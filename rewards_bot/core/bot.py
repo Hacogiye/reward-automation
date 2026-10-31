@@ -256,8 +256,24 @@ class RewardsBot:
             raise StopRequested()
 
     def check_stop(self) -> None:
+        """Gọi cả trong các khối except: lỗi Playwright do trình duyệt bị đóng vì bấm Dừng thì báo dừng, không ghi lỗi."""
         if self.stop.is_set():
             raise StopRequested()
+
+    STOP_GRACE = 5  # giây chờ bot tự dừng ở điểm kiểm tra kế tiếp trước khi buộc đóng trình duyệt
+
+    def _close_on_stop(self, launched) -> None:
+        """Thread canh: bấm Dừng mà bot còn kẹt trong lệnh Playwright dài (goto 60 s...) thì đóng trình duyệt
+        để lệnh đó lỗi ngay. Chờ STOP_GRACE trước để bot kịp tự đóng gọn (lưu cookie)."""
+        while launched.alive():
+            if self.stop.wait(0.5):
+                deadline = time.monotonic() + self.STOP_GRACE
+                while launched.alive() and time.monotonic() < deadline:
+                    time.sleep(0.2)
+                if launched.alive():
+                    self.log("Đang dừng: đóng trình duyệt")
+                    launched.kill()
+                return
 
     # task của app -> dòng "Your activity" trên Rewards mà nó nhắm tới (key = tên dòng viết thường)
     LOCAL_TO_ACTIVITY = {"Browse": "edge", "Visual Search": "visual search"}
@@ -309,6 +325,7 @@ class RewardsBot:
         self._launched = edge_launcher.launch(self.s.get("browser_channel", "msedge"), str(d), headless,
                                               extra=security.browser_args(self.s, own_proxy),
                                               profile_directory=edge_launcher.pinned_profile(str(d)))
+        threading.Thread(target=self._close_on_stop, args=(self._launched,), daemon=True).start()
         try:
             self._browser = p.chromium.connect_over_cdp(self._launched.cdp_url)
         except Exception:
@@ -431,6 +448,7 @@ class RewardsBot:
         except (StopRequested, NotLoggedIn):
             raise
         except Exception as e:
+            self.check_stop()
             self.log(f"cảnh báo: không đọc được trang Earn ({e}); Keep earning và điểm PC/Mobile có thể thiếu")
         self.state = st
         self.status(points=st["available"] if st["available"] is not None else "")
@@ -446,6 +464,7 @@ class RewardsBot:
             parse_breakdown(dlg.inner_text(), st)
             page.keyboard.press("Escape")
         except Exception as e:
+            self.check_stop()
             self.log(f"Không đọc được Points breakdown: {e}")
 
     # ------------------------------------------------------------ làm 1 thẻ task
@@ -557,6 +576,7 @@ class RewardsBot:
                 except (StopRequested, NotLoggedIn):
                     raise
                 except Exception as e:
+                    self.check_stop()
                     self.log(f"  lỗi task: {e}")
                 self.sleep(2, 4)
 
@@ -632,6 +652,7 @@ class RewardsBot:
         except (StopRequested, NotLoggedIn):
             raise
         except Exception as e:
+            self.check_stop()
             return "warn", f"không mở được bing.com để đối chiếu ({e})"
         if not pts or rewards_pts is None:
             return "warn", "không đọc được điểm trên bing.com để đối chiếu tài khoản"
@@ -683,6 +704,7 @@ class RewardsBot:
         except (StopRequested, NotLoggedIn):
             raise
         except Exception as e:
+            self.check_stop()
             self.log(f"  không kiểm tra được điểm: {e}")
             return None
 
@@ -740,6 +762,7 @@ class RewardsBot:
         except StopRequested:
             raise
         except Exception as e:
+            self.check_stop()
             self.log(f"  lỗi khi tìm '{q}': {e}")
         self.log(f"  [{tag}] {q}")
 
@@ -865,7 +888,43 @@ class RewardsBot:
         """
         ctx.clear_cookies(name=re.compile(r"^(_SS|_EDGE_S|_Rwho)$"), domain=re.compile(r"bing\.com$"))
 
-    VISUAL_MAX_TRIES = 4  # số lần thử Visual Search tối đa mỗi tài khoản mỗi ngày
+    COOKIE_BANNER = "[id^='bnp'], .bnp_container, .bnp_overlay_wrapper"
+    COOKIE_REJECT = re.compile(r"^\s*(Reject|Decline|Từ chối)", re.I)
+
+    def close_cookie_banner(self, page: Page) -> None:
+        """Đóng banner cookie của Bing (bấm Reject) nếu đang hiện.
+
+        Profile mới chưa từng trả lời banner này (hay gặp trên Linux) thì nó phủ cả trang và chặn mọi cú click,
+        ví dụ nút camera của Visual Search ("bnp_overlay_wrapper ... intercepts pointer events").
+        """
+        try:
+            if not page.locator(self.COOKIE_BANNER).locator("visible=true").count():
+                return
+            reject = page.locator("[id^='bnp'] a, [id^='bnp'] button").filter(has_text=self.COOKIE_REJECT)
+            if reject.locator("visible=true").count():
+                reject.locator("visible=true").first.click(timeout=5000)
+                self.sleep(1, 2)
+            if page.locator(self.COOKIE_BANNER).locator("visible=true").count():
+                # không bấm được thì gỡ hẳn lớp phủ khỏi trang
+                page.evaluate("s => document.querySelectorAll(s).forEach(e => e.remove())", self.COOKIE_BANNER)
+            self.log("  đã đóng banner cookie của Bing")
+        except StopRequested:
+            raise
+        except Exception as e:
+            self.log(f"  không đóng được banner cookie của Bing: {e}")
+
+    @staticmethod
+    def visual_streak_note(state: dict) -> str:
+        """Visual Search không cộng điểm mỗi lượt: chỉ giữ chuỗi "Visual Search Streak", tới mốc mới được thưởng."""
+        st = next((x for x in (state or {}).get("streaks") or [] if "visual" in x["title"].lower()), None)
+        note = " (Visual Search không cộng điểm mỗi lượt, chỉ tính vào streak"
+        if st:
+            note += f": ngày {st['day']}/{st['of']}"
+            if st.get("next"):
+                note += f", mốc tới +{st['next']} điểm"
+        return note + ")"
+
+    VISUAL_MAX_TRIES = 4 # số lần thử Visual Search tối đa mỗi tài khoản mỗi ngày
     VISUAL_MISSION_URL ="https://www.bing.com/?features=vsstreak,vstooltip&form=ML2XES"
     VISUAL_RESULT_MARKERS = ("form=sbi", "iss=sbi", "bcid=", "view=detailv2")
 
@@ -896,7 +955,7 @@ class RewardsBot:
         title = "Visual Search"
         row = activity(self.state, "visual search")
         if row and row["progress"] >= row["max"]:
-            self.log("Visual Search: hôm nay đã xong")
+            self.log("Visual Search: hôm nay đã xong" + self.visual_streak_note(self.state))
             return
         # Bing chặn Visual Search ("Unable to process this search") khi một tài khoản thử nhiều lần trong ngày,
         # nên giới hạn số lần thử mỗi ngày (tính cả các lượt chạy trước)
@@ -916,8 +975,9 @@ class RewardsBot:
                 return
             # Bing hay báo lỗi nhưng Rewards vẫn tính lượt đó: đọc lại trước khi thử ảnh khác,
             # để khỏi tốn thêm một lần thử (thử nhiều Bing càng chặn)
-            if self._visual_credited(page):
-                self.log("Visual Search: Bing báo lỗi nhưng Rewards vẫn đã ghi nhận")
+            st = self._visual_credited(page)
+            if st is not None:
+                self.log("Visual Search: Bing báo lỗi nhưng Rewards vẫn đã ghi nhận" + self.visual_streak_note(st))
                 self.set_local(title, 1, 1, "lượt")
                 return
             if attempt == 1 and visual_tries(self.name) < self.VISUAL_MAX_TRIES:
@@ -926,15 +986,17 @@ class RewardsBot:
             else:
                 break
 
-    def _visual_credited(self, page: Page) -> bool:
-        """Points breakdown đã tính Visual Search hôm nay chưa (đọc lại trang Rewards)."""
+    def _visual_credited(self, page: Page) -> "dict | None":
+        """Points breakdown đã tính Visual Search hôm nay chưa (đọc lại trang Rewards).
+        Trả về state vừa đọc nếu đã tính (để ghi chú streak), ngược lại None."""
         try:
-            row = activity(self.read_state(page), "visual search")
+            st = self.read_state(page)
         except (StopRequested, NotLoggedIn):
             raise
         except Exception:
-            return False
-        return bool(row and row["progress"] >= row["max"])
+            return None
+        row = activity(st, "visual search")
+        return st if row and row["progress"] >= row["max"] else None
 
     # Thả ảnh vào khung upload như kéo-thả thật (cách AutoRewarder dùng). Đưa ảnh qua ô chọn file thì Bing trả 400.
     _DROP_JS = r"""([b64, name, mime]) => {
@@ -972,6 +1034,7 @@ class RewardsBot:
             self.sleep(1, 3)
             page.goto("https://www.bing.com/images", wait_until="load", timeout=30000)
             self.sleep(2, 4)
+            self.close_cookie_banner(page)
             page.locator("#sb_sbi, #sbiarea [role='button'], #sbi_b").first.click(timeout=15000)
             page.locator("#sb_sbipane, [class*='sbipane']").first.wait_for(timeout=15000)
             self.sleep(2, 4)
@@ -985,6 +1048,7 @@ class RewardsBot:
         except StopRequested:
             raise
         except Exception as e:
+            self.check_stop()
             self.log(f"Lỗi: Visual Search: không mở được ô tải ảnh của Bing ({e})")
             ctx.remove_listener("response", on_response)
             return False
@@ -1018,7 +1082,7 @@ class RewardsBot:
             st = self.read_state(page)
         row = activity(st, "visual search")
         if row and row["progress"] >= row["max"]:
-            self.log("Visual Search: đã được Rewards ghi nhận")
+            self.log("Visual Search: đã được Rewards ghi nhận" + self.visual_streak_note(st))
             self.set_local(title, 1, 1, "lượt")
         else:
             self.log("cảnh báo: Visual Search đã chạy nhưng Rewards chưa ghi nhận (có thể cập nhật trễ, bấm Làm mới sau)")
@@ -1114,6 +1178,7 @@ class RewardsBot:
             except StopRequested:
                 raise
             except Exception as e:
+                self.check_stop()
                 if "has been closed" in str(e):  # trình duyệt / tab bị đóng giữa chừng: dừng hẳn, không lặp lỗi
                     self.log(f"Lỗi: trình duyệt đã bị đóng, dừng {title}")
                     raise
@@ -1164,6 +1229,10 @@ class RewardsBot:
             self.status(state="Lỗi", progress="Profile đang mở ở cửa sổ khác")
             self.log(f"Lỗi: {e}")
         except Exception as e:
+            if self.stop.is_set():  # lỗi do trình duyệt bị đóng khi bấm Dừng
+                self.status(state="Đã dừng", progress="")
+                self.log(f"{label}: đã dừng theo yêu cầu")
+                return
             self.status(state="Lỗi", progress=str(e)[:60])
             self.log(f"Lỗi: {e}")
 
@@ -1524,6 +1593,8 @@ class RewardsBot:
 
         self.status(state="Đang kiểm tra", progress="")
         self._session(work, headless=True, label="Kiểm tra")
+        if self.stop.is_set():  # giữ trạng thái "Đã dừng", không ghi kết quả kiểm tra dở dang
+            return results
         if self.profile.get("mode") == "cdp":
             add("ok", "Cổng debug", f"chỉ localhost (cổng {self.profile.get('cdp_port')})")
         if not any(r["title"] == "Mở trình duyệt" for r in results):

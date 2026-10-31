@@ -1,4 +1,5 @@
 import json
+import os
 
 import pytest
 
@@ -6,7 +7,8 @@ from rewards_bot.core import edge_launcher as el
 
 
 def test_args_have_no_automation_flags():
-    args = el.build_args(r"C:\Edge\msedge.exe", r"C:\data\profiles\a", headless=False, extra=["--no-proxy-server"])
+    exe = os.path.join("Edge", "msedge.exe")  # basename phải ra msedge.exe trên mọi OS
+    args = el.build_args(exe, os.path.join("data", "profiles", "a"), headless=False, extra=["--no-proxy-server"])
     joined = " ".join(args)
     for bad in ("--enable-automation", "--disable-background-networking", "--disable-sync", "--disable-extensions",
                 "--disable-gpu", "--headless"):

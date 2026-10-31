@@ -198,6 +198,13 @@ class Launched:
     def alive(self) -> bool:
         return self.proc.poll() is None
 
+    def kill(self) -> None:
+        """Buộc đóng (dùng từ thread khác khi bấm Dừng; Playwright không gọi được từ thread khác)."""
+        try:
+            self.proc.kill()
+        except OSError:
+            pass
+
     def close(self, browser=None, timeout: float = 10) -> None:
         """Đóng trình duyệt gọn gàng (để kịp lưu cookie / phiên đăng nhập), quá lâu thì buộc đóng."""
         if browser is not None:

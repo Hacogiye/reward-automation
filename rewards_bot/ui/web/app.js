@@ -448,7 +448,8 @@ function bindStatic() {
   $("#btn-run-one").onclick = () => S.selected && start([S.selected], "run");
   $("#btn-run-all").onclick = () => start(null, "run");
   $("#btn-do-everything").onclick = () => start(null, "everything");
-  $("#btn-stop-all").onclick = async () => { await api().stop(null); toast("Đã gửi lệnh dừng"); };
+  $("#btn-stop-all").onclick = $("#btn-stop-log").onclick = async () => { await api().stop(null); toast("Đã gửi lệnh dừng"); };
+  $("#btn-stop-one").onclick = async () => { if (S.selected) { await api().stop([S.selected]); toast("Đang dừng " + S.selected); } };
   $("#btn-add").onclick = () => openProfileDialog(null);
   $("#btn-clear-log").onclick = () => { S.logs = []; S.unreadErr = 0; renderLog(); renderLogBadge(); };
   $("#btn-copy-log").onclick = copyLog;
@@ -527,6 +528,7 @@ function renderSide() {
   $("#run-state").classList.toggle("on", on);
   $("#run-state span:last-child").textContent = on ? `Đang chạy ${S.running.size} tài khoản` : "Đang nghỉ";
   if (document.documentElement.classList.contains("side-collapsed")) $("#run-state").title = $("#run-state span:last-child").textContent;
+  $("#btn-stop-log").hidden = !on;  // Kiểm tra tự chuyển sang Nhật ký nên trang này cũng cần nút Dừng
 }
 
 function renderLogBadge() {
@@ -591,6 +593,7 @@ function renderDashboard() {
   $("#hero-life").textContent = fmt(stats.lifetime);
   for (const id of ["#btn-run-one", "#btn-refresh"]) $(id).disabled = !name || S.running.has(name);
   renderGoal(name, s);
+  $("#btn-stop-one").hidden = !name || !S.running.has(name);
   $("#tasks-updated").textContent = s.updated ? "Cập nhật " + s.updated : "";
   renderStamps(s);
   renderStreak(s);

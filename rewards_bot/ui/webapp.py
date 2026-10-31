@@ -152,7 +152,9 @@ class Api:
                 batch.append(self._events.get_nowait())
             if self._window:
                 try:
-                    self._window.evaluate_js(f"window.onEvents && window.onEvents({json.dumps(batch, ensure_ascii=False)})")
+                    # script phải toàn ASCII: pywebview GTK báo độ dài theo số ký tự thay vì số byte UTF-8,
+                    # nên script có tiếng Việt bị WebKit cắt cụt và cả lô sự kiện bị mất
+                    self._window.evaluate_js(f"window.onEvents && window.onEvents({json.dumps(batch)})")
                 except Exception:
                     pass
 
@@ -450,10 +452,41 @@ def _window_background(theme: str, fun_mode: bool = True) -> str:
     return "#151f2c" if dark else "#f6f8fb"
 
 
+def _linux_index_html() -> str:
+    """index.html cho Linux/macOS: thêm 'unsafe-eval' vào CSP. pywebview tạo pywebview.api bằng new Function;
+    WebView2 (Windows) không áp CSP lên script nó chèn vào, còn WebKitGTK/QtWebEngine thì có nên chặn mất cầu nối JS-Python.
+    File index.html gốc (CSP chặt, dùng trên Windows) không bị sửa."""
+    html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
+    relaxed = html.replace("script-src 'self';", "script-src 'self' 'unsafe-eval';", 1)
+    if relaxed == html:
+        raise RuntimeError("Không tìm thấy script-src trong CSP của index.html")
+    return relaxed
+
+
+def _linux_web_app():
+    """WSGI app phục vụ thư mục web/ như http_server của pywebview, nhưng index.html lấy từ _linux_index_html()."""
+    from webview.http import bottle
+    app = bottle.Bottle()
+    html = _linux_index_html()
+
+    @app.route("/")
+    @app.route("/index.html")
+    def index():
+        bottle.response.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        return html
+
+    @app.route("/<file:path>")
+    def asset(file):
+        return bottle.static_file(file, root=str(WEB_DIR))
+
+    return app
+
+
 def main() -> None:
     security.harden_data_dir(DATA_DIR)
     api = Api()
-    window = webview.create_window(APP_NAME, url=str(WEB_DIR / "index.html"), js_api=api,
+    url = str(WEB_DIR / "index.html") if sys.platform == "win32" else _linux_web_app()
+    window = webview.create_window(APP_NAME, url=url, js_api=api,
                                    width=1320, height=880, min_size=(1020, 680),
                                    background_color=_window_background(api._settings.get("theme", "system"),
                                                                      bool(api._settings.get("fun_mode"))),

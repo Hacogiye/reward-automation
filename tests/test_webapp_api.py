@@ -249,3 +249,26 @@ def test_window_background_follows_fun_mode():
     """Cyberpunk đã lưu mà tắt chế độ vui: nền cửa sổ là nền tối thường, không phải nền neon."""
     assert W._window_background("cyberpunk", True) == "#0b1022"
     assert W._window_background("cyberpunk", False) == "#151f2c"
+
+def test_linux_csp_relaxed_only_in_served_copy():
+    original = (W.WEB_DIR / "index.html").read_text(encoding="utf-8")
+    assert "'unsafe-eval'" not in original  # bản gốc (Windows) giữ CSP chặt
+    linux = W._linux_index_html()
+    assert "script-src 'self' 'unsafe-eval';" in linux
+    assert linux.replace(" 'unsafe-eval'", "", 1) == original
+
+
+def test_pump_sends_ascii_only_script(api):
+    import queue
+    import threading
+    import time
+    sent = []
+    api._events = queue.Queue()
+    api._window = type("Win", (), {"evaluate_js": lambda self, s: sent.append(s)})()
+    api._events.put({"type": "log", "name": "a", "msg": "Đang làm mới – xong"})
+    threading.Thread(target=api._pump, daemon=True).start()
+    deadline = time.time() + 3
+    while not sent and time.time() < deadline:
+        time.sleep(0.05)
+    assert sent and sent[0].isascii()  # GTK cắt cụt script có ký tự nhiều byte
+    assert "\\u0110ang l\\u00e0m m\\u1edbi" in sent[0]

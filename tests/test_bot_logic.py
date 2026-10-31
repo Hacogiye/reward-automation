@@ -301,6 +301,7 @@ def test_free_profile_only_kills_true_orphans(tmp_path, monkeypatch):
     from rewards_bot.core import browser
     d = tmp_path / "acc"
     killed = []
+    monkeypatch.setattr(browser.sys, "platform", "win32")  # taskkill qua subprocess.run, không kill pid thật
     monkeypatch.setattr(browser.subprocess, "run", lambda args, **k: killed.append(args))
     monkeypatch.setattr(browser, "_browser_processes",
                         lambda: [(11, f'msedge.exe --user-data-dir="{d}" --remote-debugging-port=0', True)])
@@ -1070,3 +1071,136 @@ def test_start_jitter():
     assert cli.start_jitter(0, sleep=slept.append) == 0 and cli.start_jitter("x", sleep=slept.append) == 0
     assert cli.start_jitter(999, sleep=slept.append, rnd=Rnd) == 3600  # tối đa 120 phút
     assert slept == [600, 3600]
+
+
+def test_stop_closes_stuck_browser_after_grace():
+    bot, logs = make_bot()
+    bot.STOP_GRACE = 0.1
+
+    class Launched:  # trình duyệt kẹt trong lệnh dài: chỉ thoát khi bị kill
+        killed = False
+
+        def alive(self):
+            return not self.killed
+
+        def kill(self):
+            self.killed = True
+
+    lw = Launched()
+    t = threading.Thread(target=bot._close_on_stop, args=(lw,))
+    t.start()
+    bot.stop.set()
+    t.join(3)
+    assert lw.killed and not t.is_alive()
+
+
+def test_error_after_stop_reports_stopped(monkeypatch):
+    from rewards_bot.core import bot as B
+    bot, logs = make_bot()
+    states = []
+    bot._status = lambda n, d: states.append(d.get("state"))
+
+    class P:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def broken_open(p, headless):  # trình duyệt bị đóng vì bấm Dừng -> lệnh Playwright lỗi
+        bot.stop.set()
+        raise RuntimeError("Target page, context or browser has been closed")
+
+    monkeypatch.setattr(B, "sync_playwright", lambda: P())
+    bot._open = broken_open
+    bot.diagnose()
+    assert states[-1] == "Đã dừng"  # không bị ghi đè thành "Lỗi" / kết quả kiểm tra
+    assert not any("FAIL" in m or m.startswith("Lỗi") for m in logs)
+
+
+def test_queued_profile_stops_without_waiting_for_slot(monkeypatch):
+    import time
+    from rewards_bot.core import runner as R
+    fake_log = type("L", (), {"write": lambda *a: None, "prune": staticmethod(lambda days: None)})
+    monkeypatch.setattr(R, "FileLog", fake_log)
+    states, done = {}, []
+    r = R.Runner(None, lambda n, m: None, lambda n, d: states.__setitem__(n, d.get("state")), done.append)
+    in_run, release = threading.Event(), threading.Event()
+
+    class Bot:
+        def __init__(self, *a):
+            pass
+
+        def run(self):  # tài khoản a giữ lượt duy nhất
+            in_run.set()
+            release.wait(5)
+
+    monkeypatch.setattr(R, "RewardsBot", Bot)
+    r.start([{"name": "a"}], {"max_parallel": 1})
+    assert in_run.wait(3)
+    r.start([{"name": "b"}], {"max_parallel": 1})
+    t_b = r.threads["b"]
+    time.sleep(0.2)
+    start = time.time()
+    r.stop(["b"])
+    t_b.join(3)
+    assert not t_b.is_alive() and time.time() - start < 2  # không phải đợi a chạy xong
+    assert "b" in done and states["b"] == "Đã dừng"
+    release.set()
+    assert r.wait(3)
+
+
+class FakeBannerLocator:
+    def __init__(self, page, kind):
+        self.page, self.kind = page, kind
+
+    def locator(self, sel):
+        return self
+
+    def filter(self, has_text=None):
+        return self
+
+    @property
+    def first(self):
+        return self
+
+    def count(self):
+        return int(self.page.banner)
+
+    def click(self, **k):
+        self.page.clicked.append(self.kind)
+        self.page.banner = False
+
+
+class FakeBannerPage(FakePage):
+    def __init__(self, banner):
+        super().__init__()
+        self.banner, self.clicked = banner, []
+
+    def locator(self, sel):
+        return FakeBannerLocator(self, "reject" if " a," in sel else "banner")
+
+    def evaluate(self, *a):
+        pytest.fail("bấm Reject được thì không cần gỡ lớp phủ")
+
+
+def test_cookie_banner_rejected_before_click():
+    """Profile mới (Linux) có banner cookie phủ trang, chặn nút camera của Visual Search."""
+    bot, logs = make_bot()
+    page = FakeBannerPage(banner=True)
+    bot.close_cookie_banner(page)
+    assert page.clicked == ["reject"] and any("banner cookie" in m for m in logs)
+    page = FakeBannerPage(banner=False)
+    bot.close_cookie_banner(page)
+    assert page.clicked == []
+
+
+def test_visual_done_explains_streak_not_points():
+    """Visual Search chỉ tính streak, log phải nói rõ để không hiểu nhầm là 'xong' mà mất điểm."""
+    bot, logs = make_bot()
+    bot.state = {"activity": [{"key": "visual search", "progress": 1, "max": 1}],
+                 "streaks": [{"title": "Visual Search Streak", "day": 3, "of": 7, "next": 5}]}
+    bot.do_visual_search(None, FakePage())
+    assert logs == ["Visual Search: hôm nay đã xong (Visual Search không cộng điểm mỗi lượt, "
+                    "chỉ tính vào streak: ngày 3/7, mốc tới +5 điểm)"]
+    assert RewardsBot.visual_streak_note({}).endswith("chỉ tính vào streak)")

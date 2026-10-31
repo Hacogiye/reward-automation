@@ -98,11 +98,18 @@ class Runner:
                 bot.checkin_only()
                 return
             self.status(name, {"state": "Đang chờ", "progress": "Chờ lượt chạy"})
-            with self.sem:
+            sem = self.sem
+            while not sem.acquire(timeout=0.5):  # bấm Dừng lúc đang xếp hàng thì thoát ngay, không đợi lượt
+                if ev.is_set():
+                    self.status(name, {"state": "Đã dừng", "progress": ""})
+                    return
+            try:
                 if not ev.is_set():
                     bot.run()
                 else:
                     self.status(name, {"state": "Đã dừng", "progress": ""})
+            finally:
+                sem.release()
         except Exception as e:  # lỗi khởi tạo trình duyệt...
             self.status(name, {"state": "Lỗi", "progress": str(e)[:60]})
             self.log(name, f"Lỗi: {e}")
