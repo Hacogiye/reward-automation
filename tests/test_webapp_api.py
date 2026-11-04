@@ -156,3 +156,13 @@ def test_everything_turns_on_all_tasks_without_saving(api):
     assert api.start(None, "everything")["ok"]
     assert seen["action"] == "run" and all(seen["settings"][k] for k in W.EVERYTHING)
     assert api._settings["do_browse"] is False  # cài đặt đã lưu không đổi
+
+
+def test_app_icon_is_real_ico_on_windows(monkeypatch):
+    # WinForms của pywebview chỉ nhận .ico: đưa PNG vào là app crash ngay khi mở (lỗi run.bat 2026-11)
+    monkeypatch.setattr(W.sys, "platform", "win32")
+    ico = W.app_icon()
+    assert ico.suffix == ".ico" and ico.read_bytes()[:4] == b"\x00\x00\x01\x00"
+    monkeypatch.setattr(W.sys, "platform", "linux")
+    png = W.app_icon()
+    assert png.suffix == ".png" and png.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"

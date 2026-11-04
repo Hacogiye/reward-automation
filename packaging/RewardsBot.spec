@@ -15,5 +15,5 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="RewardsBot", console=bool(os.environ.get("RB_CONSOLE")),
-          icon=str(ROOT / "packaging" / "icon.ico") if (ROOT / "packaging" / "icon.ico").exists() else None)
+          icon=str(ROOT / "rewards_bot" / "ui" / "web" / "assets" / "app-icon.ico"))
 coll = COLLECT(exe, a.binaries, a.datas, name="RewardsBot")

@@ -63,6 +63,9 @@ const LINE_ICONS = {
 const icon = (name, cls = "") => `<span class="tico ${cls}" data-icon="${name}">`
   + `<img src="vendor/fluent-emoji/${name}.png" alt="" draggable="false"><i class="ti ${LINE_ICONS[name] || "ti-point"}"></i></span>`;
 const taskIcon = (t, cls = "") => icon(iconName(t), cls);
+// icon riêng của app cho streak (ngọn lửa) và điểm (chồng xu), dùng ở mọi theme
+const STREAK_IMG = (cls = "") => `<img class="ico-streak ${cls}" src="assets/flame.png" alt="" draggable="false">`;
+const POINT_IMG = (cls = "") => `<img class="ico-point ${cls}" src="assets/point.svg" alt="" draggable="false">`;
 
 // ảnh lỗi -> ẩn đi (CSP không cho onerror nội tuyến nên bắt chung ở document)
 document.addEventListener("error", (e) => { if (e.target.tagName === "IMG") e.target.classList.add("broken"); }, true);
@@ -289,7 +292,7 @@ function renderDashboard() {
     chips.innerHTML = S.profiles.map((p) => `
       <button class="chip ${p.name === S.selected ? "active" : ""}" data-name="${esc(p.name)}">
         ${avatarHtml(p.name, `avatar-sm rounded-circle ${S.running.has(p.name) ? "run" : ""}`)}
-        <span>${esc(p.name)}</span><span class="pts">${fmt(st(p.name).points)}</span>
+        <span>${esc(p.name)}</span><span class="pts">${POINT_IMG()}${fmt(st(p.name).points)}</span>
       </button>`).join("");
     $$(".chip", chips).forEach((c) => (c.onclick = () => { S.selected = c.dataset.name; Charts.reset(); renderDashboard(); }));
   }
@@ -388,7 +391,7 @@ function renderStamps(s) {
     <div class="stamp ${t.done ? "done" : ""}" title="${esc(t.title)} · ${t.done ? "Đã xong" : "Chưa làm"} · +${t.max} điểm">
       <div class="stamp-wrap"><div class="disc">${taskIcon(t)}</div>
       <span class="check"><i class="ti ti-check"></i></span></div>
-      <span class="pts">+${t.max}</span>
+      <span class="pts">${POINT_IMG()}+${t.max}</span>
     </div>`).join("");
 }
 
@@ -403,7 +406,7 @@ function renderStreak(s) {
   const left = Math.max(0, max - have);
   $("#streak-sub").textContent = stamps ? `${have}/${max} dấu` : "";
   $("#daily-streak").innerHTML = info.daily_streak != null
-    ? `<span class="flame"><i class="ti ti-flame"></i></span><div><b>${fmt(info.daily_streak)} ngày</b><span>Daily streak liên tiếp</span></div>` : "";
+    ? `<span class="flame">${STREAK_IMG()}</span><div><b>${fmt(info.daily_streak)} ngày</b><span>Daily streak liên tiếp</span></div>` : "";
   $("#stamp-grid").setAttribute("aria-label", `${have} trên ${max} dấu`);
   $("#stamp-grid").innerHTML = Array.from({ length: max }, (_, i) =>
     `<span class="sdot ${i < have ? "on" : i === have ? "next" : ""}"><i class="ti ${i < have ? "ti-star-filled" : "ti-star"}"></i></span>`).join("");
@@ -616,14 +619,15 @@ function renderStats(name, s) {
   const hist = S.history[name] || {}, today = isoDay(new Date()), h = hist[today] || {};
   const k = computeKpis(hist, today);
   const stats = s.stats || {};
-  const tile = (ic, label, value, sub, cls = "") => `<div class="kpi ${cls}"><span class="kpi-ic"><i class="ti ${ic}"></i></span>
+  // ic: tên icon Tabler ("ti-...") hoặc HTML ảnh sẵn (STREAK_IMG / POINT_IMG)
+  const tile = (ic, label, value, sub, cls = "") => `<div class="kpi ${cls}"><span class="kpi-ic">${ic.startsWith("<") ? ic : `<i class="ti ${ic}"></i>`}</span>
     <div class="min-w-0"><div class="kpi-label">${label}</div><div class="kpi-value">${value}</div><div class="kpi-sub">${sub}</div></div></div>`;
   const pcLine = stats.pc_max ? `PC ${fmt(stats.pc)}/${fmt(stats.pc_max)} · Mobile ${fmt(stats.mobile)}/${fmt(stats.mobile_max)}` : "chưa đọc được điểm search";
   $("#kpis").innerHTML = name ? [
-    tile("ti-calendar-event", "Hôm nay", s.today != null ? "+" + fmt(s.today) : "—", pcLine),
+    tile(POINT_IMG(), "Hôm nay", s.today != null ? "+" + fmt(s.today) : "—", pcLine),
     tile("ti-chart-line", "Trung bình 7 ngày", k.avg7 != null ? fmt(k.avg7) : "—",
       k.avgDays ? `điểm/ngày, tính trên ${k.avgDays} ngày có số liệu` : "chưa có lịch sử"),
-    tile("ti-flame", "Chuỗi đủ điểm search", `${k.streak} ngày`, searchFull(h) ? "hôm nay đã đủ PC + Mobile" : "hôm nay chưa đủ PC + Mobile",
+    tile(STREAK_IMG(), "Chuỗi đủ điểm search", `${k.streak} ngày`, searchFull(h) ? "hôm nay đã đủ PC + Mobile" : "hôm nay chưa đủ PC + Mobile",
       k.streak >= 7 ? "good" : ""),
     tile(k.change == null || k.change >= 0 ? "ti-trending-up" : "ti-trending-down", "Tháng này",
       fmt(stats.month ?? k.thisMonth),

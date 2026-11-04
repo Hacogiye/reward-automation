@@ -409,6 +409,11 @@ def _windows_dark() -> bool:
         return False
 
 
+def app_icon() -> Path:
+    """Icon cửa sổ app: .ico trên Windows (WinForms không đọc được PNG), PNG ở nơi khác."""
+    return WEB_DIR / "assets" / ("app-icon.ico" if sys.platform == "win32" else "app-icon-256.png")
+
+
 def _window_background(theme: str) -> str:
     """Màu nền cửa sổ khi trang chưa vẽ xong, khớp sáng/tối để không bị nháy."""
     if theme == "cyberpunk":
@@ -436,6 +441,6 @@ def main() -> None:
     # http_server: pywebview phục vụ thư mục web/ qua 127.0.0.1 (cổng ngẫu nhiên) để CSP 'self' áp dụng được;
     # trang mở bằng file:// thì Chromium không coi là 'self' và chặn luôn app.js
     # Windows: Edge WebView2. Linux/macOS: để pywebview tự chọn (GTK/WebKitGTK, Qt hoặc Cocoa)
-    # icon chỉ có tác dụng với GTK/Qt; trên Windows icon cửa sổ lấy từ RewardsBot.exe (packaging/icon.ico)
+    # icon cửa sổ: WinForms (Windows) chỉ nhận .ico, đưa PNG vào là crash ngay khi mở; GTK/Qt dùng PNG
     webview.start(gui="edgechromium" if sys.platform == "win32" else None, debug=False, http_server=True,
-                  icon=str(WEB_DIR / "assets" / "app-icon-256.png"))
+                  icon=str(app_icon()))
