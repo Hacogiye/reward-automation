@@ -30,7 +30,8 @@ SETTING_SCHEMA = {
     "browse_minutes": (int, 1, 240),
     "headless": (bool,), "do_quests": (bool,), "do_pc": (bool,), "do_mobile": (bool,), "do_visual": (bool,),
     "do_browse": (bool,), "bypass_proxy": (bool,), "check_updates": (bool,),
-    "browse_auto_stop": (bool,), "do_quest_tasks": (bool,), "random_search_points": (bool,),
+    "browse_auto_stop": (bool,), "do_quest_tasks": (bool,), "custom_searches": (bool,),
+    "pc_searches": (int, 0, 50), "mobile_searches": (int, 0, 50),
     "browser_channel": (str, ("msedge", "chrome", "")),
     "theme": (str, ("system", "light", "dark", "cyberpunk")),
     "language": (str, ("vi", "en")),
@@ -435,4 +436,6 @@ def main() -> None:
     # http_server: pywebview phục vụ thư mục web/ qua 127.0.0.1 (cổng ngẫu nhiên) để CSP 'self' áp dụng được;
     # trang mở bằng file:// thì Chromium không coi là 'self' và chặn luôn app.js
     # Windows: Edge WebView2. Linux/macOS: để pywebview tự chọn (GTK/WebKitGTK, Qt hoặc Cocoa)
-    webview.start(gui="edgechromium" if sys.platform == "win32" else None, debug=False, http_server=True)
+    # icon chỉ có tác dụng với GTK/Qt; trên Windows icon cửa sổ lấy từ RewardsBot.exe (packaging/icon.ico)
+    webview.start(gui="edgechromium" if sys.platform == "win32" else None, debug=False, http_server=True,
+                  icon=str(WEB_DIR / "assets" / "app-icon-256.png"))

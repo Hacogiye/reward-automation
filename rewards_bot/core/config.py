@@ -18,7 +18,6 @@ DASHBOARD_FILE = DATA_DIR / "dashboard.json"  # điểm + trạng thái task l�
 LOG_DIR = DATA_DIR / "logs"  # nhật ký mỗi ngày 1 file
 LOCK_FILE = DATA_DIR / "app.lock"  # chỉ cho 1 cửa sổ app chạy cùng lúc
 VISUAL_TRIES_FILE = DATA_DIR / "visual_tries.json"  # số lần thử Visual Search mỗi tài khoản trong ngày
-SEARCH_TARGETS_FILE = DATA_DIR / "search_targets.json"  # mục tiêu điểm search random của từng tài khoản trong ngày
 CREDENTIALS_FILE = DATA_DIR / "credentials.json"  # email + mật khẩu đã mã hóa (DPAPI) để tự đăng nhập lại
 SECRETS_FILE = DATA_DIR / "secrets.json"  # token GitHub (đã mã hóa DPAPI) để kiểm tra bản mới khi repo riêng tư
 UPDATE_DIR = DATA_DIR / "update"  # file cập nhật tải về + script cài
@@ -36,7 +35,9 @@ DEFAULT_SETTINGS = {
     "do_quest_tasks": True,  # Quests nhiều bước (mục "Quests" ở trang Earn)
     "do_pc": True,
     "do_mobile": True,
-    "random_search_points": False,  # mỗi ngày random mục tiêu điểm search (0-90 PC, 0-60 Mobile, chia hết cho 3)
+    "custom_searches": False,  # tự chọn số lượt search mỗi ngày thay vì search đến khi đủ điểm tối đa
+    "pc_searches": 30,  # số lượt search PC trong ngày khi bật custom_searches (3 điểm/lượt)
+    "mobile_searches": 20,  # số lượt search Mobile trong ngày khi bật custom_searches
     "do_visual": True,  # Visual Search: tải 1 ảnh lên bằng nút camera của Bing Images
     "do_browse": False,
     "language": "vi",  # ngôn ngữ giao diện: "vi" / "en" (nhật ký của bot vẫn tiếng Việt)

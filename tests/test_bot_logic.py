@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from rewards_bot.core import bot as bot_mod
-from rewards_bot.core.bot import RewardsBot, search_target
+from rewards_bot.core.bot import RewardsBot
 from rewards_bot.core.browser import _uses_dir
 from rewards_bot.core.rewards_page import empty_state
 
@@ -107,36 +107,36 @@ def test_full_already_does_nothing():
     assert page.visits == []
 
 
-def test_search_target_is_multiple_of_3_and_fixed_for_the_day(tmp_path):
-    path = tmp_path / "targets.json"
-    for i in range(30):
-        t = search_target(f"acc{i}", "pc", 90, path=path)
-        assert 0 <= t <= 90 and t % 3 == 0
-        assert search_target(f"acc{i}", "pc", 90, path=path) == t  # chạy lại trong ngày: vẫn số đó
-        assert 0 <= search_target(f"acc{i}", "mobile", 60, path=path) <= 60
-
-
-def test_random_target_searches_up_to_target_only(tmp_path, monkeypatch):
-    monkeypatch.setattr(bot_mod, "search_target", lambda name, kind, mx, path=None: 30)
-    bot, logs = make_bot(random_search_points=True, extra_searches=5)
+def test_custom_searches_stop_at_chosen_count():
+    bot, logs = make_bot(custom_searches=True, pc_searches=10, extra_searches=5)
     bot.state = empty_state()
     bot.state["pc"] = {"progress": 12, "max": 90}
     seq = iter([21, 30])
     bot._recheck = lambda page, kind: {"progress": next(seq), "max": 90}
     page = FakePage()
     bot.do_searches(page, "pc", "Search PC")
-    assert len(page.visits) == 6  # (30 - 12) / 3, không cộng lượt search thêm
-    assert any("mục tiêu random hôm nay 30/90" in m for m in logs)
+    assert len(page.visits) == 6  # (10 lượt × 3 - 12) / 3, không cộng lượt search thêm
+    assert any("mục tiêu tự chọn hôm nay 10 lượt = 30/90" in m for m in logs)
 
 
-def test_random_target_already_reached(monkeypatch):
-    monkeypatch.setattr(bot_mod, "search_target", lambda name, kind, mx, path=None: 0)
-    bot, logs = make_bot(random_search_points=True)
+def test_custom_searches_zero_or_already_reached():
+    bot, logs = make_bot(custom_searches=True, mobile_searches=0)
     bot.state = empty_state()
     bot.state["mobile"] = {"progress": 0, "max": 60}
     page = FakePage()
     bot.do_searches(page, "mobile", "Search Mobile")
     assert page.visits == [] and any("đã đạt mục tiêu 0 điểm" in m for m in logs)
+
+
+def test_custom_searches_above_max_counts_as_full():
+    bot, _ = make_bot(custom_searches=True, pc_searches=50, extra_searches=2)
+    bot.state = empty_state()
+    bot.state["pc"] = {"progress": 84, "max": 90}
+    assert bot.search_goal("pc") == 90
+    bot._recheck = lambda page, kind: None
+    page = FakePage()
+    bot.do_searches(page, "pc", "Search PC")
+    assert len(page.visits) == 4  # 2 lượt còn thiếu + 2 lượt search thêm như khi không tự chọn
 
 
 def test_uses_dir_matches_exact_folder_only(tmp_path):

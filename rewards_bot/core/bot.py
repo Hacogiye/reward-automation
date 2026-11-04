@@ -12,7 +12,7 @@ from playwright.sync_api import sync_playwright, BrowserContext, Page, TimeoutEr
 
 from . import credentials, edge_launcher, security
 from .browser import ProfileInUse, free_profile
-from .config import SEARCH_TARGETS_FILE, VISUAL_TRIES_FILE, profile_dir, read_json, write_json
+from .config import VISUAL_TRIES_FILE, profile_dir, read_json, write_json
 from .rewards_page import (SCRAPE_JS, activity, build_task_rows, empty_state, group_icons, icon, parse_breakdown,
                            parse_page, stats, streak_info)
 from ..search.bank import QueryBank
@@ -55,26 +55,6 @@ def visual_tries(name: str, add: int = 0, path=None) -> int:
         if add:
             write_json(path, {today: {**day, name: n}})
         return n
-
-
-_TARGET_LOCK = threading.Lock()  # nhiều tài khoản chạy song song cùng ghi search_targets.json
-
-
-def search_target(name: str, kind: str, max_points: int, path=None) -> int:
-    """Mục tiêu điểm search hôm nay của tài khoản cho 'pc' / 'mobile': random 0..max, chia hết cho 3.
-
-    Random 1 lần mỗi ngày rồi lưu lại, chạy lại trong ngày vẫn dùng đúng số đó. Chỉ giữ số của ngày hiện tại.
-    """
-    path = path or SEARCH_TARGETS_FILE
-    today = time.strftime("%Y-%m-%d")
-    with _TARGET_LOCK:
-        data = read_json(path, {})
-        day = data.get(today, {}) if isinstance(data, dict) else {}
-        mine = day.get(name) if isinstance(day.get(name), dict) else {}
-        if not isinstance(mine.get(kind), int):
-            mine = {**mine, kind: POINTS_PER_SEARCH * random.randint(0, max_points // POINTS_PER_SEARCH)}
-            write_json(path, {today: {**day, name: mine}})
-        return min(mine[kind], max_points)
 
 
 class StopRequested(Exception):
@@ -511,12 +491,15 @@ class RewardsBot:
     FALLBACK_SEARCHES = {"pc": 30, "mobile": 20}
 
     def search_goal(self, kind: str):
-        """Số điểm search cần đạt hôm nay: mức tối đa, hoặc số random trong ngày khi bật random_search_points."""
+        """Số điểm search cần đạt hôm nay: mức tối đa, hoặc số lượt tự chọn × 3 khi bật custom_searches.
+
+        Tính theo tổng điểm search trong ngày, nên chạy lại trong ngày không search thêm khi đã đạt.
+        """
         c = self.state.get(kind)
         max_points = c["max"] if c else self.FALLBACK_SEARCHES[kind] * POINTS_PER_SEARCH
-        if not self.s.get("random_search_points"):
+        if not self.s.get("custom_searches"):
             return max_points
-        return search_target(self.name, kind, max_points)
+        return min(max_points, POINTS_PER_SEARCH * max(0, int(self.s.get(f"{kind}_searches", 0))))
 
     def searches_needed(self, kind: str):
         """Số lượt search còn thiếu cho 'pc' / 'mobile' theo Points breakdown (3 điểm/lượt); None = không rõ."""
@@ -552,11 +535,11 @@ class RewardsBot:
         goal = self.search_goal(kind)
         full = goal >= cur.get("max", self.FALLBACK_SEARCHES[kind] * POINTS_PER_SEARCH)
         if not full:
-            self.log(f"{label}: mục tiêu random hôm nay {goal}/{cur.get('max', '?')} điểm")
+            self.log(f"{label}: mục tiêu tự chọn hôm nay {goal // POINTS_PER_SEARCH} lượt = {goal}/{cur.get('max', '?')} điểm")
         if need <= 0:
             self.log(f"{label}: đã đủ điểm search" if full else f"{label}: đã đạt mục tiêu {goal} điểm")
             return
-        # search thêm chỉ khi lấy đủ điểm tối đa; có mục tiêu random thì không vượt quá mục tiêu
+        # search thêm chỉ khi lấy đủ điểm tối đa; có số lượt tự chọn thì không vượt quá mục tiêu
         count = need + (int(self.s.get("extra_searches", 0)) if full else 0)
         self.log(f"{label}: {count} lượt search (đang {cur.get('progress', '?')}/{cur.get('max', '?')} điểm)")
         last_progress, last_gain_at = cur.get("progress"), 0

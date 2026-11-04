@@ -732,24 +732,38 @@ function renderToggles() {
     ["do_visual", "Visual Search", "Tìm bằng 1 ảnh qua nút camera của Bing (mỗi ngày 1 lượt)", "camera"],
     ["do_pc", "Search PC", "Tìm đến khi đủ điểm search máy tính", "pc"],
     ["do_mobile", "Search Mobile", "Giả lập điện thoại, tìm đến khi đủ điểm", "mobile"],
-    ["random_search_points", "Random điểm search mỗi ngày",
-      "Mỗi ngày random mục tiêu 0-90 điểm PC và 0-60 điểm Mobile (chia hết cho 3), search đến đúng số đó thì dừng", "target"],
+    ["custom_searches", "Tự chọn số lượt search",
+      "Tắt thì search đến khi đủ điểm tối đa. Bật thì search đến đúng số lượt trong ngày ở dưới (3 điểm/lượt) rồi dừng", "target"],
     ["do_browse", "Browse", `Lướt web tối đa ${S.settings.browse_minutes} phút cho Edge – Minutes, đo số phút mỗi 10 phút`, "globe"],
     ["browse_auto_stop", "Tự dừng khi không được tính phút",
       `Edge – Minutes không tăng sau 20 phút thì dừng. Tắt để luôn lướt đủ ${S.settings.browse_minutes} phút`, "", "do_browse"],
     ["headless", "Chạy ẩn", "Không hiện cửa sổ trình duyệt", "robot"],
   ];
+  // ô nhập số lượt search trong ngày, hiện ngay dưới "Tự chọn số lượt search" khi công tắc đó bật
+  const countRow = () => `<div class="list-group-item toggle-item toggle-sub search-counts">
+      <span class="sub-mark"><i class="ti ti-corner-down-right"></i></span>
+      <div class="tt">Số lượt search trong ngày</div>
+      <div class="count-inputs">${[["pc_searches", "PC"], ["mobile_searches", "Mobile"]].map(([k, l]) =>
+        `<label>${l}<input type="number" class="form-control form-control-sm" min="0" max="50" data-count="${k}"
+          value="${esc(S.settings[k] ?? 0)}"></label>`).join("")}</div></div>`;
   $("#task-toggles").innerHTML = items.map(([k, t, d, ic, parent]) => {
     const off = parent && !S.settings[parent];
     return `<label class="list-group-item toggle-item ${parent ? "toggle-sub" : ""} ${off ? "is-off" : ""}">
       ${parent ? `<span class="sub-mark"><i class="ti ti-corner-down-right"></i></span>` : `<span class="ico">${icon(ic)}</span>`}
       <div><div class="tt">${t}</div><div class="td">${d}</div></div>
       <span class="form-check form-switch"><input class="form-check-input" type="checkbox" data-key="${k}"
-        ${S.settings[k] ? "checked" : ""} ${off ? "disabled" : ""}></span></label>`;
+        ${S.settings[k] ? "checked" : ""} ${off ? "disabled" : ""}></span></label>`
+      + (k === "custom_searches" && S.settings.custom_searches ? countRow() : "");
   }).join("");
-  $$("#task-toggles input").forEach((i) => (i.onchange = async () => {
+  $$("#task-toggles input[data-key]").forEach((i) => (i.onchange = async () => {
     await saveSettings({ [i.dataset.key]: i.checked });
-    if (i.dataset.key === "do_browse") renderToggles();  // bật/tắt mục con "Tự dừng" theo Browse
+    // bật/tắt mục con "Tự dừng" theo Browse, hiện/ẩn ô số lượt theo "Tự chọn số lượt search"
+    if (i.dataset.key === "do_browse" || i.dataset.key === "custom_searches") renderToggles();
+  }));
+  $$("#task-toggles input[data-count]").forEach((i) => (i.onchange = async () => {
+    const v = parseInt(i.value, 10);
+    if (Number.isNaN(v) || v < 0 || v > 50) { toast("Số lượt search cần từ 0 đến 50"); i.value = S.settings[i.dataset.count]; return; }
+    if (await saveSettings({ [i.dataset.count]: v })) toast("Đã lưu số lượt search");
   }));
 }
 

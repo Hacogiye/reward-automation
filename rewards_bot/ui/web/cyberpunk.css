@@ -138,12 +138,6 @@
   background: #070a17;
   border-right: 1px solid var(--cp-line);
 }
-[data-skin="cyberpunk"] .brand-mark {
-  border-radius: 0;
-  background: var(--cp-yellow);
-  color: var(--cp-night);
-  clip-path: polygon(0 0, 100% 0, 100% 70%, 70% 100%, 0 100%);
-}
 [data-skin="cyberpunk"] .brand strong { font-stretch: semi-condensed; letter-spacing: .04em; }
 [data-skin="cyberpunk"] .side .navbar-nav .nav-link { border-radius: 0; border-left: 2px solid transparent; color: var(--cp-dim); }
 [data-skin="cyberpunk"] .side .navbar-nav .nav-link:hover { color: var(--cp-text); }
@@ -427,7 +421,7 @@ html[lang="en"][data-skin="cyberpunk"] .hero .card-body::before { content: "EDDI
     linear-gradient(180deg, rgba(123, 47, 247, .10), transparent 40%),
     #070a17;
 }
-[data-skin="cyberpunk"] .brand-mark { box-shadow: 0 0 16px rgba(252, 238, 10, .45); animation: cp-flicker 6s infinite; }
+[data-skin="cyberpunk"] .brand-logo { filter: drop-shadow(0 0 8px rgba(252, 238, 10, .55)); animation: cp-flicker 6s infinite; }
 [data-skin="cyberpunk"] .brand strong { color: var(--cp-yellow); text-transform: uppercase; text-shadow: 0 0 10px rgba(252, 238, 10, .35); }
 [data-skin="cyberpunk"] .brand div > span { color: var(--cp-cyan); font-family: var(--cp-display); letter-spacing: .08em; text-transform: uppercase; font-size: 11px; }
 [data-skin="cyberpunk"] .side-foot::before {
@@ -537,7 +531,7 @@ html[lang="en"][data-skin="cyberpunk"] .hero .card-body::before { content: "EDDI
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-skin="cyberpunk"] .hero-figure .num, [data-skin="cyberpunk"] .brand-mark, [data-skin="cyberpunk"] .logbox::after { animation: none; }
+  [data-skin="cyberpunk"] .hero-figure .num, [data-skin="cyberpunk"] .brand-logo, [data-skin="cyberpunk"] .logbox::after { animation: none; }
   [data-skin="cyberpunk"] .btn-primary::after { transition: none; }
 }
 

@@ -70,9 +70,12 @@ const I18N = (() => {
     "Giả lập điện thoại, tìm đến khi đủ điểm": "Emulates a phone, searches until the points are full",
     "Lướt web tối đa # phút cho Edge – Minutes, đo số phút mỗi # phút": "Browses up to # minutes for Edge – Minutes, measuring every # minutes",
     "Tự dừng khi không được tính phút": "Stop when minutes aren't counted",
-    "Random điểm search mỗi ngày": "Random search points each day",
-    "Mỗi ngày random mục tiêu #-# điểm PC và #-# điểm Mobile (chia hết cho #), search đến đúng số đó thì dừng":
-      "Each day picks a random target of #-# PC points and #-# Mobile points (a multiple of #) and stops searching once it is reached",
+    "Tự chọn số lượt search": "Choose the number of searches",
+    "Tắt thì search đến khi đủ điểm tối đa. Bật thì search đến đúng số lượt trong ngày ở dưới (# điểm/lượt) rồi dừng":
+      "Off: search until the maximum points. On: stop once the day reaches the number of searches below (# points each)",
+    "Số lượt search trong ngày": "Searches per day",
+    "Số lượt search cần từ # đến #": "The number of searches must be between # and #",
+    "Đã lưu số lượt search": "Number of searches saved",
     "Edge – Minutes không tăng sau # phút thì dừng. Tắt để luôn lướt đủ # phút":
       "Stop if Edge – Minutes hasn't grown after # minutes. Turn off to always browse the full # minutes",
     "Chạy ẩn": "Run hidden", "Không hiện cửa sổ trình duyệt": "Don't show the browser window",
