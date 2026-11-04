@@ -60,8 +60,11 @@ const LINE_ICONS = {
   money: "ti-coin", pencil: "ti-pencil", picture: "ti-photo", leaf: "ti-leaf", flower: "ti-flower", target: "ti-target-arrow",
   rocket: "ti-rocket", key: "ti-key", robot: "ti-robot",
 };
+// icon SVG riêng của app (assets/icons) thay cho ảnh Fluent Emoji ở theme Sáng / Tối; Cyberpunk vẫn dùng icon nét
+const ASSET_ICONS = { search: "bing.svg", camera: "visual.svg", mobile: "mobile.svg", calendar: "daily-set.svg" };
+const iconSrc = (name) => (ASSET_ICONS[name] ? `assets/icons/${ASSET_ICONS[name]}` : `vendor/fluent-emoji/${name}.png`);
 const icon = (name, cls = "") => `<span class="tico ${cls}" data-icon="${name}">`
-  + `<img src="vendor/fluent-emoji/${name}.png" alt="" draggable="false"><i class="ti ${LINE_ICONS[name] || "ti-point"}"></i></span>`;
+  + `<img src="${iconSrc(name)}" alt="" draggable="false"><i class="ti ${LINE_ICONS[name] || "ti-point"}"></i></span>`;
 const taskIcon = (t, cls = "") => icon(iconName(t), cls);
 // icon riêng của app cho streak (ngọn lửa) và điểm (chồng xu), dùng ở mọi theme
 const STREAK_IMG = (cls = "") => `<img class="ico-streak ${cls}" src="assets/flame.png" alt="" draggable="false">`;

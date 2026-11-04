@@ -101,13 +101,13 @@ def test_pages_render_without_errors(server):
         assert pg.evaluate("document.documentElement.dataset.bsTheme") == "light"
         pg.click(".theme-switch button[data-theme=dark]")
         assert pg.evaluate("document.documentElement.dataset.bsTheme") == "dark"
-        # icon task là PNG trong vendor/fluent-emoji (không lấy ảnh Bing), tải được và đúng loại
+        # icon task là PNG trong vendor/fluent-emoji hoặc SVG riêng trong assets/icons (không lấy ảnh Bing), tải được
         icons = pg.evaluate("Array.from(document.querySelectorAll('#task-groups .trow .tico img, #meters .tico img'),"
                             " (i) => [i.getAttribute('src'), i.complete && i.naturalWidth > 0])")
-        assert icons and all(src.startswith("vendor/fluent-emoji/") and ok for src, ok in icons), icons
+        assert icons and all(src.startswith(("vendor/fluent-emoji/", "assets/icons/")) and ok for src, ok in icons), icons
         srcs = [src for src, _ in icons]
-        assert srcs[:2] == ["vendor/fluent-emoji/pc.png", "vendor/fluent-emoji/mobile.png"]  # thanh Search PC, Mobile
-        assert "vendor/fluent-emoji/camera.png" in srcs  # Visual Search
+        assert srcs[:2] == ["vendor/fluent-emoji/pc.png", "assets/icons/mobile.svg"]  # thanh Search PC, Mobile
+        assert "assets/icons/visual.svg" in srcs  # Visual Search
         # Task hôm nay bản gọn: không lặp nhóm Tìm kiếm, việc chưa xong lên trước, bật "Ẩn việc đã xong" thì ẩn
         groups = pg.locator("#task-groups .tgroup h3 .gname").all_inner_texts()
         assert "Tìm kiếm" not in groups and groups[:3] == ["Daily Set", "Keep earning", "Quests"], groups
