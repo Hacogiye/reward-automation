@@ -48,8 +48,8 @@ html[lang="en"] [data-lang="vi"], html:not([lang="en"]) [data-lang="en"] { displ
 .run-state.on .status-dot { background: #2fb344; box-shadow: 0 0 0 0 rgba(47, 179, 68, .6); animation: pulse 1.6s infinite; }
 @keyframes pulse { 70% { box-shadow: 0 0 0 7px rgba(47, 179, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(47, 179, 68, 0); } }
 @media (min-width: 992px) {
-  .side { position: fixed; top: 0; bottom: 0; left: 0; }
-  .page-wrapper { margin-left: 15rem; }
+  .side { position: fixed; top: 0; bottom: 0; left: 0; transition: width .18s ease; overflow-x: hidden; }
+  .page-wrapper { margin-left: 15rem; transition: margin-left .18s ease; }
 }
 
 /* ---------------------------------------------------------------- thanh báo bản mới */
@@ -349,3 +349,26 @@ img.broken { visibility: hidden; }
 .pts .ico-point { width: 14px; height: 14px; margin-right: 3px; vertical-align: -2px; }
 .hero-figure .hero-coin { width: 40px; height: 40px; align-self: center; margin-right: 6px; }
 .daily-streak .flame .ico-streak, .kpi-ic .ico-streak, .kpi-ic .ico-point { width: 26px; height: 26px; }
+
+/* ---- thanh bên thu gọn (html.side-collapsed, chỉ trên màn hình rộng): còn icon, tên trang hiện khi di chuột */
+.side-toggle { margin-left: auto; flex: none; width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 8px;
+  background: none; color: rgba(255, 255, 255, .5); font-size: 18px; }
+.side-toggle:hover { background: rgba(255, 255, 255, .08); color: #fff; }
+@media (max-width: 991.98px) { .side-toggle { display: none; } }
+@media (min-width: 992px) {
+  html.side-collapsed .side.navbar-vertical { width: 4.5rem; }
+  html.side-collapsed .side.navbar-vertical ~ .page-wrapper { margin-left: 4.5rem; }
+  html.side-collapsed .brand { flex-direction: column; gap: 8px; padding: 16px 0 4px; }
+  html.side-collapsed .brand > div { display: none; }
+  html.side-collapsed .side-toggle { margin-left: 0; }
+  html.side-collapsed .side .nav-link-title { display: none; }
+  html.side-collapsed .side .navbar-nav .nav-link { position: relative; justify-content: center !important; margin: 2px 10px; padding: .6rem 0; }
+  html.side-collapsed .side .nav-link-icon { margin: 0; }
+  html.side-collapsed #log-badge { position: absolute; top: 3px; right: 4px; margin: 0 !important; padding: 2px 4px; font-size: 9px; line-height: 1; }
+  html.side-collapsed .side-foot { padding: 12px 10px 16px; align-items: stretch; }
+  html.side-collapsed .theme-switch, html.side-collapsed .lang-switch { flex-direction: column; }
+  html.side-collapsed .theme-switch button { padding: 7px 0; }
+  html.side-collapsed .run-state { justify-content: center; }
+  html.side-collapsed .run-state span:last-child { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .side, .page-wrapper { transition: none !important; } }

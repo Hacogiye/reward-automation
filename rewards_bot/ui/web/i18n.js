@@ -8,6 +8,7 @@
 const I18N = (() => {
   const EN = {
     // ---- khung, menu, chung
+    "Thu gọn thanh bên": "Collapse sidebar", "Mở rộng thanh bên": "Expand sidebar",
     // ---- văn phòng
     "Văn phòng": "Office", "Văn phòng bot": "Bot office", "Bật nhạc lofi": "Play lofi", "Tắt nhạc lofi": "Stop lofi",
     "Tiếng mưa": "Rain sounds", "Âm lượng": "Volume", "Nhạc đang tắt": "Music is off", "Lofi tự sinh": "Generated lofi",

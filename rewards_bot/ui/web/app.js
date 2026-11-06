@@ -210,6 +210,12 @@ function bindStatic() {
     toast(S.app.has_token ? "Đã lưu token GitHub" : "Đã xóa token GitHub");
   };
   $$("#nav [data-page]").forEach((b) => b.addEventListener("click", (e) => { e.preventDefault(); go(b.dataset.page); }));
+  $("#side-toggle").onclick = () => setSideCollapsed(!document.documentElement.classList.contains("side-collapsed"));
+  syncSide();
+  // nội dung rộng / hẹp theo thanh bên: báo cho biểu đồ ApexCharts (chỉ tự co giãn khi cửa sổ đổi cỡ)
+  $(".page-wrapper").addEventListener("transitionend", (e) => {
+    if (e.target === e.currentTarget && e.propertyName === "margin-left") window.dispatchEvent(new Event("resize"));
+  });
   $$(".theme-switch button").forEach((b) => (b.onclick = () => setTheme(b.dataset.theme)));
   $$("#theme-choice input").forEach((i) => (i.onchange = () => setTheme(i.value)));
   $("#btn-refresh").onclick = () => S.selected && start([S.selected], "refresh");
@@ -225,6 +231,21 @@ function bindStatic() {
   $("#max-parallel").onchange = (e) => saveSettings({ max_parallel: Math.max(1, +e.target.value || 1) });
   bindProfileDialog();
   bindGoalDialog();
+}
+
+// thanh bên thu gọn: chỉ còn icon; tên trang hiện khi di chuột (title). Nhớ lựa chọn trong localStorage
+function setSideCollapsed(on) {
+  document.documentElement.classList.toggle("side-collapsed", on);
+  pref.set("sideCollapsed", on);
+  syncSide();
+}
+function syncSide() {
+  const on = document.documentElement.classList.contains("side-collapsed"), t = $("#side-toggle");
+  const label = on ? "Mở rộng thanh bên" : "Thu gọn thanh bên";
+  t.title = label; t.setAttribute("aria-label", label); t.setAttribute("aria-expanded", String(!on));
+  t.querySelector("i").className = "ti " + (on ? "ti-layout-sidebar-left-expand" : "ti-layout-sidebar-left-collapse");
+  $$("#nav .nav-link").forEach((a) => { a.title = on ? a.querySelector(".nav-link-title").textContent.trim() : ""; });
+  $("#run-state").title = on ? $("#run-state span:last-child").textContent : "";
 }
 
 function go(page) {
@@ -262,6 +283,7 @@ function renderSide() {
   const on = S.running.size > 0;
   $("#run-state").classList.toggle("on", on);
   $("#run-state span:last-child").textContent = on ? `Đang chạy ${S.running.size} tài khoản` : "Đang nghỉ";
+  if (document.documentElement.classList.contains("side-collapsed")) $("#run-state").title = $("#run-state span:last-child").textContent;
 }
 
 function renderLogBadge() {

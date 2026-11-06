@@ -167,6 +167,16 @@ def test_pages_render_without_errors(server):
         assert pg.locator("#profile-table .avatar.has-img").count() == 1
         pg.evaluate("go('dashboard')")
         assert pg.locator("#hero-avatar.has-img").count() == 1
+        # thanh bên thu gọn: còn icon, tên trang thành tooltip; mở rộng lại như cũ
+        pg.click("#side-toggle")
+        assert pg.evaluate("document.documentElement.classList.contains('side-collapsed')")
+        assert pg.evaluate("document.querySelector('.side').getBoundingClientRect().width") < 90
+        assert pg.locator("#nav [data-page=office]").get_attribute("title") == "Văn phòng"
+        assert pg.locator("#nav [data-page=office] .nav-link-icon").is_visible()
+        assert not pg.locator("#nav [data-page=office] .nav-link-title").is_visible()
+        pg.click("#side-toggle")
+        assert not pg.evaluate("document.documentElement.classList.contains('side-collapsed')")
+        assert pg.locator("#nav [data-page=office] .nav-link-title").is_visible()
         # Văn phòng: mỗi tài khoản 1 robot có bảng tên; robot làm theo trạng thái thật; nhạc lofi bật / tắt được
         name = pg.evaluate("S.profiles[0].name")
         pg.evaluate("go('office')")
