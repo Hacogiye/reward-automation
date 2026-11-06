@@ -10,3 +10,6 @@ venv/
 # bản build .exe (python packaging/build_exe.py)
 build/
 dist/
+
+# cấu hình riêng của từng máy (quyền, đường dẫn), không đưa lên git
+.claude/settings.local.json

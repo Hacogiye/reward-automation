@@ -96,6 +96,10 @@ class Api:
         self._events: queue.Queue = queue.Queue()
         # câu search vẫn sinh tự động (đa lĩnh vực, không trùng) dù không còn trang bảng search
         self._bank = QueryBank(HISTORY_FILE, int(self._settings.get("history_days", 30)))
+        try:  # repo đã công khai: xóa token GitHub cũ (từng cần khi repo riêng tư) nếu còn lưu
+            credentials.remove_secret("github_token")
+        except OSError:
+            pass
         self._runner = Runner(
             self._bank,
             log=lambda n, m: self._events.put({"type": "log", "name": n, "msg": m, "time": time.strftime("%H:%M:%S")}),
@@ -200,34 +204,19 @@ class Api:
         return {"ok": True, "avatars": self._avatars()}
 
     # ------------------------------------------------------------ cập nhật
-    _TOKEN_KEY = "github_token"
-
     def _app_info(self) -> dict:
-        return {"version": __version__, "frozen": config.FROZEN, "releases": updater.RELEASES_URL,
-                "has_token": bool(credentials.load_secret(self._TOKEN_KEY)), "can_store": credentials.supported()}
+        return {"version": __version__, "frozen": config.FROZEN, "releases": updater.RELEASES_URL}
 
     def check_update(self) -> dict:
         """Hỏi GitHub bản mới nhất. Không có bản mới / lỗi mạng thì không làm phiền người dùng."""
         try:
-            rel = updater.latest_release(credentials.load_secret(self._TOKEN_KEY))
+            rel = updater.latest_release()
         except updater.UpdateError as e:
             return {"ok": False, "error": str(e), "current": __version__}
         self._release = rel
         newer = updater.is_newer(rel["tag"])
         return {"ok": True, "current": __version__, "latest": rel["version"], "newer": newer, "notes": rel["notes"],
                 "name": rel["name"], "can_install": newer and config.FROZEN and bool(rel["asset"])}
-
-    def set_update_token(self, token) -> dict:
-        token = str(token or "").strip()
-        if not token:
-            credentials.remove_secret(self._TOKEN_KEY)
-            return {"ok": True, "app": self._app_info()}
-        if not updater.TOKEN_RE.match(token):
-            return {"ok": False, "error": "Token GitHub không đúng dạng (bắt đầu bằng github_pat_ hoặc ghp_)."}
-        if not credentials.supported():
-            return {"ok": False, "error": "Chỉ lưu được token trên Windows (mã hóa DPAPI)."}
-        credentials.save_secret(self._TOKEN_KEY, token)
-        return {"ok": True, "app": self._app_info()}
 
     def open_releases(self) -> dict:
         """Mở trang bản phát hành trên GitHub bằng trình duyệt mặc định (chỉ đúng địa chỉ của repo này)."""
@@ -254,7 +243,7 @@ class Api:
                     last[0] = time.time()
                     self._events.put({"type": "update", "state": "downloading", "done": done, "total": total})
             try:
-                updater.download(rel["asset"], dest, credentials.load_secret(self._TOKEN_KEY), progress)
+                updater.download(rel["asset"], dest, progress)
                 self._update_zip = dest
                 self._events.put({"type": "update", "state": "ready", "version": rel["version"]})
             except (updater.UpdateError, OSError) as e:

@@ -1,11 +1,12 @@
 """Kiểm tra và cài bản mới từ GitHub Releases cho bản đóng gói RewardsBot.exe.
 
-Bản phát hành là file zip `RewardsBot-<phiên bản>-win64.zip` chứa thư mục `RewardsBot/` (RewardsBot.exe + _internal/).
-Cài đặt: tải zip về data/update/, kiểm tra nội dung, rồi một script PowerShell chạy sau khi app đóng sẽ chép đè file
-mới lên thư mục cài đặt (KHÔNG đụng data/: phiên đăng nhập, cài đặt, mật khẩu đã mã hóa) và mở lại app.
-Repo riêng tư thì GitHub chỉ trả thông tin cho người có token đọc (lưu mã hóa DPAPI như mật khẩu).
+Bản phát hành là file zip `RewardsBot-<phiên bản>-win64.zip` chứa thư mục `RewardsBot/` (RewardsBot.exe + _internal/),
+kèm file `<tên zip>.sha256`. Cài đặt: tải zip về data/update/, so SHA-256 và kiểm tra nội dung, rồi một script
+PowerShell chạy sau khi app đóng sẽ chép đè file mới lên thư mục cài đặt (KHÔNG đụng data/: phiên đăng nhập, cài đặt,
+mật khẩu đã mã hóa) và mở lại app. Repo công khai nên không cần token.
 """
 
+import hashlib
 import json
 import os
 import re
@@ -26,7 +27,6 @@ ASSET_RE = re.compile(r"^RewardsBot-[\w.]+-win64\.zip$")
 EXE_NAME = "RewardsBot.exe"
 APP_FOLDER = "RewardsBot"
 MAX_ASSET_BYTES = 400 * 1024 * 1024
-TOKEN_RE = re.compile(r"^(ghp_|github_pat_|gho_)[A-Za-z0-9_]{20,255}$")
 # chỉ tải từ GitHub (API trả về link chuyển tiếp sang máy chủ file của GitHub)
 _ALLOWED_HOSTS = ("api.github.com", "github.com", "objects.githubusercontent.com",
                   "release-assets.githubusercontent.com", "github-releases.githubusercontent.com")
@@ -47,11 +47,8 @@ def is_newer(latest, current=__version__) -> bool:
     return bool(a and b and a > b)
 
 
-def _headers(token=None, accept="application/vnd.github+json") -> dict:
-    h = {"Accept": accept, "User-Agent": f"RewardsBot/{__version__}", "X-GitHub-Api-Version": "2022-11-28"}
-    if token:
-        h["Authorization"] = f"Bearer {token}"
-    return h
+def _headers(accept="application/vnd.github+json") -> dict:
+    return {"Accept": accept, "User-Agent": f"RewardsBot/{__version__}", "X-GitHub-Api-Version": "2022-11-28"}
 
 
 def _allowed(url: str) -> bool:
@@ -59,29 +56,30 @@ def _allowed(url: str) -> bool:
     return u.scheme == "https" and (u.hostname or "") in _ALLOWED_HOSTS
 
 
-def latest_release(token=None, timeout: float = 15, opener=urllib.request.urlopen) -> dict:
-    """Thông tin bản phát hành mới nhất: {version, tag, name, notes, url, asset{name,size,api_url}}."""
-    req = urllib.request.Request(LATEST_API, headers=_headers(token))
+def latest_release(timeout: float = 15, opener=urllib.request.urlopen) -> dict:
+    """Thông tin bản phát hành mới nhất: {version, tag, name, notes, url, asset{name,size,api_url,sha256_url}}."""
+    req = urllib.request.Request(LATEST_API, headers=_headers())
     try:
         with opener(req, timeout=timeout) as r:
             data = json.loads(r.read().decode("utf-8"))
     except urllib.error.HTTPError as e:
-        if e.code in (401, 403, 404):
-            raise UpdateError("Không xem được bản phát hành: repo riêng tư cần token GitHub (quyền đọc) trong Cài đặt, "
-                              "hoặc chưa có bản phát hành nào" if e.code == 404 or not token else
-                              "Token GitHub không hợp lệ hoặc không có quyền đọc repo") from None
+        if e.code == 404:
+            raise UpdateError("Chưa có bản phát hành nào trên GitHub") from None
         raise UpdateError(f"GitHub trả lỗi {e.code}") from None
     except (urllib.error.URLError, OSError, ValueError) as e:
         raise UpdateError(f"Không kết nối được GitHub ({getattr(e, 'reason', e)})") from None
     tag = str(data.get("tag_name") or "")
-    asset = next((a for a in data.get("assets") or [] if ASSET_RE.match(str(a.get("name") or ""))), None)
+    assets = data.get("assets") or []
+    asset = next((a for a in assets if ASSET_RE.match(str(a.get("name") or ""))), None)
+    sha = asset and next((a for a in assets if a.get("name") == asset["name"] + ".sha256"), None)
     return {
         "version": ".".join(map(str, parse_version(tag))) if parse_version(tag) else tag,
         "tag": tag,
         "name": str(data.get("name") or tag)[:120],
         "notes": str(data.get("body") or "")[:3000],
         "url": str(data.get("html_url") or RELEASES_URL),
-        "asset": {"name": asset["name"], "size": int(asset.get("size") or 0), "api_url": asset["url"]} if asset else None,
+        "asset": {"name": asset["name"], "size": int(asset.get("size") or 0), "api_url": asset["url"],
+                  "sha256_url": sha["url"] if sha else ""} if asset else None,
     }
 
 
@@ -90,38 +88,61 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def download(asset: dict, dest: Path, token=None, progress=None, timeout: float = 60) -> Path:
-    """Tải file zip của bản phát hành về dest. GitHub chuyển tiếp sang link có chữ ký: bước đó KHÔNG gửi token."""
-    url = asset["api_url"]
+def _open(url: str, timeout: float):
+    """Mở file của bản phát hành; GitHub chuyển tiếp sang link có chữ ký, chỉ đi theo nếu vẫn là host của GitHub."""
     if not _allowed(url):
         raise UpdateError("Link tải không phải của GitHub")
-    if asset.get("size", 0) > MAX_ASSET_BYTES:
-        raise UpdateError("File cập nhật quá lớn")
     opener = urllib.request.build_opener(_NoRedirect)
-    req = urllib.request.Request(url, headers=_headers(token, "application/octet-stream"))
     try:
-        resp = opener.open(req, timeout=timeout)
+        return opener.open(urllib.request.Request(url, headers=_headers("application/octet-stream")), timeout=timeout)
     except urllib.error.HTTPError as e:
         if e.code not in (301, 302, 303, 307, 308):
             raise UpdateError(f"Tải bản cập nhật lỗi {e.code}") from None
         location = e.headers.get("Location", "")
         if not _allowed(location):
             raise UpdateError("GitHub chuyển tới địa chỉ lạ, dừng tải") from None
-        resp = urllib.request.urlopen(urllib.request.Request(location, headers={"User-Agent": f"RewardsBot/{__version__}"}),
-                                      timeout=timeout)
+        try:
+            return urllib.request.urlopen(
+                urllib.request.Request(location, headers={"User-Agent": f"RewardsBot/{__version__}"}), timeout=timeout)
+        except (urllib.error.URLError, OSError) as e2:
+            raise UpdateError(f"Không tải được bản cập nhật ({getattr(e2, 'reason', e2)})") from None
     except (urllib.error.URLError, OSError) as e:
         raise UpdateError(f"Không tải được bản cập nhật ({getattr(e, 'reason', e)})") from None
+
+
+def _expected_sha256(asset: dict, timeout: float) -> str:
+    """Đọc mã SHA-256 trong file `<zip>.sha256` (dạng `sha256sum`: "<64 ký tự hex>  <tên file>")."""
+    if not asset.get("sha256_url"):
+        raise UpdateError("Bản phát hành thiếu file .sha256, không cài để an toàn")
+    with _open(asset["sha256_url"], timeout) as r:
+        text = r.read(4096).decode("ascii", "replace")
+    m = re.match(r"\s*([0-9a-fA-F]{64})(?![0-9a-fA-F])", text)
+    if not m:
+        raise UpdateError("File .sha256 của bản phát hành không đúng dạng")
+    return m.group(1).lower()
+
+
+def download(asset: dict, dest: Path, progress=None, timeout: float = 60) -> Path:
+    """Tải file zip của bản phát hành về dest, so SHA-256 với file .sha256 đi kèm rồi kiểm tra nội dung zip."""
+    if asset.get("size", 0) > MAX_ASSET_BYTES:
+        raise UpdateError("File cập nhật quá lớn")
+    expected = _expected_sha256(asset, timeout)
+    resp = _open(asset["api_url"], timeout)
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(".part")
-    total, done = int(resp.headers.get("Content-Length") or asset.get("size") or 0), 0
+    total, done, h = int(resp.headers.get("Content-Length") or asset.get("size") or 0), 0, hashlib.sha256()
     with resp, open(tmp, "wb") as f:
         while chunk := resp.read(1024 * 256):
             done += len(chunk)
             if done > MAX_ASSET_BYTES:
                 raise UpdateError("File cập nhật quá lớn")
+            h.update(chunk)
             f.write(chunk)
             if progress:
                 progress(done, total)
+    if h.hexdigest() != expected:
+        tmp.unlink(missing_ok=True)
+        raise UpdateError("File cập nhật không khớp mã SHA-256, đã xóa (tải lại sau)")
     os.replace(tmp, dest)
     verify_zip(dest)
     return dest

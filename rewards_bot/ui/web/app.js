@@ -202,13 +202,6 @@ function bindStatic() {
   $("#tasks-hide-done").onchange = (e) => { pref.set("hideDoneTasks", e.target.checked); renderTasks(st(S.selected)); };
   $("#update-dismiss").onclick = () => ($("#update-bar").hidden = true);
   $("#btn-check-update").onclick = () => checkUpdate(true);
-  $("#btn-save-token").onclick = async () => {
-    const r = await api().set_update_token($("#set-gh-token").value);
-    $("#set-gh-token").value = "";
-    if (!r.ok) { toast(r.error); return; }
-    S.app = r.app; renderSettings();
-    toast(S.app.has_token ? "Đã lưu token GitHub" : "Đã xóa token GitHub");
-  };
   $$("#nav [data-page]").forEach((b) => b.addEventListener("click", (e) => { e.preventDefault(); go(b.dataset.page); }));
   $("#side-toggle").onclick = () => setSideCollapsed(!document.documentElement.classList.contains("side-collapsed"));
   syncSide();
@@ -1045,8 +1038,6 @@ function renderSettings() {
   const app = S.app || {};
   $("#app-version").textContent = `Phiên bản ${app.version || "?"}${app.frozen ? "" : " (mã nguồn)"}`;
   $("#set-check-updates").checked = S.settings.check_updates !== false;
-  $("#set-gh-token").placeholder = app.has_token ? "Đã lưu token (nhập token mới để thay)" : "github_pat_...";
-  $("#set-gh-token").disabled = $("#btn-save-token").disabled = app.can_store === false;
 }
 async function saveSettingsForm() {
   const partial = { browser_channel: $("#set-browser").value };

@@ -3,7 +3,10 @@
 Tự làm Daily Set, Keep earning (link, poll, quiz cơ bản), search PC + Mobile, search ảnh trên Bing Images
 và browse web trong N phút. Chạy được nhiều tài khoản/cửa sổ **song song**, có dashboard theo dõi điểm và task.
 
-> ⚠️ Microsoft Rewards cấm dùng bot. Tài khoản có thể bị khóa hoặc mất điểm. Bạn tự chịu rủi ro.
+> ⚠️ **Đọc trước khi dùng.** Điều khoản của Microsoft Rewards cấm dùng bot hay công cụ tự động để kiếm điểm. Microsoft
+> có thể **khóa tài khoản Rewards, hủy điểm chưa đổi hoặc hủy quà đã đổi**. Dự án này chỉ để học và nghiên cứu, không
+> liên quan và không được Microsoft xác nhận. Bạn tự chịu mọi rủi ro khi dùng, tác giả không chịu trách nhiệm cho việc
+> tài khoản bị khóa hay mất điểm. Không nên dùng với tài khoản Microsoft chính mà bạn không muốn mất.
 
 ## Cài đặt
 
@@ -139,8 +142,14 @@ lặp lại trong N ngày (lưu ở `data/search_history.json`). Muốn thêm c�
 - **HTTPS** luôn được kiểm tra chứng chỉ, nên proxy chen giữa dùng chứng chỉ giả sẽ bị chặn.
 - **Giao diện** có Content-Security-Policy: chỉ chạy script của app, chỉ tải ảnh từ bing.com. Dữ liệu lấy từ trang
   Rewards luôn được escape. Mọi giá trị giao diện gửi xuống Python (cài đặt, tên tài khoản, cổng, lệnh) đều được kiểm tra.
+- **Cổng debug khi bot đang chạy**: ở chế độ Cửa sổ riêng, Edge mở một cổng debug ngẫu nhiên chỉ trên `127.0.0.1` và
+  đóng khi trình duyệt đóng. Trong lúc đó, chương trình khác **trên cùng máy** có thể điều khiển cửa sổ Edge đã đăng
+  nhập đó (mạng ngoài thì không). Mọi bot dùng CDP/Selenium đều vậy. Đừng chạy bot trên máy dùng chung với người khác.
 - **Chế độ Gắn vào Edge đang mở**: cổng debug cho phép mọi chương trình trên máy điều khiển Edge. Bot chỉ kết nối qua
   `127.0.0.1` và từ chối chạy nếu cổng bị mở ra mạng LAN. Chỉ bật Edge debug khi cần chạy bot.
+- **Cập nhật tự động** chỉ tải file từ máy chủ của GitHub (HTTPS), so mã SHA-256 với file `.sha256` của bản phát
+  hành, kiểm tra nội dung zip (không ghi ra ngoài thư mục app, không đụng `data/`) rồi mới cài. SHA-256 bảo vệ khỏi file
+  hỏng hoặc bị sửa trên đường tải; nó không thay được chữ ký số, nên ai cũng có thể tự build từ mã nguồn nếu muốn chắc chắn.
 - Giới hạn: phần mềm độc hại chạy dưới chính tài khoản Windows của bạn vẫn có thể đọc dữ liệu của bạn. Hãy giữ
   Windows và phần mềm diệt virus cập nhật.
 
@@ -180,15 +189,14 @@ Bản .exe: lệnh là `C:\RewardsBot\RewardsBot.exe --run-all --headless`.
 - **Bản .exe:** mở app thì app tự hỏi GitHub có bản mới không (tắt được trong Cài đặt). Có bản mới thì hiện thanh báo ở
   trên cùng: **Tải và cập nhật**, rồi **Khởi động lại để cập nhật**. App đóng, chép đè file mới rồi tự mở lại; thư mục
   `data\` không bao giờ bị đụng tới. Kết quả ghi ở `data\update\update.log`.
-- Repo đang **riêng tư** nên GitHub chỉ trả thông tin bản phát hành khi có token: vào Cài đặt > Cập nhật, dán một
-  *fine-grained token* chỉ cho repo này với quyền **Contents: Read-only**. Token được mã hóa DPAPI (`data\secrets.json`).
+- Bản cập nhật chỉ được cài khi mã SHA-256 của file zip khớp file `.sha256` đi kèm bản phát hành.
 - **Bản mã nguồn:** `git pull`.
 - App bị lỗi khi mở (bản .exe): chi tiết ghi ở `data\crash.log`.
 
 ### Phát hành bản mới (người phát triển)
 1. Tăng `__version__` trong `rewards_bot/__init__.py`, commit.
 2. `git tag v<phiên bản>` rồi `git push origin v<phiên bản>`. GitHub Actions (`.github/workflows/release.yml`) chạy test,
-   build `.exe` trên Windows và tạo Release kèm file zip.
+   build `.exe` trên Windows và tạo Release kèm file zip và file `.sha256` của nó.
 3. Build thử trên máy: `python packaging/build_exe.py` ra `dist/RewardsBot/RewardsBot.exe` và
    `dist/RewardsBot-<phiên bản>-win64.zip`.
 
@@ -207,7 +215,7 @@ rewards-bot/
 │   │   ├── browser.py      # phát hiện trình duyệt đang giữ profile
 │   │   ├── security.py     # khóa quyền data/, proxy, cổng debug
 │   │   ├── instance.py     # chỉ 1 cửa sổ app chạy cùng lúc
-│   │   ├── credentials.py  # mật khẩu / token mã hóa DPAPI
+│   │   ├── credentials.py  # mật khẩu tự đăng nhập, mã hóa DPAPI
 │   │   ├── updater.py      # kiểm tra + cài bản mới từ GitHub Releases
 │   │   └── config.py       # cài đặt, tài khoản, đọc/ghi file an toàn
 │   ├── search/             # catalog.py (danh mục câu search) + bank.py (chia câu không trùng)
@@ -219,7 +227,7 @@ rewards-bot/
 ├── data/                   # tự tạo khi chạy (không commit)
 ├── run.bat / run.sh        # mở app (Windows / Linux)
 ├── check.bat / check.sh    # chạy test
-├── CLAUDE.md               # ghi chú cho Claude Code (lệnh, cấu trúc, các lỗi đã tìm ra)
+├── CLAUDE.md / AGENTS.md   # ghi chú cho trợ lý AI viết code (lệnh, cấu trúc, các lỗi đã tìm ra)
 ├── requirements.txt
 └── requirements-dev.txt
 ```
@@ -230,3 +238,9 @@ rewards-bot/
 pip install -r requirements-dev.txt
 ```
 Chạy `check.bat` (hoặc `python -m pytest -q tests`) trước mỗi lần commit.
+
+## Giấy phép
+
+Mã nguồn phát hành theo giấy phép [MIT](LICENSE). Các thư viện đi kèm trong `rewards_bot/ui/web/vendor/` giữ giấy phép
+riêng (file LICENSE trong từng thư mục): Tabler và Tabler Icons (MIT), ApexCharts 3.54 (MIT), Fluent Emoji (MIT),
+font Chakra Petch (SIL OFL 1.1). "Microsoft", "Bing", "Edge" và "Microsoft Rewards" là thương hiệu của Microsoft.

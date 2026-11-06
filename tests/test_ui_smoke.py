@@ -60,7 +60,7 @@ def boot_data():
         "running": [],
         "credentials": {"supported": True, "emails": {"acc <img src=x onerror=alert(1)>": "me@example.com"}},
         "goals": {"acc <img src=x onerror=alert(1)>": {"title": "<img src=x onerror=alert(5)>", "points": 6500}},
-        "app": {"version": "1.2.0", "frozen": True, "has_token": False, "can_store": True},
+        "app": {"version": "1.2.0", "frozen": True},
         # ảnh 1x1 PNG
         "avatars": {"acc <img src=x onerror=alert(1)>": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="},
     }

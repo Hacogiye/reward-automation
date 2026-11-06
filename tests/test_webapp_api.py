@@ -106,23 +106,17 @@ def test_goal_validation_and_follows_profile(api):
     assert api._settings["goals"] == {}
 
 
-def test_update_check_and_token(api, monkeypatch):
-    monkeypatch.setattr(W.updater, "latest_release", lambda token: {
+def test_update_check(api, monkeypatch):
+    monkeypatch.setattr(W.updater, "latest_release", lambda: {
         "tag": "v9.0.0", "version": "9.0.0", "name": "v9", "notes": "", "url": "", "asset": {"name": "x", "size": 1, "api_url": ""}})
     r = api.check_update()
     assert r["ok"] and r["newer"] and r["latest"] == "9.0.0"
     assert r["can_install"] is False  # chạy từ mã nguồn: không tự cài, dùng git pull
     assert api.download_update()["ok"] is False
-    assert api.set_update_token("not-a-token")["ok"] is False
-    if W.credentials.supported():
-        tok = "github_pat_" + "A" * 40
-        assert api.set_update_token(tok)["app"]["has_token"] is True
-        assert tok not in repr(api._app_info())
-        assert api.set_update_token("")["app"]["has_token"] is False
 
 
 def test_update_check_error_is_reported(api, monkeypatch):
-    def boom(token):
+    def boom():
         raise W.updater.UpdateError("Không kết nối được GitHub")
     monkeypatch.setattr(W.updater, "latest_release", boom)
     assert api.check_update() == {"ok": False, "error": "Không kết nối được GitHub", "current": W.__version__}

@@ -68,8 +68,8 @@ python -m rewards_bot --run-all --headless # what Task Scheduler runs
 - `search/catalog.py`: the query catalog. `search/bank.py` hands out queries without repeats across accounts or
   across `history_days`.
 - `data/` holds login sessions and cookies. It is never committed. Profile dir = `data/profiles/<profile["dir"]>`,
-  which is fixed at creation and is not the display name (for example account `namanh` uses `namanh_2`).
-  One such folder can hold several Edge profiles (`namanh_2` has `Default` = work account and `Profile 1` = the
+  which is fixed at creation and is not the display name (for example account `alice` may use `alice_2`).
+  One such folder can hold several Edge profiles (for example `Default` = a work account and `Profile 1` = the
   personal MSA). `edge_launcher.pinned_profile()` pins one into `rewards_bot_profile.txt` on first open and the bot
   always passes `--profile-directory`. Never drop that, or Edge silently opens whichever profile was used last.
 - Per-account proxy (`profile["proxy"]`, managed mode only): `security.validate_proxy` normalizes it to
@@ -106,14 +106,14 @@ python -m rewards_bot --run-all --headless # what Task Scheduler runs
 - **Headless tell.** `--headless=new` puts `HeadlessChrome` in the UA, and Bing then rejects Visual Search.
   `edge_launcher` passes `--user-agent` with the normal UA (version read from the folder next to msedge.exe) and
   `--screen-info` 1920x1080. Verified: headless Visual Search works after this.
-- 2026-10-21 the Edge Browsing Streak did count for namanh (streak day 2), but on 2026-10-22 about 5 h of headless
+- 2026-10-21 the Edge Browsing Streak did count for one test account (streak day 2), but on 2026-10-22 about 5 h of headless
   Browse in the same `Profile 1` left Edge – Minutes at 0/30. The cause is unknown. The user later reported (2026-10-23)
   that it does fill when Run is repeated 3–4 times in a day; the guide says so, and suggests turning auto-stop off. `do_browse` now reads Edge – Minutes
   every 10 min, logs `first → now (chạy ẩn/hiện cửa sổ)`, and stops when full or after 20 min without gain
   (the 20-min stop can be turned off with the `browse_auto_stop` setting). Read those
   log lines before claiming anything about what earns it.
 - Older note: "Edge – Minutes" (Edge Browsing Streak, 30 min/day) was NOT earned by the bot's Browse in early tests. The following were all
-  tested on namanh and all gave 0/30: headless, headed, Playwright's background-blocking flags removed, and the Edge
+  tested on one account and all gave 0/30: headless, headed, Playwright's background-blocking flags removed, and the Edge
   browser itself signed in to the right MSA (checked in edge://signin-internals). The minutes that did count came
   from the user's own Edge use: the bot profile's History shows no long browse on those days. Do not claim Browse
   earns it.
@@ -126,7 +126,7 @@ python -m rewards_bot --run-all --headless # what Task Scheduler runs
   search" even with the working flow). Test on an account that has not done it yet that day, and only once or twice.
 - Stamp bonus: on /dashboard the element `[role=progressbar][aria-label="Stamps collected"]` carries
   `aria-valuenow` / `aria-valuemax`. Streaks are in the /earn "Streaks" section ("Day x of 7").
-- Windows can auto-sign the Edge *browser* into the user's work account in every bot profile, even
+- Windows can auto-sign the Edge *browser* into a work account in every bot profile, even
   when bing.com cookies belong to another account. This did not affect search points.
 
 ## Debugging against real accounts
@@ -136,7 +136,7 @@ python -m rewards_bot --run-all --headless # what Task Scheduler runs
 - A profile can be opened by only one browser at a time. Check that the app is not running that account (look for
   `msedge.exe` with `--user-data-dir=...\<dir>`) before you launch it.
 - Prove a fix with an A/B run on the same account: read Points breakdown, do 3 searches, read it again. Do not draw
-  conclusions from log timing alone, because the user also searches manually on their phone.
+  conclusions from log timing alone, because the account owner may also search manually on a phone.
 
 ## Conventions
 

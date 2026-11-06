@@ -19,7 +19,7 @@ LOG_DIR = DATA_DIR / "logs"  # nhật ký mỗi ngày 1 file
 LOCK_FILE = DATA_DIR / "app.lock"  # chỉ cho 1 cửa sổ app chạy cùng lúc
 VISUAL_TRIES_FILE = DATA_DIR / "visual_tries.json"  # số lần thử Visual Search mỗi tài khoản trong ngày
 CREDENTIALS_FILE = DATA_DIR / "credentials.json"  # email + mật khẩu đã mã hóa (DPAPI) để tự đăng nhập lại
-SECRETS_FILE = DATA_DIR / "secrets.json"  # token GitHub (đã mã hóa DPAPI) để kiểm tra bản mới khi repo riêng tư
+SECRETS_FILE = DATA_DIR / "secrets.json"  # bí mật khác (đã mã hóa DPAPI); hiện chưa dùng
 UPDATE_DIR = DATA_DIR / "update"  # file cập nhật tải về + script cài
 AVATAR_DIR = DATA_DIR / "avatars"  # ảnh đại diện tài khoản: <thư mục profile>.webp|png|jpg
 
