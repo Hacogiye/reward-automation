@@ -74,15 +74,21 @@ python -m rewards_bot --run-all --headless # what Task Scheduler runs
   uses `skewY(26.565deg)` to match. Static layer (`drawStatic`, redrawn only when `staticKey()` changes): floor, walls,
   rug and wall items, i.e. only things nothing can stand behind. Desks, chairs, sofa, coffee machine, water cooler,
   plant and arcade are pre-rendered sprites (`sprites[name]`, rebuilt when `themeKey()` changes) in the depth-sorted
-  list with the robots; only monitor screens, windows and LEDs are drawn per frame. `Office._pos(name)` is read-only,
-  for tests. The `activity()` regexes did not change with the isometric view. The page draws about 30 fps when something
+  list with the robots; only monitor screens, windows and LEDs are drawn per frame. The monitor is a thin box at the
+  back of the desk whose glass faces `+gy`; `drawScreen` content (26 x 15) is drawn onto it with `transform(1, 0.5, 0,
+  1, ...)`. The chair stands in front of the desk (`SEAT_DX/SEAT_DY`, the viewer's side), so a seated robot shows its
+  back and looks at the screen up-right (1-2 o'clock). The chair is two sprites: seat (drawn before the robot) and a
+  low back (`chairBack`, after it). Robots are drawn as isometric boxes (`boxO`, body + head + arms/legs); `b.fa`
+  (`+gy`/`+gx`/`-gy`/`-gx`) is the facing, set from the walk direction or `restFace()`, and the visor/face is drawn
+  on a visible side with `onFace()`; facing away shows only the visor edge. A waiting robot stands behind its own
+  chair. Test hooks (read-only): `Office._pos(name)`, `_path(name)`, `_screens()`. The `activity()` regexes did not change with the isometric view. The page draws about 30 fps when something
   moves and 6 fps when all robots are idle, and stops when the page is hidden. Numbers use a 3x5 pixel font (`pix`).
   Vietnamese wall text is HTML (`.ow`). The back desk row sits 2 tiles from the right wall and the wall is 84 px tall
   so sprites and bubbles never cover the sign or score board; rows are 4.6 tiles apart so name tags (anchored under each
   seat) do not hit the next row. `walk()` routes from the robot's real `gx/gy` (desk gap, corridor, `GAP_L`, front
   row), also when the target changes mid-walk. Measured 2026-11-06 with 7 robots, 3 running (CDP `TaskDuration`, 8 s,
   old and new back to back): old top-down 34-52 ms/s, isometric 50-64 ms/s (about 1.25-1.5x, noisy); canvas
-  0.49 -> 0.63 MB (492 x 338).
+  0.49 -> 0.63 MB (492 x 338). After the box robots and chairs in front of the desks: 43-74 ms/s over 3 runs (noisy).
 - Reward goal per account: `settings["goals"]`, set through `Api.set_goal`. It follows profile renames and deletes.
 - `search/catalog.py`: the query catalog. `search/bank.py` hands out queries without repeats across accounts or
   across `history_days`.

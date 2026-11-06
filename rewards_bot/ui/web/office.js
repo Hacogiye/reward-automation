@@ -211,13 +211,14 @@ const Office = (() => {
   const bots = new Map();           // tên tài khoản -> robot
   const fx = [];                    // hạt hiệu ứng (tọa độ màn hình): khói, pháo giấy, "+điểm", nốt nhạc, zzz
 
-  const seatGy = (row) => TOP + row * ROWD + 0.5;
-  const corridorY = () => seatGy(rows - 1) + 3.4;
+  const SEAT_DX = 0.9, SEAT_DY = 1.55;              // ghế ở trước mặt bàn (phía +gy, gần người xem): robot quay lưng ra, nhìn màn hình về hướng 1-2 giờ
+  const seatGy = (row) => TOP + row * ROWD + SEAT_DY;
+  const corridorY = () => seatGy(rows - 1) + 2.4;
   const loungeTop = () => corridorY() + 0.5;
   const frontY = () => loungeTop() + 2.3;           // hàng đứng phía trước đồ khu nghỉ
   const cellOf = (i) => ({ col: i % COLS, row: Math.floor(i / COLS) });
   const deskGx = (col) => col * CW + 0.8, deskGy = (row) => TOP + row * ROWD;   // góc gx/gy nhỏ nhất của bàn (rộng 2 x sâu 1)
-  const seat = (i) => { const { col, row } = cellOf(i); return { gx: col * CW + 3.15, gy: seatGy(row) }; };
+  const seat = (i) => { const { col, row } = cellOf(i); return { gx: deskGx(col) + SEAT_DX, gy: seatGy(row) }; };
   const gapX = (col) => col * CW + 3.9;             // khe giữa các cột bàn: lối đi xuống hành lang
   const LOUNGE_SPOTS = () => {
     const L = loungeTop(), fy = frontY();
@@ -335,7 +336,7 @@ const Office = (() => {
       let b = bots.get(name);
       if (!b) {
         const color = BODY[hash(name) % BODY.length];
-        b = { name, gx: 0, gy: 0, sx: 0, sy: 0, lift: 0, depth: 0, dir: -1, path: [], where: null, pose: "stand", act: null, spot: null, until: 0, color,
+        b = { name, gx: 0, gy: 0, sx: 0, sy: 0, lift: 0, depth: 0, fa: "+gy", path: [], where: null, pose: "stand", act: null, spot: null, until: 0, color,
               dark: shade(color, -0.35), light: shade(color, 0.25), blink: 0, log: "", logUntil: 0, celebrate: 0,
               today: st(name).today, el: document.createElement("div"), bub: { text: null, cls: "", x: -1, y: -1 } };
         b.el.className = "ob";
@@ -373,7 +374,9 @@ const Office = (() => {
     b.lift = still && b.pose === "sit" ? b.where.z || 0 : onSofa ? 7.5 : 0;
     b.depth = b.gx + b.gy + (onSofa ? 1.5 : still ? b.where.bias || 0 : 0);
   }
-  function place(b, to) { b.gx = to.gx; b.gy = to.gy; b.path = []; b.where = to; b.pose = to.pose; if (to.pose === "sit") b.dir = -1; locate(b); }
+  // hướng mặt khi đứng yên: ngồi bàn thì nhìn màn hình (-gy), còn lại quay về phía người xem
+  const restFace = (to) => (to.kind === "desk" && to.pose === "sit" ? "-gy" : to.face || "+gy");
+  function place(b, to) { b.gx = to.gx; b.gy = to.gy; b.path = []; b.where = to; b.pose = to.pose; b.fa = restFace(to); locate(b); }
   function walk(b, to) {  // đi theo lối đi: ra khe giữa các bàn, xuống hành lang, qua lối giữa sofa và máy cà phê, rồi mới tới chỗ mới
     const pts = [], cy = corridorY(), fy = frontY(), from = b.where, eps = 1e-6, moving = b.path.length > 0;
     const add = (gx, gy) => {  // bỏ điểm trùng điểm trước để mỗi đoạn đi dọc đúng 1 trục sàn
@@ -384,7 +387,7 @@ const Office = (() => {
     const area = b.gy < cy - eps ? "desk" : b.gy > cy + eps ? "lounge" : "corr";
     const nearCol = () => Math.max(0, Math.min(COLS - 1, Math.round((b.gx - 3.9) / CW)));
     if (!moving && from && from.kind === "desk" && to.kind === "desk" && from.col === to.col && from.row === to.row) {
-      add(gapX(to.col), seatGy(to.row)); add(to.gx, to.gy);  // ngồi <-> đứng cạnh bàn: qua khe bên phải ghế, không cắt qua ghế
+      add(gapX(to.col), b.gy); add(gapX(to.col), to.gy); add(to.gx, to.gy);  // ngồi <-> đứng chờ sau ghế: vòng qua khe bên phải, không cắt qua ghế
     } else {
       if (to.kind === "lounge" && area === "lounge") add(b.gx, fy);  // đã ở khu nghỉ: ra hàng trước rồi đi ngang
       else if (area === "desk") { const c = !moving && from && from.kind === "desk" ? from.col : nearCol(); add(gapX(c), b.gy); add(gapX(c), cy); }
@@ -398,7 +401,7 @@ const Office = (() => {
   function target(b, act) {
     const { col, row } = cellOf(b.index), s = seat(b.index);
     if (act.at === "desk") return { kind: "desk", col, row, gx: s.gx, gy: s.gy, pose: "sit", z: SEAT_Z };
-    if (act.at === "wait") return { kind: "desk", col, row, gx: gapX(col), gy: s.gy + 1.2, pose: "stand" };  // đứng cạnh ghế, phía trước màn hình của cột bên cạnh
+    if (act.at === "wait") return { kind: "desk", col, row, gx: s.gx, gy: s.gy + 1.2, pose: "stand", face: "+gy" };  // đứng chờ ngay sau ghế của mình
     return pickSpot(b);
   }
   function pickSpot(b) {
@@ -580,8 +583,11 @@ const Office = (() => {
     return { c, ax, ay };
   }
   const MUGS = ["#e05d5d", "#5d8fe0", "#5dc08a", "#e0b85d"];
-  const MONQ = qz(0.55, 0.5, 11);                           // chân màn hình trên mặt bàn (cục bộ trong sprite bàn)
-  const MON = { x: MONQ[0] - 13, y: MONQ[1] - 19 };         // góc trên-trái vùng hiển thị 26 x 15 so với điểm neo của bàn
+  // màn hình: khối mỏng đứng ở mép sau bàn, mặt kính hướng +gy (về phía ghế và người xem). Nội dung 26 x 15 px vẽ lên mặt
+  // đó bằng phép nghiêng 2:1 (đi 1 px theo gx thì xuống 0,5 px), nên màn hình nằm cùng không gian với cái bàn.
+  const MON = { x0: 0.13, x1: 1.89, y0: 0.12, y1: 0.28, z0: 14, z1: 33 };   // khung (ô / px độ cao, cục bộ trong bàn)
+  const SCR = { gx: 0.2, z: 31 };                                            // góc trên-trái vùng hiển thị trên mặt kính
+  const SCRQ = qz(SCR.gx, MON.y1, SCR.z);
   function buildSprite(name, P) {
     const dk = (c) => shade(c, -0.3);
     switch (name) {
@@ -592,19 +598,24 @@ const Office = (() => {
           box(1.7, 0.1, 1.9, 0.3, 0, 9, P.leg, P.leg, P.leg); box(0.1, 0.1, 0.3, 0.3, 0, 9, P.leg, P.leg, P.leg);
           box(1.7, 0.7, 1.9, 0.9, 0, 9, P.leg, P.leg, P.leg); box(0.1, 0.7, 0.3, 0.9, 0, 9, P.leg, P.leg, P.leg);
           box(0, 0, 2, 1, 9, 11, P.deskTop, P.desk, P.deskSide);
-          g.fillStyle = P.deskEdge; const a = pt(0, 1, 11), b = pt(2, 1, 11); g.fillRect(a[0], a[1], b[0] - a[0], 1);  // viền sáng mép trước
-          box(1.1, 0.35, 1.7, 0.65, 11, 11.8, kb, shade(kb, -0.15), dk(kb));                                         // bàn phím
-          box(1.75, 0.15, 1.95, 0.35, 11, 16, mug, mug, dk(mug));                                                    // cốc
-          const [mx, my] = MONQ;                                                                                       // màn hình quay mặt ra người xem
-          R(mx - 15, my - 21, 30, 19, P.monEdge); R(mx - 13, my - 19, 26, 15, P.mon); R(mx - 2, my - 2, 4, 2, P.monEdge);
+          // viền sáng mép trước: đường chéo theo mép bàn (không phải vạch ngang)
+          g.strokeStyle = P.deskEdge; g.lineWidth = 1; g.beginPath(); { const a = pt(0, 1, 11), b = pt(2, 1, 11); g.moveTo(a[0], a[1] + 0.5); g.lineTo(b[0], b[1] + 0.5); } g.stroke();
+          flat(0.75, 0.08, 1.25, 0.32, 11.2, shade(P.monEdge, -0.2));                                                // đế màn hình
+          box(0.94, 0.14, 1.06, 0.22, 11, 15, P.monEdge, P.monEdge, dk(P.monEdge));                                  // cổ màn hình
+          box(MON.x0, MON.y0, MON.x1, MON.y1, MON.z0, MON.z1, shade(P.monEdge, 0.15), P.monEdge, dk(P.monEdge));      // khung màn hình
+          box(0.55, 0.5, 1.45, 0.78, 11, 11.8, kb, shade(kb, -0.15), dk(kb));                                         // bàn phím trước màn hình
+          box(1.62, 0.55, 1.8, 0.73, 11, 16, mug, mug, dk(mug));                                                      // cốc
         });
       }
-      case "chair":  // ghế xoay: lưng ghế ở phía sau lưng robot (phía -gy), chân ghế, mặt ghế
+      case "chair":  // ghế xoay: bóng, chân, mặt ghế (lưng ghế là sprite riêng, vẽ sau robot)
         return mk(40, 40, 20, 24, () => {
           flat(-0.05, -0.05, 0.8, 0.8, 0, P.shadow);
-          box(0, 0, 0.7, 0.12, SEAT_Z, 15, P.chairHi, P.chair, P.chairSide);
           box(0.3, 0.3, 0.4, 0.4, 0, SEAT_Z - 1, P.outline, P.outline, P.outline);
           box(0, 0, 0.7, 0.7, SEAT_Z - 2, SEAT_Z, P.chairHi, P.chair, P.chairSide);
+        });
+      case "chairBack":  // lưng ghế ở phía +gy (sau lưng robot, gần người xem): che phần dưới lưng robot đang ngồi
+        return mk(40, 48, 20, 32, () => {
+          box(0.08, 0.6, 0.62, 0.7, SEAT_Z, SEAT_Z + 6, P.chairHi, P.chair, P.chairSide);  // thấp: vẫn thấy vai + đầu robot
         });
       case "sofa":
         return mk(80, 64, 24, 24, () => {
@@ -656,10 +667,15 @@ const Office = (() => {
     const { col, row } = cellOf(i), a = iso(deskGx(col), deskGy(row)), x = Math.round(a.x), y = Math.round(a.y);
     blit("desk" + (i % 4), P, x, y);
     const b = bots.get(S.profiles[i]?.name);
-    drawScreen(b && b.act ? b.act.screen : "off", x + MON.x, y + MON.y, t + i, P, b);
+    g.save(); g.transform(1, 0.5, 0, 1, x + SCRQ[0], y + SCRQ[1]);  // nội dung nằm trên mặt kính nghiêng 2:1
+    drawScreen(b && b.act ? b.act.screen : "off", 0, 0, t + i, P, b);
+    g.restore();
   }
-  function drawChair(i, P) { const s = seat(i), a = iso(s.gx - 0.35, s.gy - 0.35); blit("chair", P, a.x, a.y); }
-  function deskCenter(i) { const { col, row } = cellOf(i), a = iso(deskGx(col), deskGy(row)); return { x: Math.round(a.x) + MON.x + 13, y: Math.round(a.y) + MON.y + 7 }; }
+  function drawChair(i, P, part) { const s = seat(i), a = iso(s.gx - 0.35, s.gy - 0.35); blit(part, P, a.x, a.y); }
+  function deskCenter(i) {  // giữa mặt kính màn hình (tọa độ thế giới)
+    const { col, row } = cellOf(i), a = iso(deskGx(col), deskGy(row)), c = qz(SCR.gx + 13 / TW * 2, MON.y1, SCR.z - 7);
+    return { x: Math.round(a.x) + c[0], y: Math.round(a.y) + c[1] };
+  }
   function drawScreen(kind, x, y, t, P, b) {
     const w = 26, h = 15, blinkOn = Math.floor(t * 2) % 2;
     const fill = (c) => R(x, y, w, h, c);
@@ -715,6 +731,20 @@ const Office = (() => {
 
   function drawFurn(f, P) { blit(f.key, P, f.sx, f.sy); }
 
+  // robot là 2 khối hộp isometric (thân + đầu), vẽ quanh điểm chân (b.sx, b.sy). b.fa = hướng mặt: "+gy" (xuống-trái),
+  // "+gx" (xuống-phải) thì thấy mặt; "-gy" (lên-phải, ví dụ ngồi nhìn màn hình) và "-gx" thì thấy lưng, chỉ ló mép kính mặt.
+  const BH = 0.2, HH2 = 0.28;                          // nửa cạnh thân / đầu (ô)
+  function boxO(x0, y0, x1, y1, z0, z1, top, left, right, O) {  // hộp + viền ngoài
+    box(x0, y0, x1, y1, z0, z1, top, left, right);
+    g.strokeStyle = O; g.lineWidth = 1; g.beginPath();
+    [pt(x0, y0, z1), pt(x1, y0, z1), pt(x1, y0, z0), pt(x1, y1, z0), pt(x0, y1, z0), pt(x0, y1, z1)]
+      .forEach((p, i) => (i ? g.lineTo(p[0] + 0.5, p[1] + 0.5) : g.moveTo(p[0] + 0.5, p[1] + 0.5)));
+    g.closePath(); g.stroke();
+  }
+  function onFace(side, h, ztop, fn) {  // vẽ bằng tọa độ phẳng (u sang phải, v xuống) trên mặt +gy ("L") hoặc +gx ("R") của hộp nửa cạnh h
+    const p = side === "L" ? pt(-h, h, ztop) : pt(h, h, ztop);
+    g.save(); g.transform(1, side === "L" ? 0.5 : -0.5, 0, 1, p[0], p[1]); fn(Math.round(2 * h * HW)); g.restore();
+  }
   function drawBot(b, t, P, beat, now) {
     const moving = b.path.length > 0, sit = !moving && b.pose === "sit";
     const cele = b.celebrate > now;
@@ -722,40 +752,53 @@ const Office = (() => {
     if (cele) bob = -Math.abs(Math.sin(t * 9)) * 6;
     else if (moving) bob = Math.floor(t * 8) % 2 ? -1 : 0;
     else if (beat !== null && b.act && b.act.at !== "desk") bob = Math.sin(beat * Math.PI) ** 2 > 0.6 ? -1 : 0;  // nhún theo nhạc
-    const x = b.sx, y = Math.round(b.sy - b.lift + bob), base = sit ? y - 2 : y, O = P.outline;
-    const s = b.dir < 0 ? -1 : 1;  // quay mặt theo hướng đi (mặt phải luôn là mặt khuất sáng); ngồi thì nhìn về phía màn hình
-    if (!sit) { R(x - 6, b.sy - 2, 12, 3, P.shadow); R(x - 4, b.sy - 3, 8, 1, P.shadow); R(x - 4, b.sy + 1, 8, 1, P.shadow); }  // bóng elip trên sàn
-    // chân
-    if (!sit) {
-      const sw = moving ? (Math.floor(t * 8) % 2 ? 1 : -1) : 0;
-      R(x - 4, base - 5 + Math.max(0, sw), 3, 5 - Math.max(0, sw), O); R(x + 1, base - 5 + Math.max(0, -sw), 3, 5 - Math.max(0, -sw), O);
-    }
-    const bodyY = base - (sit ? 9 : 14);
-    // thân + mặt khuất sáng + đèn ngực
-    R(x - 7, bodyY - 1, 14, 11, O); R(x - 6, bodyY, 12, 9, b.color); R(x - 6, bodyY, 12, 2, b.light); R(x + 3, bodyY + 2, 3, 7, b.dark);
-    const working = b.act && b.act.at === "desk" && b.act.screen !== "error";
-    R(x - 1, bodyY + 4, 3, 3, working ? (Math.floor(t * 4) % 2 ? "#4dff88" : "#1f8f4e") : b.act && b.act.screen === "error" ? "#ff4d4d" : b.dark);
-    // tay
-    const act = b.act || {};
-    if (sit && act.typing && !cele) {
-      const a = Math.floor(t * (act.slow ? 3 : 10)) % 2;
-      R(x - 9, bodyY + 3 + a, 3, 4, O); R(x + 6, bodyY + 4 - a, 3, 4, O);
-    } else if (cele) {
-      R(x - 10, bodyY - 5, 3, 6, O); R(x + 7, bodyY - 5, 3, 6, O);  // giơ tay ăn mừng
-    } else {
-      R(x - 9, bodyY + 2, 3, 6, O); R(x + 6, bodyY + 2, 3, 6, O);
-    }
-    if (act.prop === "phone" && !moving) { R(x + 4, bodyY - 3, 5, 8, "#2a2e38"); R(x + 5, bodyY - 2, 3, 5, Math.floor(t * 3) % 2 ? "#5fc9e8" : "#9fe6ff"); }
-    if (act.prop === "mug" && !moving) { R(x + 6, bodyY + 1, 4, 4, "#f4f4f4"); R(x + 10, bodyY + 2, 1, 2, "#f4f4f4"); if (Math.floor(t * 2) % 2) R(x + 7, bodyY - 2, 1, 2, "rgba(255,255,255,.6)"); }
-    // đầu + mặt màn hình (lệch 1px về phía đang nhìn) + mặt khuất sáng
-    const headY = bodyY - 11;
-    R(x - 8, headY - 1, 16, 12, O); R(x - 7, headY, 14, 10, b.color); R(x - 7, headY, 14, 2, b.light); R(x + 5, headY + 2, 2, 8, b.dark);
-    R(x - 5 + s, headY + 2, 10, 6, "#10131c");
-    drawFace(b, x + s, headY + 2, now, cele ? "happy" : sleeping(b) ? "sleep" : act.face || "idle");
-    // ăng-ten
-    R(x, headY - 4, 1, 3, O);
-    const ant = working ? (Math.floor(t * 3) % 2 ? "#4dff88" : "#ffd23f") : act.screen === "error" ? (Math.floor(t * 4) % 2 ? "#ff4d4d" : "#7a1d1d") : b.light;
-    R(x - 1, headY - 6, 3, 2, ant);
+    const O = P.outline, fa = b.fa || "+gy", alongGy = fa[2] === "y", act = b.act || {};
+    if (!sit) { R(b.sx - 6, b.sy - 2, 12, 3, P.shadow); R(b.sx - 4, b.sy - 3, 8, 1, P.shadow); R(b.sx - 4, b.sy + 1, 8, 1, P.shadow); }  // bóng trên sàn
+    const mox = ox, moy = oy;
+    ox = b.sx; oy = Math.round(b.sy - b.lift + bob);
+    try {
+      const bz = sit ? 1 : 5, hz = bz + 11, top = hz + 11;  // đáy thân, đáy đầu, đỉnh đầu (px độ cao)
+      // tay / chân nằm ở 2 bên vuông góc với hướng mặt; vẽ bên xa (độ sâu nhỏ) trước thân, bên gần sau thân
+      const side = (k, w) => (alongGy ? [k - w, -0.06, k + w, 0.06] : [-0.06, k - w, 0.06, k + w]);
+      const legs = [-0.1, 0.1], sw = moving ? (Math.floor(t * 8) % 2 ? 1 : -1) : 0;
+      if (!sit) legs.forEach((k, i) => { const [a0, b0, a1, b1] = side(k, 0.06), up = Math.max(0, i ? sw : -sw); box(a0, b0, a1, b1, up, bz, O, O, O); });
+      const typing = sit && act.typing && !cele, tp = Math.floor(t * (act.slow ? 3 : 10)) % 2;
+      const atDesk = sit && act.at === "desk" && fa === "-gy";
+      const arm = (k, i) => {
+        const [a0, b0, a1, b1] = side(k, 0.05);
+        if (atDesk && !cele) {  // ngồi bàn: tay vươn về phía bàn phím (hướng -gy), gõ phím thì nhấp lên xuống
+          const z0 = bz + 4 + (typing ? (i ? tp : 1 - tp) : 0);
+          boxO(a0, -BH - 0.24, a1, -0.02, z0, z0 + 3, b.light, b.color, b.dark, O);
+          return;
+        }
+        const z0 = cele ? bz + 9 : bz + 2 + (typing ? (i ? tp : 1 - tp) : 0), z1 = cele ? bz + 16 : z0 + 6;
+        boxO(a0, b0, a1, b1, z0, z1, b.light, b.color, b.dark, O);
+      };
+      arm(-(BH + 0.05), 0);
+      boxO(-BH, -BH, BH, BH, bz, bz + 10, b.light, b.color, b.dark, O);
+      const working = act.at === "desk" && act.screen !== "error";
+      const chest = working ? (Math.floor(t * 4) % 2 ? "#4dff88" : "#1f8f4e") : act.screen === "error" ? "#ff4d4d" : b.dark;
+      if (fa === "+gy" || fa === "+gx") onFace(fa === "+gy" ? "L" : "R", BH, bz + 10, (w) => R(Math.floor(w / 2) - 1, 4, 3, 3, chest));
+      else onFace("L", BH, bz + 10, (w) => { R(2, 3, w - 4, 1, b.dark); R(2, 5, w - 4, 1, b.dark); });  // lưng: khe tản nhiệt
+      arm(BH + 0.05, 1);
+      // đầu + kính mặt
+      boxO(-HH2, -HH2, HH2, HH2, hz, top, b.light, b.color, b.dark, O);
+      const face = cele ? "happy" : sleeping(b) ? "sleep" : act.face || "idle";
+      const eye = face === "sad" ? "#ff5d5d" : face === "happy" ? "#ffd23f" : "#6ff0ff";
+      if (fa === "+gy" || fa === "+gx") {
+        onFace(fa === "+gy" ? "L" : "R", HH2, top, (w) => { R(0, 2, w, 6, "#10131c"); drawFace(b, Math.round(w / 2), 2, now, face); });
+      } else if (fa === "-gy") {  // nhìn lên-phải: kính mặt ló ở đầu phải của mặt +gx
+        onFace("R", HH2, top, (w) => { R(w - 3, 2, 3, 6, "#10131c"); R(w - 2, 4, 1, 2, eye); });
+      } else {                    // nhìn lên-trái: ló ở đầu trái của mặt +gy
+        onFace("L", HH2, top, () => { R(0, 2, 3, 6, "#10131c"); R(1, 4, 1, 2, eye); });
+      }
+      // đồ cầm tay
+      if (act.prop === "phone" && !moving) { const p = pt(BH + 0.12, -0.05, hz + 6); R(p[0], p[1], 4, 7, "#2a2e38"); R(p[0] + 1, p[1] + 1, 2, 4, Math.floor(t * 3) % 2 ? "#5fc9e8" : "#9fe6ff"); }
+      if (act.prop === "mug" && !moving) { const p = pt(BH + 0.1, 0.12, bz + 7); R(p[0], p[1], 4, 4, "#f4f4f4"); R(p[0] + 4, p[1] + 1, 1, 2, "#f4f4f4"); if (Math.floor(t * 2) % 2) R(p[0] + 1, p[1] - 3, 1, 2, "rgba(255,255,255,.6)"); }
+      // ăng-ten
+      const a = pt(0, 0, top), ant = working ? (Math.floor(t * 3) % 2 ? "#4dff88" : "#ffd23f") : act.screen === "error" ? (Math.floor(t * 4) % 2 ? "#ff4d4d" : "#7a1d1d") : b.light;
+      R(a[0], a[1] - 3, 1, 3, O); R(a[0] - 1, a[1] - 5, 3, 2, ant);
+    } finally { ox = mox; oy = moy; }
   }
   function isWorking(b) { return !!(b.act && b.act.at === "desk" && b.act.screen !== "error" && b.act.screen !== "lock"); }
   let nightCache = { at: 0, night: false };
@@ -818,10 +861,10 @@ const Office = (() => {
     for (const b of bots.values()) {
       if (b.path.length) {
         const p = b.path[0], dx = p.gx - b.gx, dy = p.gy - b.gy, d = Math.hypot(dx, dy), mv = SPEED * dt;
-        if (Math.abs(dx - dy) > 1e-6) b.dir = dx - dy > 0 ? 1 : -1;  // hướng trên màn hình = dấu của (dgx - dgy)
+        if (Math.abs(dx) > 1e-6 || Math.abs(dy) > 1e-6) b.fa = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "+gx" : "-gx") : (dy > 0 ? "+gy" : "-gy");  // nhìn theo hướng đi
         if (d <= mv) {
           b.gx = p.gx; b.gy = p.gy; b.path.shift();
-          if (!b.path.length) { b.pose = b.where.pose; if (b.pose === "sit") b.dir = -1; }
+          if (!b.path.length) { b.pose = b.where.pose; b.fa = restFace(b.where); }
         } else { b.gx += (dx / d) * mv; b.gy += (dy / d) * mv; }
       } else if (b.act && b.act.at === "lounge") {
         if (b.celebrate && b.celebrate < now && b.where && b.where.kind === "desk") { b.celebrate = 0; walk(b, pickSpot(b)); }
@@ -843,7 +886,7 @@ const Office = (() => {
       }
       if (text === null) continue;
       if (bt[1] !== c.cls) { el.className = "ob-bubble" + (bt[1] ? " " + bt[1] : ""); c.cls = bt[1]; }
-      const bx = b.sx, by = Math.round(b.sy - b.lift - (b.pose === "sit" && !b.path.length ? 26 : 31));
+      const bx = b.sx, by = Math.round(b.sy - b.lift - (b.pose === "sit" && !b.path.length ? 28 : 32));
       if (bx !== c.x || by !== c.y) {
         el.style.left = (bx / W * 100) + "%"; el.style.top = (by / H * 100) + "%";
         c.x = bx; c.y = by;
@@ -877,7 +920,8 @@ const Office = (() => {
     order.length = 0;
     S.profiles.forEach((_, i) => {
       const s = seat(i), c = cellOf(i);
-      order.push({ d: deskGx(c.col) + 1 + deskGy(c.row) + 0.5, k: 0, desk: i }, { d: s.gx + s.gy - 0.05, k: 1, chair: i });
+      order.push({ d: deskGx(c.col) + 1 + deskGy(c.row) + 0.5, k: 0, desk: i }, { d: s.gx + s.gy - 0.05, k: 1, chair: i, part: "chair" },
+        { d: s.gx + s.gy + 0.3, k: 4, chair: i, part: "chairBack" });
     });
     for (const f of FURN) order.push({ d: f.d, k: 0, f });
     for (const b of bots.values()) order.push({ d: b.depth, k: 3, b });
@@ -885,7 +929,7 @@ const Office = (() => {
     for (const it of order) {
       if (it.b) drawBot(it.b, t, P, beat, now);
       else if (it.f) drawFurn(it.f, P);
-      else if (it.chair !== undefined) drawChair(it.chair, P);
+      else if (it.chair !== undefined) drawChair(it.chair, P, it.part);
       else drawDesk(it.desk, P, t);
     }
     for (const b of bots.values()) {
@@ -1000,8 +1044,8 @@ const Office = (() => {
       const r = cv.getBoundingClientRect();
       return S.profiles.map((_, i) => {
         const c = deskCenter(i);
-        return { left: r.left + (c.x - 15) / W * r.width, right: r.left + (c.x + 15) / W * r.width,
-                 top: r.top + (c.y - 15) / H * r.height, bottom: r.top + (c.y + 9) / H * r.height };
+        return { left: r.left + (c.x - 15) / W * r.width, right: r.left + (c.x + 15) / W * r.width,  // cả khung nghiêng
+                 top: r.top + (c.y - 16) / H * r.height, bottom: r.top + (c.y + 16) / H * r.height };
       });
     },
     // chỉ để kiểm thử: vị trí hiện tại + các điểm còn phải đi (tọa độ sàn)
