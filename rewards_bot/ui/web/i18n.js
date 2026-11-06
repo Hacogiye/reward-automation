@@ -8,7 +8,7 @@
 const I18N = (() => {
   const EN = {
     // ---- khung, menu, chung
-    "Thu gọn thanh bên": "Collapse sidebar", "Mở rộng thanh bên": "Expand sidebar",
+    "Thu gọn thanh bên": "Collapse sidebar", "Mở rộng thanh bên": "Expand sidebar", "Thu gọn": "Collapse",
     // ---- văn phòng
     "Văn phòng": "Office", "Văn phòng bot": "Bot office", "Bật nhạc lofi": "Play lofi", "Tắt nhạc lofi": "Stop lofi",
     "Tiếng mưa": "Rain sounds", "Âm lượng": "Volume", "Nhạc đang tắt": "Music is off", "Lofi tự sinh": "Generated lofi",
@@ -150,6 +150,7 @@ const I18N = (() => {
   };
   // chuỗi có dữ liệu của người dùng (tên tài khoản, email...) ở giữa: dịch theo mẫu, phần ở giữa giữ nguyên hoặc dịch tiếp
   const PATTERNS = [
+    [/^(.+) \(bấm để đổi\)$/, (m) => `${tr(m[1]) ?? m[1]} (click to change)`],
     [/^Tài khoản (.+): hiện có (.+) điểm\.$/, (m) => `Account ${m[1]}: ${m[2]} points now.`],
     [/^Đã lưu mật khẩu \(mã hóa\) cho (.+): phiên hết hạn thì bot tự đăng nhập lại$/,
       (m) => `Password saved (encrypted) for ${m[1]}: when the session expires the bot logs in again`],

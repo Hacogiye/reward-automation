@@ -197,7 +197,7 @@ async function setLanguage(lang) {
 }
 
 function bindStatic() {
-  $$(".lang-switch button").forEach((b) => (b.onclick = () => setLanguage(b.dataset.setLang)));
+  $$(".lang-switch button").forEach((b) => (b.onclick = () => setLanguage(sideCycle(b, "setLang"))));
   $$("#lang-choice input").forEach((i) => (i.onchange = () => setLanguage(i.value)));
   $("#tasks-hide-done").onchange = (e) => { pref.set("hideDoneTasks", e.target.checked); renderTasks(st(S.selected)); };
   $("#update-dismiss").onclick = () => ($("#update-bar").hidden = true);
@@ -216,7 +216,7 @@ function bindStatic() {
   $(".page-wrapper").addEventListener("transitionend", (e) => {
     if (e.target === e.currentTarget && e.propertyName === "margin-left") window.dispatchEvent(new Event("resize"));
   });
-  $$(".theme-switch button").forEach((b) => (b.onclick = () => setTheme(b.dataset.theme)));
+  $$(".theme-switch button").forEach((b) => (b.onclick = () => setTheme(sideCycle(b, "theme"))));
   $$("#theme-choice input").forEach((i) => (i.onchange = () => setTheme(i.value)));
   $("#btn-refresh").onclick = () => S.selected && start([S.selected], "refresh");
   $("#btn-run-one").onclick = () => S.selected && start([S.selected], "run");
@@ -239,10 +239,20 @@ function setSideCollapsed(on) {
   pref.set("sideCollapsed", on);
   syncSide();
 }
+// thanh bên thu gọn chỉ hiện nút đang chọn: bấm nó thì lấy lựa chọn kế tiếp trong nhóm
+function sideCycle(b, key) {
+  if (!document.documentElement.classList.contains("side-collapsed") || !b.classList.contains("active")) return b.dataset[key];
+  const all = [...b.parentElement.querySelectorAll("button")];
+  return all[(all.indexOf(b) + 1) % all.length].dataset[key];
+}
 function syncSide() {
   const on = document.documentElement.classList.contains("side-collapsed"), t = $("#side-toggle");
   const label = on ? "Mở rộng thanh bên" : "Thu gọn thanh bên";
-  t.title = label; t.setAttribute("aria-label", label); t.setAttribute("aria-expanded", String(!on));
+  t.title = on ? label : ""; t.setAttribute("aria-label", label); t.setAttribute("aria-expanded", String(!on));
+  $$(".theme-switch button, .lang-switch button").forEach((b) => {  // gợi ý "bấm để đổi" khi chỉ còn 1 nút
+    if (!b.dataset.tip) b.dataset.tip = b.title || b.textContent.trim();
+    b.title = on ? `${b.dataset.tip} (bấm để đổi)` : b.dataset.tip;
+  });
   t.querySelector("i").className = "ti " + (on ? "ti-layout-sidebar-left-expand" : "ti-layout-sidebar-left-collapse");
   $$("#nav .nav-link").forEach((a) => { a.title = on ? a.querySelector(".nav-link-title").textContent.trim() : ""; });
   $("#run-state").title = on ? $("#run-state span:last-child").textContent : "";

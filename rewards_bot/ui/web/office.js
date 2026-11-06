@@ -363,30 +363,36 @@ const Office = (() => {
     // cửa sổ: trời theo giờ thật; mưa khi bật tiếng mưa
     const hr = new Date().getHours() + new Date().getMinutes() / 60, day = hr >= 6 && hr < 18, dusk = (hr >= 17 && hr < 19) || (hr >= 5 && hr < 7);
     [[134, 12], [204, 12]].forEach(([wx, wy], wi) => {
-      R(wx - 2, wy - 2, 58, 44, P.cyber ? "#05d9e8" : P.outline);
+      const WW = 54, WH = 40, frame = P.cyber ? "#05d9e8" : P.outline;
       const sky = P.cyber ? "#1b0838" : dusk ? "#f4a06a" : day ? "#8fd0f5" : "#141a3a";
-      R(wx, wy, 54, 40, sky);
+      // mọi thứ bên trong ô kính bị cắt theo khung, khung vẽ sau cùng nên không bao giờ bị đè
+      g.save(); g.beginPath(); g.rect(wx, wy, WW, WH); g.clip();
+      R(wx, wy, WW, WH, sky);
       if (P.cyber || !day) {
         for (let i = 0; i < 9; i++) { const sx = wx + ((i * 37 + wi * 13) % 52), sy = wy + ((i * 23) % 22); if (Math.sin(t * 2 + i) > -0.3) R(sx, sy, 1, 1, "#fff"); }
         if (!P.cyber && wi === 1) { R(wx + 38, wy + 6, 7, 7, "#f3efd6"); R(wx + 40, wy + 6, 5, 5, sky); }
       } else {
         const cx = wx + ((t * 4 + wi * 30) % 70) - 12;  // mây trôi
-        g.save(); g.beginPath(); g.rect(wx, wy, 54, 40); g.clip();
-        R(cx, wy + 8, 14, 4, "#fff"); R(cx + 3, wy + 5, 8, 3, "#fff"); g.restore();
+        R(cx, wy + 8, 14, 4, "#fff"); R(cx + 3, wy + 5, 8, 3, "#fff");
         if (wi === 0) R(wx + 6, wy + 5, 6, 6, "#ffe27a");
       }
       // nhà phía xa
       const city = P.cyber ? ["#2b0f55", "#ff2a6d", "#05d9e8"] : day ? ["#7d93a8", "#c6d6e4", "#fff3b0"] : ["#232a52", "#2f3868", "#ffd56a"];
       for (let i = 0; i < 6; i++) {
         const bw = 7 + ((i * 5 + wi * 3) % 5), bh = 10 + ((i * 7 + wi * 11) % 16), bx = wx + i * 9;
-        R(bx, wy + 40 - bh, bw, bh, city[0]);
-        for (let yy = wy + 42 - bh; yy < wy + 38; yy += 4) if ((yy + i) % 3) R(bx + 2, yy, 1, 1, i % 2 ? city[2] : city[1]);
+        R(bx, wy + WH - bh, bw, bh, city[0]);
+        for (let yy = wy + WH + 2 - bh; yy < wy + WH - 2; yy += 4) if ((yy + i) % 3) R(bx + 2, yy, 1, 1, i % 2 ? city[2] : city[1]);
       }
       if (S.officeRain) {
         g.fillStyle = "rgba(200,220,255,.55)";
-        for (let i = 0; i < 14; i++) { const rx = wx + ((i * 17 + Math.floor(t * 60) * 3) % 54), ry = wy + ((i * 29 + Math.floor(t * 120)) % 38); g.fillRect(rx, ry, 1, 3); }
+        for (let i = 0; i < 14; i++) { const rx = wx + ((i * 17 + Math.floor(t * 60) * 3) % WW), ry = wy + ((i * 29 + Math.floor(t * 120)) % (WH - 2)); g.fillRect(rx, ry, 1, 3); }
       }
-      R(wx + 26, wy, 2, 40, P.cyber ? "#05d9e8" : P.outline); R(wx, wy + 19, 54, 2, P.cyber ? "#05d9e8" : P.outline);
+      g.restore();
+      // khung 2px bốn cạnh + song cửa chữ thập + bậu cửa
+      R(wx - 2, wy - 2, WW + 4, 2, frame); R(wx - 2, wy + WH, WW + 4, 2, frame);
+      R(wx - 2, wy, 2, WH, frame); R(wx + WW, wy, 2, WH, frame);
+      R(wx + WW / 2 - 1, wy, 2, WH, frame); R(wx, wy + WH / 2 - 1, WW, 2, frame);
+      R(wx - 4, wy + WH + 2, WW + 8, 3, P.cyber ? "#ff2a6d" : P.base);
     });
 
     // đồng hồ số
