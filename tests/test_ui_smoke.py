@@ -203,9 +203,24 @@ def test_pages_render_without_errors(server):
         pg.evaluate("document.querySelector('#office-canvas').scrollIntoView({block: 'center'})")
         pos = pg.evaluate(f"Office._pos({json.dumps(name)})")
         assert pos and pos["x"] > 0 and pos["y"] > 0, pos
-        pg.mouse.click(pos["x"], pos["y"])
+        pg.mouse.click(pos["x"], pos["y"])  # bấm robot: mở thẻ thông tin trên đầu robot, không chuyển trang
+        assert pg.evaluate("S.page") == "office"
+        assert pg.evaluate("Office._card()") == name
+        card = pg.locator("#office-layer .ob-card")
+        assert card.is_visible()
+        assert "me@example.com" in card.inner_text()  # tài khoản liên kết = email đã lưu
+        assert card.locator(".oc-list li").count() > 0  # việc đã làm / chưa làm của hôm nay
+        cb, lb = card.bounding_box(), pg.locator("#office-layer").bounding_box()
+        assert cb["x"] >= lb["x"] - 1 and cb["x"] + cb["width"] <= lb["x"] + lb["width"] + 1, (cb, lb)
+        assert cb["y"] + cb["height"] <= pos["y"] or cb["y"] >= pos["y"], (cb, pos)  # nằm trên (hoặc dưới) robot, không che thân
+        pg.keyboard.press("Escape")
+        assert pg.evaluate("Office._card()") is None and card.is_hidden()
+        pg.locator("#office-layer .ob-tag").first.click()  # bấm bảng tên cũng mở thẻ
+        assert pg.evaluate("Office._card()") == name
+        card.locator("[data-act=open]").click()  # nút Tổng quan trong thẻ
         assert pg.evaluate("S.page") == "dashboard"
         pg.evaluate("go('office')")
+        assert pg.evaluate("Office._card()") is None
         # Cyberpunk và giao diện tối: dựng lại sprite + nền, không lỗi JS
         for theme in ("cyberpunk", "dark"):
             pg.click(f".theme-switch button[data-theme={theme}]")
@@ -310,6 +325,16 @@ def test_pages_render_without_errors(server):
     assert dialogs == []  # tên/tiêu đề chứa HTML không được chạy
 
 
+def settings_home(pg, timeout_ms=3000):
+    """Chờ khối cài đặt về lại trang Cài đặt (sự kiện "close" của <dialog> chạy sau một nhịp).
+    Không dùng wait_for_function: CSP của app chặn eval nên Playwright không thăm dò được bằng chuỗi JS."""
+    for _ in range(timeout_ms // 50):
+        if pg.evaluate("document.querySelector('#settings-cards').parentElement.id") == "settings-home":
+            return
+        pg.wait_for_timeout(50)
+    assert pg.evaluate("document.querySelector('#settings-cards').parentElement.id") == "settings-home"
+
+
 def test_office_many_accounts_layout(server):
     """7 tài khoản: bảng tên / bong bóng không đè nhau, chữ trên tường không bị màn hình hàng sau che, robot không đi chéo qua đồ."""
     boot = boot_data()
@@ -412,10 +437,10 @@ def test_office_many_accounts_layout(server):
         assert pg.locator("#settings-dialog .settings-help").is_hidden()
         pg.click("#sd-save")
         assert not pg.locator("#settings-dialog").is_visible()
-        assert pg.evaluate("document.querySelector('#settings-cards').parentElement.id") == "settings-home"
+        settings_home(pg)
         pg.click("#office-settings")
         pg.keyboard.press("Escape")  # sự kiện "close" chạy sau một nhịp: chờ khối cài đặt về chỗ cũ
-        pg.wait_for_function("document.querySelector('#settings-cards').parentElement.id === 'settings-home'", timeout=3000)
+        settings_home(pg)
         pg.evaluate("go('settings')")
         assert pg.locator("#page-settings #set-browser").is_visible()
         b.close()
