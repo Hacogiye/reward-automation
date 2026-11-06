@@ -343,8 +343,8 @@ const Office = (() => {
         b.el.className = "ob";
         b.el.innerHTML = `<div class="ob-bubble" data-no-i18n hidden></div><button type="button" class="ob-tag"></button>`;
         b.tagEl = b.el.querySelector(".ob-tag"); b.bubEl = b.el.querySelector(".ob-bubble");
-        b.tagEl.onclick = () => { S.selected = name; go("dashboard"); };
-        b.tagEl.title = "Xem tổng quan của tài khoản này";
+        b.tagEl.onclick = (e) => { e.stopPropagation(); toggleCard(name); };
+        b.tagEl.title = "Xem nhanh tài khoản này";
         layer.appendChild(b.el);
         bots.set(name, b);
       }
@@ -1056,8 +1056,9 @@ const Office = (() => {
 
   // ------------------------------------------------------------ lớp HTML: chỉ chạm DOM khi có gì thật sự đổi
   function drawLayer(now) {
+    placeCard();
     for (const b of bots.values()) {
-      const bt = bubbleText(b, now), c = b.bub, el = b.bubEl;
+      const bt = b.name === cardName ? null : bubbleText(b, now), c = b.bub, el = b.bubEl;  // đang mở thẻ thì ẩn bong bóng (thẻ che chỗ đó)
       const text = bt ? bt[0] : null;
       if (text !== c.text) {
         el.hidden = text === null;
@@ -1158,6 +1159,106 @@ const Office = (() => {
     return [tr(a.say), a.screen === "error" ? "err" : ""];
   }
 
+  // ------------------------------------------------------------ thẻ thông tin khi bấm robot (HTML, nổi trên đầu robot)
+  let cardEl = null, cardName = null, cardHtml = "";
+  const cardPos = { x: -1, y: -1 };
+  const CARD_DONE_MAX = 8;  // việc đã xong chỉ liệt kê vài dòng đầu, còn lại gộp "+n việc khác"
+  function toggleCard(name) { if (cardName === name) closeCard(); else openCard(name); }
+  function openCard(name) {
+    cardName = name; cardHtml = ""; cardPos.x = -1;
+    cardEl.hidden = false;
+    renderCard();
+    cardEl.classList.remove("pop"); void cardEl.offsetWidth; cardEl.classList.add("pop");
+    for (const b of bots.values()) b.tagEl.classList.toggle("active", b.name === name);
+    wake();
+  }
+  function closeCard() {
+    if (!cardName) return;
+    cardName = null; cardEl.hidden = true;
+    for (const b of bots.values()) b.tagEl.classList.remove("active");
+    wake();
+  }
+  function taskRow(t) {
+    const unit = t.unit || "điểm", ic = t.done ? "ti-circle-check" : t.progress > 0 ? "ti-circle-half-2" : "ti-circle";
+    return `<li class="${t.done ? "done" : ""}" title="${esc(t.title)}${t.bot ? " · " + esc(t.bot) : ""}"><i class="ti ${ic}"></i>`
+      + `<span class="oc-t">${esc(t.title)}</span><span class="oc-n">${fmt(t.progress)}/${fmt(t.max)} <small>${esc(unit)}</small></span></li>`;
+  }
+  function renderCard() {
+    if (!cardName || !cardEl) return;
+    const name = cardName, prof = S.profiles.find((p) => p.name === name);
+    if (!prof) { closeCard(); return; }
+    const s = st(name), tasks = s.tasks || [], email = savedEmail(name), running = S.running.has(name);
+    const todo = tasks.filter((t) => !t.done), done = tasks.filter((t) => t.done);
+    const linked = email ? `<span data-no-i18n>${esc(email)}</span>` : `<span class="oc-muted">Chưa lưu email đăng nhập</span>`;
+    const extra = [prof.mode === "cdp" ? `CDP :${esc(prof.cdp_port)}` : "",
+      prof.proxy ? `Proxy <span data-no-i18n>${esc(prof.proxy)}</span>` : ""].filter(Boolean);
+    let body;
+    if (!tasks.length) body = `<p class="oc-empty">Chưa có dữ liệu task. Bấm <b>Làm mới</b> để đọc task hôm nay từ Rewards.</p>`;
+    else {
+      body = `<div class="oc-sec"><span>Chưa làm</span><b>${todo.length}</b></div>`
+        + (todo.length ? `<ul class="oc-list">${todo.map(taskRow).join("")}</ul>`
+          : `<p class="oc-empty ok"><i class="ti ti-confetti"></i>Đã làm hết việc hôm nay</p>`)
+        + `<div class="oc-sec"><span>Đã làm</span><b>${done.length}</b></div>`
+        + (done.length ? `<ul class="oc-list">${done.slice(0, CARD_DONE_MAX).map(taskRow).join("")}`
+          + (done.length > CARD_DONE_MAX ? `<li class="oc-more">+${done.length - CARD_DONE_MAX} việc khác</li>` : "") + `</ul>`
+          : `<p class="oc-empty">Chưa làm việc nào</p>`);
+    }
+    const html = `<div class="oc-head">${avatarHtml(name, "avatar-sm rounded-circle")}
+        <div class="oc-who"><b data-no-i18n>${esc(name)}</b><small><i class="ti ti-link"></i>${linked}</small>${extra.length ? `<small>${extra.join(" · ")}</small>` : ""}</div>
+        <button type="button" class="oc-x" data-act="close" title="Đóng" aria-label="Đóng"><i class="ti ti-x"></i></button></div>
+      <div class="oc-stats"><div><small>Điểm</small><b>${fmt(s.points)}</b></div><div><small>Hôm nay</small><b>${s.today != null ? "+" + fmt(s.today) : "—"}</b></div>
+        <div><small>Trạng thái</small>${statePill(name)}</div></div>
+      ${s.progress ? `<div class="oc-now"><i class="ti ti-player-play"></i><span>${esc(s.progress)}</span></div>` : ""}
+      <div class="oc-body">${body}</div>
+      <div class="oc-foot"><small>${s.updated ? "Cập nhật " + esc(s.updated) : ""}</small>
+        ${running ? `<button type="button" class="btn btn-sm" data-act="stop"><i class="ti ti-player-stop"></i>Dừng</button>`
+          : `<button type="button" class="btn btn-sm btn-primary" data-act="run"><i class="ti ti-player-play"></i>Chạy</button>`}
+        <button type="button" class="btn btn-sm" data-act="open"><i class="ti ti-layout-dashboard"></i>Tổng quan</button></div>`;
+    if (html === cardHtml) return;  // không đổi gì: khỏi đụng DOM (sự kiện trạng thái đến liên tục khi bot chạy)
+    const scroll = cardEl.querySelector(".oc-body")?.scrollTop || 0;
+    cardEl.innerHTML = html; cardHtml = html;
+    const bd = cardEl.querySelector(".oc-body"); if (bd) bd.scrollTop = scroll;
+    cardPos.x = -1;  // cỡ thẻ có thể đổi: đặt lại vị trí ở khung hình tới
+  }
+  function placeCard() {  // neo thẻ trên đầu robot (robot có thể đang đi), kẹp trong khung văn phòng; sát mép trên thì lật xuống dưới
+    if (!cardName) return;
+    const b = bots.get(cardName);
+    if (!b) { closeCard(); return; }
+    const x = b.sx, y = Math.round(b.sy - b.lift - (b.pose === "sit" && !b.path.length ? 28 : 32));
+    if (x === cardPos.x && y === cardPos.y) return;
+    cardPos.x = x; cardPos.y = y;
+    const lw = layer.clientWidth, lh = layer.clientHeight, sc = lw / W, ax = x * sc, ay = y * sc, gap = 8;
+    const by = (b.sy + 4) * sc + gap;  // mép trên của thẻ khi lật xuống dưới chân robot
+    const up = ay - gap - 4, down = lh - by - 4;  // chỗ trống phía trên / dưới robot
+    cardEl.style.maxHeight = "none";
+    const full = cardEl.offsetHeight, below = full > up && down > up;  // trên không đủ chỗ mà dưới rộng hơn thì lật xuống
+    cardEl.style.maxHeight = Math.max(120, below ? down : up) + "px";  // văn phòng thấp: thẻ co lại, danh sách việc tự cuộn
+    const w = cardEl.offsetWidth, h = cardEl.offsetHeight;
+    const left = Math.max(4, Math.min(lw - w - 4, ax - w / 2));
+    const top = below ? Math.min(lh - h - 4, by) : ay - h - gap;
+    cardEl.classList.toggle("below", below);
+    cardEl.style.left = left + "px"; cardEl.style.top = Math.max(4, top) + "px";
+    cardEl.style.setProperty("--ax", Math.max(14, Math.min(w - 14, ax - left)) + "px");  // mũi nhọn chỉ đúng robot
+  }
+  function bindCard() {
+    layer.insertAdjacentHTML("beforeend", `<div class="ob-card" role="dialog" aria-label="Thông tin tài khoản" hidden></div>`);
+    cardEl = $(".ob-card", layer);
+    cardEl.addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-act]");
+      if (!btn) return;
+      const name = cardName, act = btn.dataset.act;
+      if (act === "close") closeCard();
+      else if (act === "open") { closeCard(); S.selected = name; go("dashboard"); }
+      else if (act === "run") { btn.disabled = true; await start([name], "run"); renderCard(); }
+      else if (act === "stop") { btn.disabled = true; await api().stop([name]); toast("Đang dừng " + name); }
+    });
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && cardName) closeCard(); });
+    document.addEventListener("pointerdown", (e) => {  // bấm ra ngoài văn phòng: đóng thẻ
+      if (cardName && !e.target.closest(".ob-card, .ob-tag, #office-canvas")) closeCard();
+    }, true);
+    window.addEventListener("resize", () => { cardPos.x = -1; });
+  }
+
   function bindControls() {
     const music = $("#office-music"), rain = $("#office-rain"), volume = $("#office-volume");
     const vol = pref.get("officeVolume", 0.6);
@@ -1175,13 +1276,14 @@ const Office = (() => {
     music.onclick = () => { Lofi.toggle(); pref.set("officeMusic", Lofi.on); paint(); };
     rain.onclick = () => { S.officeRain = !S.officeRain; Lofi.setRain(S.officeRain); pref.set("officeRain", S.officeRain); paint(); };
     volume.oninput = () => { const v = +volume.value / 100; Lofi.setVolume(v); pref.set("officeVolume", v); };
-    cv.addEventListener("click", (e) => {  // bấm vào robot -> mở tổng quan của tài khoản đó
+    cv.addEventListener("click", (e) => {  // bấm vào robot -> mở thẻ thông tin nhỏ trên đầu robot
       const r = cv.getBoundingClientRect(), wx = (e.clientX - r.left) / r.width * W, wy = (e.clientY - r.top) / r.height * H;
       let hit = null;  // robot gần người xem nhất (độ sâu lớn nhất) trong vùng bấm; robot luôn được ưu tiên hơn mèo
       for (const b of bots.values()) {
         if (Math.abs(b.sx - wx) < 9 && wy > b.sy - b.lift - 30 && wy < b.sy + 2 && (!hit || b.depth > hit.depth)) hit = b;
       }
-      if (hit) { S.selected = hit.name; go("dashboard"); return; }
+      if (hit) { toggleCard(hit.name); return; }
+      closeCard();  // bấm chỗ trống / con mèo: đóng thẻ đang mở
       if (Math.abs(cat.sx - wx) < 9 && wy > cat.sy - 20 && wy < cat.sy + 2) {  // bấm vào mèo: thả tim, mèo thức dậy ngồi một lúc
         for (let i = 0; i < 4; i++) fx.push({ kind: "heart", x: cat.sx - 3 + i * 2, y: cat.sy - 18, vx: (i - 1.5) * 6, vy: -14, life: 1.4, age: 0 });
         if (!cat.path.length && cat.st !== "eat") { cat.goal = "sit"; cat.st = "sit"; cat.until = performance.now() + 5000; }
@@ -1212,6 +1314,7 @@ const Office = (() => {
       layer.insertAdjacentHTML("beforeend", `<button type="button" class="ob-add" title="Thêm tài khoản" aria-label="Thêm tài khoản"><i class="ti ti-plus"></i></button>`);
       addBtn = $(".ob-add", layer);
       addBtn.onclick = () => window.openProfileDialog(null);
+      bindCard();
       bindControls();
       new ResizeObserver(() => resize()).observe(stage);
       document.addEventListener("visibilitychange", () => this.render());
@@ -1220,6 +1323,7 @@ const Office = (() => {
       if (!cv) return;
       const show = S.page === "office" && !document.hidden;
       sync();
+      if (show) renderCard(); else closeCard();
       $("#office-empty").hidden = S.profiles.length > 0;
       const run = [...bots.values()].filter(isWorking).length;
       const sub = `${run} robot đang làm việc · ${S.profiles.length - run} đang nghỉ`;
@@ -1244,6 +1348,8 @@ const Office = (() => {
     _path(name) { const b = bots.get(name); return b ? [{ gx: b.gx, gy: b.gy }, ...b.path.map((p) => ({ gx: p.gx, gy: p.gy }))] : []; },
     // chỉ để kiểm thử: trạng thái mèo (tọa độ sàn) + các điểm còn phải đi
     _cat() { return { st: cat.st, gx: cat.gx, gy: cat.gy, path: cat.path.map((p) => ({ gx: p.gx, gy: p.gy })), GX, GY }; },
+    // chỉ để kiểm thử: tên tài khoản đang mở thẻ thông tin (null nếu không mở)
+    _card() { return cardName; },
     // chỉ để kiểm thử: tọa độ (client) giữa thân robot, null nếu chưa có
     _pos(name) {
       const b = bots.get(name);

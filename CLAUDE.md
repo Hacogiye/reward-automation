@@ -64,6 +64,11 @@ python -m rewards_bot --run-all --headless # what Task Scheduler runs
   tags and speech bubbles are an HTML layer on top (bubbles are `data-no-i18n`; canvas text goes through `I18N.tr`).
   The lofi music is generated with Web Audio (`Lofi`), so there are no audio files and the CSP is unchanged. It only
   starts after a click (autoplay policy). Volume and rain are kept in `localStorage` (`pref`).
+  Clicking a robot (or its name tag) opens one info card (`.ob-card`, `openCard`/`renderCard`/`placeCard`) above its
+  head instead of leaving the page: linked account (saved email from `S.credentials`, plus proxy/CDP), points, today,
+  state, current progress, today's tasks split into to-do / done, and Run/Stop + Overview buttons. It follows the robot,
+  shrinks to the free space above (or flips below) and is re-rendered only when its HTML changes. Esc, clicking empty
+  floor or clicking outside closes it. Test hook `Office._card()`.
   Isometric 2:1 view (tile 32 x 16 px): logic runs in floor coordinates `b.gx`/`b.gy` (tile units), `iso(gx, gy, z)`
   projects to the canvas and the depth is `gx + gy` (bigger = nearer the viewer, drawn later). Desks run along `gx`
   (`COLS=4`), rows along `gy`, then a corridor, then the lounge strip nearest the viewer. Robots walk along floor axes
