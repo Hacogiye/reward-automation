@@ -166,3 +166,14 @@ def test_app_icon_is_real_ico_on_windows(monkeypatch):
     monkeypatch.setattr(W.sys, "platform", "linux")
     png = W.app_icon()
     assert png.suffix == ".png" and png.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_save_profile_proxy(api):
+    assert api.save_profile(None, {"name": "a", "proxy": "1.2.3.4:8080"})["ok"]
+    assert api._find("a")["proxy"] == "http://1.2.3.4:8080"
+    r = api.save_profile("a", {"name": "a", "proxy": "http://u:p@1.2.3.4:8080"})
+    assert r["ok"] is False and "mật khẩu" in r["error"]
+    assert api.save_profile("a", {"name": "a", "proxy": ""})["ok"]
+    assert api._find("a")["proxy"] == ""
+    assert api.save_profile("a", {"name": "a", "mode": "cdp", "proxy": "1.2.3.4:80"})["ok"]
+    assert api._find("a")["proxy"] == ""  # gắn vào Edge đang mở: proxy do Edge đó tự đặt

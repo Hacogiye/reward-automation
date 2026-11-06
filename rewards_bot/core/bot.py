@@ -135,14 +135,17 @@ class RewardsBot:
         d = profile_dir(self.profile)
         d.mkdir(parents=True, exist_ok=True)
         free_profile(d, self.log)  # đóng Edge mồ côi của bot / báo rõ nếu profile đang mở ở cửa sổ khác
-        if self.s.get("bypass_proxy", True):
+        own_proxy = security.validate_proxy(self.profile.get("proxy"))
+        if own_proxy:
+            self.log(f"Trình duyệt đi qua proxy riêng của tài khoản: {own_proxy}")
+        elif self.s.get("bypass_proxy", True):
             proxy = security.system_proxy()
             if proxy:
                 self.log(f"Máy đang bật proxy ({proxy}); trình duyệt của bot bỏ qua proxy này")
         # mở trình duyệt "thường" (ít cờ, không có cờ tự động hóa của Playwright) rồi gắn vào qua CDP cục bộ;
         # chứng chỉ HTTPS vẫn được kiểm tra như trình duyệt bình thường
         self._launched = edge_launcher.launch(self.s.get("browser_channel", "msedge"), str(d), headless,
-                                              extra=security.browser_args(self.s),
+                                              extra=security.browser_args(self.s, own_proxy),
                                               profile_directory=edge_launcher.pinned_profile(str(d)))
         try:
             self._browser = p.chromium.connect_over_cdp(self._launched.cdp_url)
@@ -1011,7 +1014,13 @@ class RewardsBot:
             self.log(f"[Kiểm tra] {'OK' if level == 'ok' else level.upper()} – {title}: {detail}")
 
         proxy = security.system_proxy()
-        if proxy:
+        own = self.profile.get("proxy") if self.profile.get("mode") != "cdp" else ""
+        if own:
+            try:
+                add("ok", "Proxy riêng", f"{security.validate_proxy(own)} (bỏ qua proxy hệ thống)")
+            except ValueError as e:
+                add("fail", "Proxy riêng", str(e))
+        elif proxy:
             add("ok" if self.s.get("bypass_proxy", True) else "warn", "Proxy hệ thống",
                 f"đang bật ({proxy}); " + ("bot bỏ qua proxy này" if self.s.get("bypass_proxy", True)
                                          else "bot ĐANG đi qua proxy này (bật lại tùy chọn trong Cài đặt)"))

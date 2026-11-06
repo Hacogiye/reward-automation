@@ -596,6 +596,15 @@
         <div class="form-hint mt-2" data-lang="en">Any program on this computer can control Edge through this port. Only open Edge in
           debug mode when you need the bot, and don't use <code>--remote-debugging-address</code> (it exposes the port to your LAN).</div>
       </div>
+      <div id="pd-proxy-wrap" class="mt-3">
+        <label class="form-label" for="pd-proxy">Proxy riêng <span class="text-secondary fw-normal">(không bắt buộc)</span></label>
+        <input id="pd-proxy" name="proxy" class="form-control" maxlength="300" autocomplete="off" spellcheck="false"
+          placeholder="socks5://1.2.3.4:1080 hoặc http://host:8080">
+        <div class="form-hint mt-2" data-lang="vi">Để trống = kết nối thẳng như bình thường. Chỉ hỗ trợ proxy xác thực theo IP
+          (không có user:mật khẩu). Nên dùng một proxy cố định cho mỗi tài khoản: đổi IP liên tục dễ bị nghi hơn.</div>
+        <div class="form-hint mt-2" data-lang="en">Empty = connect directly as usual. Only IP-authenticated proxies are supported
+          (no user:password). Keep one fixed proxy per account: an IP that keeps changing looks more suspicious.</div>
+      </div>
       <div id="pd-cred" class="mt-3">
         <div class="form-label">Tự đăng nhập lại <span class="text-secondary fw-normal">(không bắt buộc)</span></div>
         <input id="pd-email" type="email" class="form-control" placeholder="Email tài khoản Microsoft" maxlength="200"

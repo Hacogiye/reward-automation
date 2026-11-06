@@ -66,6 +66,10 @@ python -m rewards_bot --run-all --headless # what Task Scheduler runs
   One such folder can hold several Edge profiles (`namanh_2` has `Default` = work account and `Profile 1` = the
   personal MSA). `edge_launcher.pinned_profile()` pins one into `rewards_bot_profile.txt` on first open and the bot
   always passes `--profile-directory`. Never drop that, or Edge silently opens whichever profile was used last.
+- Per-account proxy (`profile["proxy"]`, managed mode only): `security.validate_proxy` normalizes it to
+  `scheme://host:port` (http/https/socks4/socks5) and rejects `user:pass@` (Chromium can't take it on the command
+  line, and it would show in the process list). `browser_args` then passes `--proxy-server` instead of
+  `--no-proxy-server`, plus `--force-webrtc-ip-handling-policy=disable_non_proxied_udp` so WebRTC doesn't leak the real IP.
 - `core/credentials.py`: optional auto re-login. Email + DPAPI-encrypted password in `data/credentials.json`, Windows
   only, never sent to the UI or written to logs. `RewardsBot.auto_login()` runs from `_session()` on `NotLoggedIn` and
   stops (does not try to pass) at any verification step: code, Authenticator, CAPTCHA.

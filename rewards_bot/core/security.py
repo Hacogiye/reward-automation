@@ -67,8 +67,45 @@ def system_proxy() -> str:
     return "; ".join(found)
 
 
-def browser_args(settings: dict) -> list:
-    """Cờ dòng lệnh an toàn cho trình duyệt do app mở."""
+PROXY_SCHEMES = ("http", "https", "socks4", "socks5")
+
+
+def validate_proxy(value) -> str:
+    """Chuẩn hóa proxy riêng của tài khoản thành "scheme://host:port"; rỗng = không dùng proxy riêng.
+
+    Không nhận user:pass trong địa chỉ: Chromium không đọc mật khẩu từ --proxy-server, và để vậy thì mật khẩu
+    sẽ nằm trong dòng lệnh của process (ai trên máy cũng đọc được). Dùng proxy xác thực theo IP.
+    """
+    s = str(value or "").strip()
+    if not s:
+        return ""
+    if "://" not in s:
+        s = "http://" + s
+    scheme, rest = s.split("://", 1)
+    scheme = scheme.lower()
+    if scheme not in PROXY_SCHEMES:
+        raise ValueError(f"Proxy phải bắt đầu bằng {', '.join(x + '://' for x in PROXY_SCHEMES)}")
+    rest = rest.rstrip("/")
+    if "@" in rest:
+        raise ValueError("Không hỗ trợ proxy có user:mật khẩu. Dùng proxy xác thực theo IP (whitelist IP máy này)")
+    host, sep, port = rest.rpartition(":")
+    if not sep or not host or not port.isdigit() or not 1 <= int(port) <= 65535:
+        raise ValueError("Proxy cần dạng host:cổng, ví dụ socks5://1.2.3.4:1080")
+    if host.startswith("[") and host.endswith("]"):  # IPv6
+        ok = all(c in "0123456789abcdefABCDEF:." for c in host[1:-1])
+    else:
+        ok = all(c.isalnum() or c in "-." for c in host)
+    if not ok or len(host) > 255:
+        raise ValueError("Tên máy proxy không hợp lệ")
+    return f"{scheme}://{host}:{int(port)}"
+
+
+def browser_args(settings: dict, proxy: str = "") -> list:
+    """Cờ dòng lệnh an toàn cho trình duyệt do app mở. `proxy`: proxy riêng của tài khoản (đã kiểm tra)."""
+    if proxy:
+        proxy = validate_proxy(proxy)
+        # chỉ đi qua proxy này (không dùng proxy hệ thống); WebRTC không được gửi UDP ra ngoài proxy (lộ IP thật)
+        return [f"--proxy-server={proxy}", "--force-webrtc-ip-handling-policy=disable_non_proxied_udp"]
     args = []
     if settings.get("bypass_proxy", True):
         args += ["--no-proxy-server"]  # không đi qua proxy hệ thống / PAC

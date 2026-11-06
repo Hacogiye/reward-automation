@@ -699,7 +699,7 @@ function renderProfiles() {
       return `<tr data-name="${esc(p.name)}">
         <td>${avatarHtml(p.name, `avatar-sm rounded-circle ${run ? "run" : ""}`)}</td>
         <td><b>${esc(p.name)}</b>${savedEmail(p.name) ? ` <span class="badge bg-green-lt ms-1" title="Đã lưu mật khẩu (mã hóa) cho ${esc(savedEmail(p.name))}: phiên hết hạn thì bot tự đăng nhập lại"><i class="ti ti-key"></i> tự đăng nhập</span>` : ""}</td>
-        <td class="text-secondary">${p.mode === "cdp" ? `Edge đang mở · cổng ${p.cdp_port}` : "Cửa sổ riêng"}</td>
+        <td class="text-secondary">${p.mode === "cdp" ? `Edge đang mở · cổng ${p.cdp_port}` : p.proxy ? `Cửa sổ riêng · proxy ${esc(p.proxy)}` : "Cửa sổ riêng"}</td>
         <td>${statePill(p.name)}</td>
         <td class="text-end">${fmt(s.points)}</td>
         <td class="text-end">${s.today != null ? "+" + fmt(s.today) : "—"}</td>
@@ -788,6 +788,7 @@ function bindProfileDialog() {
   const dlg = $("#profile-dialog"), f = $("#profile-form");
   const syncPort = () => {
     $("#pd-port").hidden = f.mode.value !== "cdp";
+    $("#pd-proxy-wrap").hidden = f.mode.value === "cdp";  // Edge tự mở thì proxy do bạn đặt cho Edge đó
     $("#pd-cred").hidden = f.mode.value === "cdp" || !S.credentials?.supported;  // chế độ gắn vào Edge: tự đăng nhập trên Edge đó
   };
   $$("input[name=mode]", f).forEach((r) => (r.onchange = syncPort));
@@ -801,7 +802,8 @@ function bindProfileDialog() {
         : "Muốn bỏ tự đăng nhập thì tick \"Xóa mật khẩu đã lưu\".";
       return;
     }
-    const r = await api().save_profile(old, { name: f.name.value, mode: f.mode.value, cdp_port: +f.cdp_port.value });
+    const r = await api().save_profile(old, { name: f.name.value, mode: f.mode.value, cdp_port: +f.cdp_port.value,
+      proxy: f.proxy.value.trim() });
     if (!r.ok) { $("#pd-error").textContent = r.error; return; }
     const name = f.name.value.trim();
     dlg.dataset.old = name;  // tài khoản đã lưu: bấm Lưu lần nữa (sau lỗi mật khẩu) là sửa, không thêm mới
@@ -859,6 +861,7 @@ function openProfileDialog(p) {
   f.name.value = p ? p.name : `Tài khoản ${S.profiles.length + 1}`;
   f.mode.value = p ? p.mode : "managed";
   f.cdp_port.value = p ? p.cdp_port : 9222 + S.profiles.length;
+  f.proxy.value = (p && p.proxy) || "";
   dlg._avatar = undefined;  // undefined = không đổi, "" = xóa, data URL = ảnh mới
   setAvatarPreview(p ? (S.avatars || {})[p.name] : "", f.name.value);
   const saved = p ? savedEmail(p.name) : "";

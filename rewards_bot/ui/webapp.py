@@ -330,13 +330,14 @@ class Api:
             return {"ok": False, "error": "Chế độ không hợp lệ."}
         try:
             port = security.validate_port(profile.get("cdp_port") or 9222)
+            proxy = security.validate_proxy(profile.get("proxy")) if mode == "managed" else ""
         except ValueError as e:
             return {"ok": False, "error": str(e)}
         if name != old_name and self._find(name):
             return {"ok": False, "error": "Đã có profile tên này."}
         if old_name and self._runner.is_running(old_name):
             return {"ok": False, "error": "Dừng profile trước khi sửa."}
-        p = {"name": name, "mode": mode, "cdp_port": port}
+        p = {"name": name, "mode": mode, "cdp_port": port, "proxy": proxy}
         old = self._find(old_name) if old_name else None
         with self._lock:
             if old:
