@@ -3,8 +3,10 @@
 // (S.pstate / S.running trong app.js): search PC thì gõ phím, Mobile thì cầm điện thoại, xong thì ra sofa uống cà phê...
 // Mọi hình đều vẽ pixel bằng canvas, nhạc lofi tự sinh bằng Web Audio: không có file ảnh / nhạc ngoài (CSP chỉ cho 'self').
 //
-// Hiệu năng: canvas chỉ to bằng "thế giới" (400 x H px), GPU phóng to bằng CSS image-rendering: pixelated. Phần không
-// động (sàn, tường, đồ đạc, ghế, đồng hồ, bảng điểm) vẽ sẵn vào canvas nền, mỗi khung hình chỉ dán lại. Khoảng 30 khung
+// Góc nhìn isometric 2:1 (ô sàn 32 x 16 px): hai bức tường phía sau, cửa sổ ở tường trái, biển tên / đồng hồ / bảng điểm ở
+// tường phải, khu nghỉ là dải gần người xem nhất. Hiệu năng: canvas chỉ to bằng "thế giới" (cỡ phụ thuộc số hàng bàn), GPU
+// phóng to bằng CSS image-rendering: pixelated. Phần không có gì đứng sau (sàn, tường, thảm, đồ treo tường) vẽ sẵn vào
+// canvas nền; đồ đạc vẽ sẵn thành sprite theo giao diện, rồi xếp cùng robot theo độ sâu. Khoảng 30 khung
 // hình/giây khi có gì chuyển động, 6 khi tất cả đang nghỉ; dừng hẳn khi rời trang. Chữ tiếng Việt nằm ở lớp HTML phía
 // trên (nét ở mọi cỡ), số vẽ bằng font pixel 3x5 tự làm.
 
@@ -185,55 +187,88 @@ const Lofi = (() => {
   };
 })();
 
-// ===================================================================== cảnh văn phòng
+
+// ===================================================================== cảnh văn phòng (isometric 2:1)
 const Office = (() => {
-  const W = 400, CELL = 100, COLS = 4, WALL = 74, ROW = 80, LOUNGE = 84;
-  const SPEED = 34;                 // px thế giới / giây
-  const FPS = 30, IDLE_FPS = 6;     // có gì chuyển động / tất cả đang nghỉ
+  // Logic chạy trên tọa độ sàn (gx, gy) tính bằng ô; màn hình: x = OX + (gx - gy) * 16, y = OY + (gx + gy) * 8 - độ cao.
+  // gx chạy xuống-phải, gy chạy xuống-trái; độ sâu = gx + gy (lớn = gần người xem, vẽ sau).
+  const TW = 32, TH = 16, HW = TW / 2, HH = TH / 2;   // 1 ô sàn = hình thoi 32 x 16 px thế giới
+  const COLS = 4, CW = 3.5, ROWD = 4.6, TOP = 2.0;          // bước cột (gx), bước hàng bàn (gy) và khoảng cách bàn hàng đầu tới tường phải (gy), tính bằng ô
+  const WALLH = 84, LOUNGE_D = 3.3, GAP_L = 4.25;     // cao tường (px), bề sâu khu nghỉ, lối xuống khu nghỉ (giữa sofa và máy cà phê)
+  const TAG_DX = 0.6, TAG_DY = 0.4;                   // bảng tên nằm dưới ghế / robot của chính bàn đó
+  const SEAT_Z = 5.5;                                 // độ cao mặt ghế (px)
+  const SPEED = 2.4;                                  // ô / giây (khoảng 34 px màn hình / giây như bản cũ)
+  const FPS = 30, IDLE_FPS = 6;                       // có gì chuyển động / tất cả đang nghỉ
   const BODY = ["#6c9cf0", "#f07a8e", "#8fcf6a", "#e9b45f", "#b096f0", "#5fc9e8", "#f09a5f", "#7fd6b5"];
   const tr = (s) => (typeof I18N !== "undefined" && I18N.lang === "en" && I18N.tr(s)) || s;
   let cv = null, g = null, layer = null, stage = null, inner = null, wall = null;
   let bg = null, bgKey = "";        // canvas nền vẽ sẵn + khóa: đổi khóa thì vẽ lại
-  let H = WALL + ROW + LOUNGE, rows = 1, raf = 0, tmo = 0, lastT = 0, visible = false, layoutKey = "";
+  let GX = 15, GY = 8, OX = 0, OY = 0, W = 400, H = 300;   // cỡ sàn (ô), gốc chiếu, cỡ thế giới (px)
+  let rows = 1, raf = 0, tmo = 0, lastT = 0, visible = false, layoutKey = "";
+  let ox = 0, oy = 0;               // gốc cộng thêm cho pt() (0 khi vẽ sprite, OX/OY khi vẽ nền)
+  let WINS = [], FURN = [];         // cửa sổ trên tường trái, đồ khu nghỉ (tính lại khi đổi số hàng)
+  let sprites = {}, sprKey = "";    // sprite đồ đạc vẽ sẵn theo giao diện
   const bots = new Map();           // tên tài khoản -> robot
-  const fx = [];                    // hạt hiệu ứng: khói, pháo giấy, "+điểm", nốt nhạc, zzz
+  const fx = [];                    // hạt hiệu ứng (tọa độ màn hình): khói, pháo giấy, "+điểm", nốt nhạc, zzz
 
-  const loungeTop = () => WALL + rows * ROW;
-  const corridorY = () => loungeTop() + 12;
+  const seatGy = (row) => TOP + row * ROWD + 0.5;
+  const corridorY = () => seatGy(rows - 1) + 3.4;
+  const loungeTop = () => corridorY() + 0.5;
+  const frontY = () => loungeTop() + 2.3;           // hàng đứng phía trước đồ khu nghỉ
   const cellOf = (i) => ({ col: i % COLS, row: Math.floor(i / COLS) });
-  const deskTop = (row) => WALL + row * ROW + 40;
-  const seat = (i) => { const { col, row } = cellOf(i); return { x: col * CELL + 64, y: deskTop(row) + 5 }; };
-  const gapX = (col) => (col === 0 ? 7 : col * CELL);
+  const deskGx = (col) => col * CW + 0.8, deskGy = (row) => TOP + row * ROWD;   // góc gx/gy nhỏ nhất của bàn (rộng 2 x sâu 1)
+  const seat = (i) => { const { col, row } = cellOf(i); return { gx: col * CW + 3.15, gy: seatGy(row) }; };
+  const gapX = (col) => col * CW + 3.9;             // khe giữa các cột bàn: lối đi xuống hành lang
   const LOUNGE_SPOTS = () => {
-    const y = loungeTop();
+    const L = loungeTop(), fy = frontY();
     return [
-      { x: 36, y: y + 58, pose: "sit", what: "sofa" }, { x: 62, y: y + 58, pose: "sit", what: "sofa" },
-      { x: 132, y: y + 62, pose: "stand", what: "coffee" }, { x: 178, y: y + 62, pose: "stand", what: "water" },
-      { x: 206, y: y + 70, pose: "stand", what: "plant" }, { x: 352, y: y + 64, pose: "stand", what: "arcade" },
-      { x: 286, y: y + 74, pose: "stand", what: "rug" }, { x: 252, y: y + 52, pose: "stand", what: "rug" },
+      { gx: 1.5, gy: L + 1.15, pose: "sit", what: "sofa", z: 7.5, bias: 1.5 }, { gx: 2.7, gy: L + 1.15, pose: "sit", what: "sofa", z: 7.5, bias: 1.5 },
+      { gx: 5.3, gy: fy, pose: "stand", what: "coffee" }, { gx: 6.55, gy: fy, pose: "stand", what: "water" },
+      { gx: 7.9, gy: fy, pose: "stand", what: "plant" }, { gx: 13.4, gy: fy, pose: "stand", what: "arcade" },
+      { gx: 9.5, gy: fy, pose: "stand", what: "rug" }, { gx: 11.5, gy: fy, pose: "stand", what: "rug" },
     ];
   };
+  // tính cỡ sàn / thế giới từ số hàng bàn; chiều cao thế giới = từ đỉnh tường đến góc sàn xa nhất
+  function geom() {
+    GX = Math.ceil(COLS * CW + 0.5);
+    GY = Math.ceil(loungeTop() + LOUNGE_D);
+    OX = GY * HW + 6; OY = WALLH + 6;
+    W = (GX + GY) * HW + 12; H = OY + (GX + GY) * HH + 8;
+    const n = Math.max(1, Math.min(4, Math.floor(GY / 3.6))), len = GY * HW, ww = 36;
+    WINS = Array.from({ length: n }, (_, i) => ({ u: Math.round(len * (i + 0.5) / n - ww / 2), v: 20, w: ww, h: 32 }));
+    const L = loungeTop(), y0 = L + 0.5;
+    FURN = [["sofa", 0.6, y0, 3, 1], ["coffee", 4.9, y0 + 0.1, 0.8, 0.8], ["water", 6.2, y0 + 0.15, 0.7, 0.7],
+            ["plant", 7.5, y0 + 0.1, 0.8, 0.8], ["arcade", 12.9, y0, 1, 0.9]].map(([key, gx0, gy0, gw, gd]) => {
+      const p = iso(gx0, gy0);
+      return { key, gx0, gy0, gw, gd, d: gx0 + gw / 2 + gy0 + gd / 2, sx: Math.round(p.x), sy: Math.round(p.y) };
+    });
+  }
+  const iso = (gx, gy, z = 0) => ({ x: OX + (gx - gy) * HW, y: OY + (gx + gy) * HH - z });
+  const qz = (x, y, z) => [Math.round((x - y) * HW), Math.round((x + y) * HH - z)];   // điểm cục bộ trong sprite
   const hash = (s) => [...String(s)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
 
   // ------------------------------------------------------------ bảng màu theo giao diện (tính 1 lần cho mỗi giao diện)
   const PALETTES = {
-    cyber: { cyber: true, dark: true, wall: "#140c2c", wall2: "#1d1240", base: "#05d9e8", floor: "#120a26",
-      grid: "rgba(5,217,232,.16)", desk: "#25184a", deskTop: "#33246a", deskEdge: "#05d9e8", leg: "#0d0820",
-      mon: "#0b0f1f", monEdge: "#ff2a6d", sofa: "#5a1846", sofa2: "#7a2160", rug: "#2a1150", rug2: "#ff2a6d",
+    cyber: { cyber: true, dark: true, wallR: "#1d1240", wallL: "#140c2c", stripe: "rgba(255,255,255,.035)", base: "#05d9e8",
+      floor: "#120a26", floor2: "#170d30", gridIso: "rgba(5,217,232,.22)",
+      desk: "#25184a", deskSide: "#190f36", deskTop: "#33246a", deskEdge: "#05d9e8", leg: "#0d0820",
+      mon: "#0b0f1f", monEdge: "#ff2a6d", sofa: "#5a1846", sofa2: "#7a2160", sofaSide: "#43102f", rug: "#2a1150", rug2: "#ff2a6d",
       shadow: "rgba(0,0,0,.45)", outline: "#05030d", plant: "#05d9e8", pot: "#3a2470",
-      chair: "#3a1f66", chairHi: "#ff2a6d", clock: "#fcee0a", board: "#05d9e8", boardBg: "#0b0f1f", total: "#fcee0a",
+      chair: "#3a1f66", chairHi: "#ff2a6d", chairSide: "#2b1750", clock: "#fcee0a", board: "#05d9e8", boardBg: "#0b0f1f", total: "#fcee0a",
       signBox: "#0b0617", signBg: "#1a0b33", frame: "#05d9e8", sill: "#ff2a6d" },
-    dark: { cyber: false, dark: true, wall: "#2b3042", wall2: "#323850", base: "#1d2130", floor: "#3a3546",
-      grid: null, desk: "#5a3e2e", deskTop: "#76523b", deskEdge: "#8d6448", leg: "#2c1f17",
-      mon: "#1a1d26", monEdge: "#444b5e", sofa: "#4a5d8a", sofa2: "#5c71a3", rug: "#4b3a52", rug2: "#6a5470",
+    dark: { cyber: false, dark: true, wallR: "#323850", wallL: "#262b3d", stripe: "rgba(255,255,255,.03)", base: "#1d2130",
+      floor: "#3a3546", floor2: "#322e3e", gridIso: null,
+      desk: "#5a3e2e", deskSide: "#46301f", deskTop: "#76523b", deskEdge: "#8d6448", leg: "#2c1f17",
+      mon: "#1a1d26", monEdge: "#444b5e", sofa: "#4a5d8a", sofa2: "#5c71a3", sofaSide: "#3a4a70", rug: "#4b3a52", rug2: "#6a5470",
       shadow: "rgba(0,0,0,.35)", outline: "#12141b", plant: "#4f9a5c", pot: "#8a5a44",
-      chair: "#2f6f8f", chairHi: "#4a8fb0", clock: "#7dfc9a", board: "#9aa0ac", boardBg: "#fbfcfe", total: "#1f8f4e",
+      chair: "#2f6f8f", chairHi: "#4a8fb0", chairSide: "#235672", clock: "#7dfc9a", board: "#9aa0ac", boardBg: "#fbfcfe", total: "#1f8f4e",
       signBox: "#12141b", signBg: "#23283a", frame: "#12141b", sill: "#1d2130" },
-    light: { cyber: false, dark: false, wall: "#ece6da", wall2: "#e2dacb", base: "#b9a98f", floor: "#d6c4a6",
-      grid: null, desk: "#93603f", deskTop: "#b07a52", deskEdge: "#c48c61", leg: "#5e3d28",
-      mon: "#2a2e38", monEdge: "#4a5060", sofa: "#5b7cc4", sofa2: "#7393d6", rug: "#c97f6a", rug2: "#e0a08d",
+    light: { cyber: false, dark: false, wallR: "#ece6da", wallL: "#d8cfbd", stripe: "rgba(0,0,0,.035)", base: "#b9a98f",
+      floor: "#d6c4a6", floor2: "#cbb893", gridIso: null,
+      desk: "#93603f", deskSide: "#74492f", deskTop: "#b07a52", deskEdge: "#c48c61", leg: "#5e3d28",
+      mon: "#2a2e38", monEdge: "#4a5060", sofa: "#5b7cc4", sofa2: "#7393d6", sofaSide: "#4562a3", rug: "#c97f6a", rug2: "#e0a08d",
       shadow: "rgba(60,40,20,.18)", outline: "#2a2420", plant: "#4f9a5c", pot: "#b5694a",
-      chair: "#3f7fa8", chairHi: "#62a2c8", clock: "#7dfc9a", board: "#9aa0ac", boardBg: "#fbfcfe", total: "#1f8f4e",
+      chair: "#3f7fa8", chairHi: "#62a2c8", chairSide: "#2e6486", clock: "#7dfc9a", board: "#9aa0ac", boardBg: "#fbfcfe", total: "#1f8f4e",
       signBox: "#2a2420", signBg: "#fdfbf6", frame: "#2a2420", sill: "#b9a98f" },
   };
   const themeKey = () => (document.documentElement.getAttribute("data-skin") === "cyberpunk" ? "cyber"
@@ -266,7 +301,6 @@ const Office = (() => {
       cx += (rowsOf[0].length + 1) * sc;
     }
   }
-
   // ------------------------------------------------------------ bot đang làm gì (theo trạng thái thật)
   function activity(name) {
     const s = st(name), state = s.state || "Sẵn sàng", p = s.progress || "", running = S.running.has(name);
@@ -295,13 +329,13 @@ const Office = (() => {
   function sync() {
     const names = S.profiles.map((p) => p.name);
     rows = Math.max(1, Math.ceil(names.length / COLS));
-    H = WALL + rows * ROW + LOUNGE;
+    geom();
     for (const n of [...bots.keys()]) if (!names.includes(n)) { bots.get(n).el.remove(); bots.delete(n); }
     names.forEach((name, i) => {
       let b = bots.get(name);
       if (!b) {
         const color = BODY[hash(name) % BODY.length];
-        b = { name, x: 0, y: 0, path: [], where: null, pose: "stand", act: null, spot: null, until: 0, color,
+        b = { name, gx: 0, gy: 0, sx: 0, sy: 0, lift: 0, depth: 0, dir: -1, path: [], where: null, pose: "stand", act: null, spot: null, until: 0, color,
               dark: shade(color, -0.35), light: shade(color, 0.25), blink: 0, log: "", logUntil: 0, celebrate: 0,
               today: st(name).today, el: document.createElement("div"), bub: { text: null, cls: "", x: -1, y: -1 } };
         b.el.className = "ob";
@@ -313,14 +347,14 @@ const Office = (() => {
         bots.set(name, b);
       }
       b.index = i;
-      // bảng tên: chỉ dựng lại khi điểm / ảnh đại diện đổi; vị trí theo bàn (đổi khi số hàng bàn đổi)
+      // bảng tên: chỉ dựng lại khi điểm / ảnh đại diện đổi; vị trí ở mép trước của bàn (đổi khi số hàng bàn đổi)
       const s = st(name), html = `${avatarHtml(name, "avatar-xs rounded-circle")}<span>${esc(name)}</span>`
         + `<b>${typeof s.points === "number" ? fmt(s.points) : ""}</b>`;
       if (b.tagHtml !== html) { b.tagEl.innerHTML = html; b.tagHtml = html; }
-      const { col, row } = cellOf(i);
-      b.tagEl.style.left = ((col * CELL + 51) / W * 100) + "%";
-      b.tagEl.style.top = ((deskTop(row) + 28) / H * 100) + "%";
-      b.bub.x = -1;  // H có thể đổi: đặt lại vị trí bong bóng ở khung hình tới
+      const { col, row } = cellOf(i), sp = seat(i), tp = iso(sp.gx + TAG_DX, sp.gy + TAG_DY);
+      b.tagEl.style.left = (tp.x / W * 100) + "%";
+      b.tagEl.style.top = (tp.y / H * 100) + "%";
+      b.bub.x = -1;  // W / H có thể đổi: đặt lại vị trí bong bóng ở khung hình tới
     });
     const key = names.join("\n") + "|" + rows;
     if (key !== layoutKey) {  // đổi danh sách tài khoản: dựng lại kích thước, đặt robot thẳng vào chỗ (không đi bộ)
@@ -328,33 +362,50 @@ const Office = (() => {
       resize();
       for (const b of bots.values()) { b.act = null; b.path = []; b.where = null; }
     }
-    for (const b of bots.values()) update(b);
+    for (const b of bots.values()) { update(b); locate(b); }
   }
 
-  function place(b, to) { b.x = to.x; b.y = to.y; b.path = []; b.where = to; b.pose = to.pose; }
-  function walk(b, to) {  // đi theo lối đi: ra khe giữa các bàn, xuống hành lang, rồi mới tới chỗ mới
-    const pts = [], cy = corridorY(), from = b.where;
-    if (from && from.kind === "desk" && to.kind === "desk" && from.col === to.col && from.row === to.row) { pts.push(to); }
-    else {
-      if (from && from.kind === "desk") pts.push({ x: gapX(from.col), y: b.y }, { x: gapX(from.col), y: cy });
-      else if (to.kind === "desk") pts.push({ x: b.x, y: cy });
-      if (to.kind === "desk") pts.push({ x: gapX(to.col), y: cy }, { x: gapX(to.col), y: to.y });
-      pts.push(to);
+  // vị trí màn hình + độ sâu của robot, tính 1 lần mỗi khung hình (vẽ, bong bóng, bấm chuột, hiệu ứng đều dùng)
+  function locate(b) {
+    const p = iso(b.gx, b.gy), still = !b.path.length && b.where;
+    b.sx = Math.round(p.x); b.sy = Math.round(p.y);
+    const L = loungeTop(), onSofa = b.gx > 0.5 && b.gx < 3.7 && b.gy > L + 0.4 && b.gy < L + 1.6;  // trong chân sofa: giữ độ cao + độ sâu để không "chui" ra sau sofa khi đứng dậy
+    b.lift = still && b.pose === "sit" ? b.where.z || 0 : onSofa ? 7.5 : 0;
+    b.depth = b.gx + b.gy + (onSofa ? 1.5 : still ? b.where.bias || 0 : 0);
+  }
+  function place(b, to) { b.gx = to.gx; b.gy = to.gy; b.path = []; b.where = to; b.pose = to.pose; if (to.pose === "sit") b.dir = -1; locate(b); }
+  function walk(b, to) {  // đi theo lối đi: ra khe giữa các bàn, xuống hành lang, qua lối giữa sofa và máy cà phê, rồi mới tới chỗ mới
+    const pts = [], cy = corridorY(), fy = frontY(), from = b.where, eps = 1e-6, moving = b.path.length > 0;
+    const add = (gx, gy) => {  // bỏ điểm trùng điểm trước để mỗi đoạn đi dọc đúng 1 trục sàn
+      const l = pts.length ? pts[pts.length - 1] : b;
+      if (Math.abs(l.gx - gx) > eps || Math.abs(l.gy - gy) > eps) pts.push({ gx, gy });
+    };
+    // đang đi dở thì `from` chỉ là đích cũ: luôn tính khu vực theo vị trí thật (gx, gy) của robot
+    const area = b.gy < cy - eps ? "desk" : b.gy > cy + eps ? "lounge" : "corr";
+    const nearCol = () => Math.max(0, Math.min(COLS - 1, Math.round((b.gx - 3.9) / CW)));
+    if (!moving && from && from.kind === "desk" && to.kind === "desk" && from.col === to.col && from.row === to.row) {
+      add(gapX(to.col), seatGy(to.row)); add(to.gx, to.gy);  // ngồi <-> đứng cạnh bàn: qua khe bên phải ghế, không cắt qua ghế
+    } else {
+      if (to.kind === "lounge" && area === "lounge") add(b.gx, fy);  // đã ở khu nghỉ: ra hàng trước rồi đi ngang
+      else if (area === "desk") { const c = !moving && from && from.kind === "desk" ? from.col : nearCol(); add(gapX(c), b.gy); add(gapX(c), cy); }
+      else if (area === "lounge") { add(b.gx, fy); add(GAP_L, fy); add(GAP_L, cy); }
+      if (to.kind === "desk") { add(gapX(to.col), cy); add(gapX(to.col), to.gy); }
+      else { if (area !== "lounge") { add(GAP_L, cy); add(GAP_L, fy); } add(to.gx, fy); }
+      add(to.gx, to.gy);
     }
     b.path = pts; b.where = to; b.pose = "stand";
   }
   function target(b, act) {
     const { col, row } = cellOf(b.index), s = seat(b.index);
-    if (act.at === "desk") return { kind: "desk", col, row, x: s.x, y: s.y, pose: "sit" };
-    if (act.at === "wait") return { kind: "desk", col, row, x: col * CELL + (col === COLS - 1 ? 5 : 95), y: s.y + 2, pose: "stand" };
+    if (act.at === "desk") return { kind: "desk", col, row, gx: s.gx, gy: s.gy, pose: "sit", z: SEAT_Z };
+    if (act.at === "wait") return { kind: "desk", col, row, gx: gapX(col), gy: s.gy + 1.2, pose: "stand" };  // đứng cạnh ghế, phía trước màn hình của cột bên cạnh
     return pickSpot(b);
   }
   function pickSpot(b) {
-    const taken = new Set([...bots.values()].filter((o) => o !== b && o.spot).map((o) => o.spot.what + o.spot.x));
-    const free = LOUNGE_SPOTS().filter((s) => !taken.has(s.what + s.x));
-    const lt = loungeTop();
+    const taken = new Set([...bots.values()].filter((o) => o !== b && o.spot).map((o) => o.spot.what + o.spot.gx));
+    const free = LOUNGE_SPOTS().filter((s) => !taken.has(s.what + s.gx));
     const s = free.length ? free[Math.floor(Math.random() * free.length)]
-      : { x: 100 + Math.random() * 200, y: lt + 40 + Math.random() * 34, pose: "stand", what: "rug" };
+      : { gx: 6 + Math.random() * 6, gy: frontY() + Math.random() * 0.6, pose: "stand", what: "rug" };
     b.spot = s;
     b.until = performance.now() + 8000 + Math.random() * 12000;
     return { kind: "lounge", ...s };
@@ -364,7 +415,7 @@ const Office = (() => {
     const sig = (a) => a && a.at + a.screen;
     if (prev && prev.face !== "happy" && act.face === "happy") {  // vừa chạy xong: ăn mừng tại bàn một lúc rồi mới đi nghỉ
       b.celebrate = performance.now() + 4500;
-      burst(b.x, b.y - 26, "confetti", 26);
+      burst(b.sx, b.sy - b.lift - 26, "confetti", 26);
     }
     const s = st(b.name);
     if (typeof s.today === "number" && typeof b.today === "number" && s.today > b.today) floatText(b, `+${s.today - b.today}`);
@@ -377,7 +428,7 @@ const Office = (() => {
     if (!b.where) place(b, to); else walk(b, to);
   }
 
-  // ------------------------------------------------------------ hiệu ứng
+  // ------------------------------------------------------------ hiệu ứng (tọa độ màn hình)
   function burst(x, y, kind, n) {
     const cols = ["#ff5d73", "#ffd23f", "#4fd1c5", "#7aa2ff", "#b28dff", "#8fd16a"];
     for (let i = 0; i < n; i++) {
@@ -385,7 +436,7 @@ const Office = (() => {
                 c: cols[i % cols.length] });
     }
   }
-  function floatText(b, text) { fx.push({ kind: "text", text, x: b.x, y: b.y - 36, vx: 0, vy: -10, life: 2.2, age: 0 }); }
+  function floatText(b, text) { fx.push({ kind: "text", text, x: b.sx, y: b.sy - b.lift - 36, vx: 0, vy: -10, life: 2.2, age: 0 }); }
   function onLog(e) {
     const b = bots.get(e.name);
     if (!b || !e.msg) return;
@@ -393,49 +444,74 @@ const Office = (() => {
     b.logUntil = performance.now() + 3500;
   }
 
-  // ------------------------------------------------------------ vẽ
+  // ------------------------------------------------------------ vẽ: hình cơ bản
   function R(x, y, w, h, c) { g.fillStyle = c; g.fillRect(Math.round(x), Math.round(y), w, h); }
+  const pt = (gx, gy, z = 0) => [Math.round(ox + (gx - gy) * HW), Math.round(oy + (gx + gy) * HH - z)];
+  function poly(pts, c) {  // đa giác đặc; viền cùng màu để các mặt kề nhau không hở kẽ
+    g.fillStyle = c; g.strokeStyle = c; g.lineWidth = 1; g.beginPath();
+    pts.forEach((p, i) => (i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])));
+    g.closePath(); g.fill(); g.stroke();
+  }
+  const flat = (x0, y0, x1, y1, z, c) => poly([pt(x0, y0, z), pt(x1, y0, z), pt(x1, y1, z), pt(x0, y1, z)], c);
+  function box(x0, y0, x1, y1, z0, z1, top, left, right) {  // khối hộp: mặt trên + mặt hướng +gy (trái) + mặt hướng +gx (phải, tối hơn)
+    poly([pt(x0, y1, z0), pt(x1, y1, z0), pt(x1, y1, z1), pt(x0, y1, z1)], left);
+    poly([pt(x1, y0, z0), pt(x1, y1, z0), pt(x1, y1, z1), pt(x1, y0, z1)], right);
+    poly([pt(x0, y0, z1), pt(x1, y0, z1), pt(x1, y1, z1), pt(x0, y1, z1)], top);
+  }
+  const faceL = (x0, x1, z0, z1, y, c) => poly([pt(x0, y, z0), pt(x1, y, z0), pt(x1, y, z1), pt(x0, y, z1)], c);  // hình dán lên mặt trái
+  function withWall(side, fn) {  // tọa độ cục bộ (u ngang theo tường, v từ đỉnh tường xuống) với phép nghiêng 2:1 của tường phải / trái
+    g.save(); g.transform(side === "R" ? 1 : -1, 0.5, 0, 1, OX, OY - WALLH); fn(); g.restore();
+  }
 
-  // nền tĩnh: chỉ vẽ lại khi giao diện / số bàn / giờ:phút / điểm hôm nay / số robot đang làm đổi
+  // ------------------------------------------------------------ nền tĩnh
+  // chỉ vẽ lại khi giao diện / số bàn / giờ:phút / điểm hôm nay / số robot đang làm đổi
   function staticKey(P, key) {
     const now = new Date(), total = officeTotal(), working = [...bots.values()].filter(isWorking).length;
     return `${key}|${layoutKey}|${now.getHours()}:${now.getMinutes()}|${total}|${working}|${S.officeRain ? 1 : 0}`;
   }
   function officeTotal() { return S.profiles.reduce((a, p) => a + (typeof st(p.name).today === "number" ? st(p.name).today : 0), 0); }
+  // chỉ vẽ những thứ không có gì đứng sau: sàn, tường, thảm, đồ treo tường. Đồ đạc và ghế nằm trong danh sách xếp theo độ sâu.
   function drawStatic(P) {
-    const lt = loungeTop();
-    R(0, 0, W, WALL, P.wall);
-    for (let x = 0; x < W; x += 16) R(x, 0, 8, WALL, P.wall2);  // giấy dán tường sọc
-    R(0, WALL - 5, W, 5, P.base);
-    R(0, WALL, W, H - WALL, P.floor);  // sàn
-    if (P.grid) { g.fillStyle = P.grid; for (let x = 0; x < W; x += 20) g.fillRect(x, WALL, 1, H - WALL); for (let y = WALL; y < H; y += 20) g.fillRect(0, y, W, 1); }
-    R(0, lt, W, 2, P.base);  // vạch ngăn khu nghỉ
-
-    R(10, 14, 104, 26, P.signBox); R(12, 16, 100, 22, P.signBg);  // biển tên (chữ ở lớp HTML)
-    // khung cửa sổ + bậu (phần trong kính vẽ động)
-    for (const wx of [134, 204]) {
-      const wy = 12;
-      R(wx - 2, wy - 2, 58, 2, P.frame); R(wx - 2, wy + 40, 58, 2, P.frame); R(wx - 2, wy, 2, 40, P.frame); R(wx + 54, wy, 2, 40, P.frame);
-      R(wx - 4, wy + 42, 62, 3, P.sill);
+    ox = OX; oy = OY;
+    const L = loungeTop(), lenR = GX * HW, lenL = GY * HW, t = 0.25;
+    for (let a = 0; a < GX; a++) for (let c = 0; c < GY; c++) flat(a, c, a + 1, c + 1, 0, (a + c) % 2 ? P.floor2 : P.floor);  // sàn caro
+    if (P.gridIso) {  // Cyberpunk: lưới neon dọc theo các trục sàn
+      g.strokeStyle = P.gridIso; g.lineWidth = 1; g.beginPath();
+      for (let a = 0; a <= GX; a++) { const p = pt(a, 0), q = pt(a, GY); g.moveTo(p[0] + 0.5, p[1] + 0.5); g.lineTo(q[0] + 0.5, q[1] + 0.5); }
+      for (let c = 0; c <= GY; c++) { const p = pt(0, c), q = pt(GX, c); g.moveTo(p[0] + 0.5, p[1] + 0.5); g.lineTo(q[0] + 0.5, q[1] + 0.5); }
+      g.stroke();
     }
-    // đồng hồ số (dấu ":" nhấp nháy vẽ động)
-    const now = new Date();
-    R(264, 14, 44, 16, P.outline); R(266, 16, 40, 12, "#0d1410");
-    pix(`${String(now.getHours()).padStart(2, "0")} ${String(now.getMinutes()).padStart(2, "0")}`, 286, 17, P.clock, 2);
-    // bảng điểm hôm nay (chữ "Hôm nay" / "đang làm" ở lớp HTML, con số vẽ pixel)
-    R(312, 10, 80, 50, P.board); R(314, 12, 76, 46, P.boardBg);
-    pix(`+${officeTotal().toLocaleString("en-US")}`, 352, 28, P.total, 2);
-    // khu nghỉ: thảm, sofa, máy cà phê, bình nước, cây, máy game (đèn / hơi nước vẽ động)
-    R(240, lt + 44, 96, 36, P.rug); R(244, lt + 48, 88, 28, P.rug2); R(248, lt + 52, 80, 20, P.rug);
-    R(16, lt + 36, 66, 14, P.sofa2); R(14, lt + 48, 70, 16, P.sofa); R(12, lt + 44, 6, 22, P.sofa2); R(80, lt + 44, 6, 22, P.sofa2);
-    R(118, lt + 26, 22, 30, P.outline); R(120, lt + 28, 18, 26, P.cyber ? "#2b2050" : "#d9dde6");
-    R(124, lt + 32, 10, 6, "#222"); R(126, lt + 44, 6, 6, "#fff");
-    R(166, lt + 22, 16, 14, "#9fd3f5"); R(167, lt + 23, 14, 12, "#c7e8fb"); R(164, lt + 36, 20, 22, P.cyber ? "#33246a" : "#e6e9ef");
-    R(222, lt + 48, 14, 12, P.pot); R(220, lt + 30, 18, 18, P.plant); R(224, lt + 24, 10, 8, P.plant); R(226, lt + 36, 2, 12, "#2f6b3a");
-    R(340, lt + 20, 26, 40, P.cyber ? "#ff2a6d" : "#5a3fa0"); R(343, lt + 24, 20, 14, "#08080f");
-    R(345, lt + 42, 4, 4, "#ffd23f"); R(355, lt + 42, 3, 3, "#ff5d73"); R(360, lt + 44, 3, 3, "#4fd1c5");
-    // ghế luôn nằm sau robot (robot ngồi quay mặt ra ngoài, lối đi không cắt qua ghế) nên vẽ sẵn được
-    S.profiles.forEach((_, i) => drawChair(i, P));
+    flat(0, L, GX, L + 0.1, 0, P.base);  // vạch ngăn khu nghỉ
+    poly([pt(0, GY), pt(GX, GY), pt(GX, GY, -5), pt(0, GY, -5)], P.wallL);                    // gờ sàn phía trước-trái
+    poly([pt(GX, 0), pt(GX, GY), pt(GX, GY, -5), pt(GX, 0, -5)], shade(P.wallL, -0.3));        // gờ sàn phía trước-phải
+    // thảm (hình thoi phẳng, lồng 3 lớp)
+    flat(8.8, L + 1.8, 12.4, L + 3.1, 0, P.rug); flat(8.95, L + 1.95, 12.25, L + 2.95, 0, P.rug2); flat(9.15, L + 2.1, 12.05, L + 2.8, 0, P.rug);
+    // hai bức tường: trái (tối hơn) và phải, mỗi bức có mép trên dày và đầu tường
+    poly([pt(0, 0, WALLH), pt(0, GY, WALLH), pt(0, GY), pt(0, 0)], P.wallL);
+    poly([pt(0, 0, WALLH), pt(GX, 0, WALLH), pt(GX, 0), pt(0, 0)], P.wallR);
+    poly([pt(0, 0, WALLH), pt(0, GY, WALLH), pt(-t, GY, WALLH), pt(-t, -t, WALLH)], shade(P.wallL, 0.35));
+    poly([pt(0, 0, WALLH), pt(GX, 0, WALLH), pt(GX, -t, WALLH), pt(-t, -t, WALLH)], shade(P.wallR, 0.35));
+    poly([pt(0, GY, WALLH), pt(-t, GY, WALLH), pt(-t, GY), pt(0, GY)], shade(P.wallL, -0.2));
+    poly([pt(GX, 0, WALLH), pt(GX, -t, WALLH), pt(GX, -t), pt(GX, 0)], shade(P.wallR, -0.2));
+    withWall("L", () => {
+      for (let u = 0; u < lenL; u += 16) R(u, 0, 8, WALLH, P.stripe);  // giấy dán tường sọc
+      R(0, WALLH - 5, lenL, 5, P.base);                                  // chân tường
+      for (const w of WINS) {  // khung cửa sổ + bậu (phần trong kính vẽ động)
+        R(w.u - 2, w.v - 2, w.w + 4, 2, P.frame); R(w.u - 2, w.v + w.h, w.w + 4, 2, P.frame);
+        R(w.u - 2, w.v, 2, w.h, P.frame); R(w.u + w.w, w.v, 2, w.h, P.frame);
+        R(w.u - 4, w.v + w.h + 2, w.w + 8, 3, P.sill);
+      }
+    });
+    withWall("R", () => {
+      for (let u = 0; u < lenR; u += 16) R(u, 0, 8, WALLH, P.stripe);
+      R(0, WALLH - 5, lenR, 5, P.base);
+      R(12, 10, 76, 26, P.signBox); R(14, 12, 72, 22, P.signBg);   // biển tên (chữ ở lớp HTML)
+      const now = new Date();                                         // đồng hồ số (dấu ":" nhấp nháy vẽ động)
+      R(104, 12, 44, 16, P.outline); R(106, 14, 40, 12, "#0d1410");
+      pix(`${String(now.getHours()).padStart(2, "0")} ${String(now.getMinutes()).padStart(2, "0")}`, 126, 15, P.clock, 2);
+      R(160, 8, 72, 46, P.board); R(162, 10, 68, 42, P.boardBg);   // bảng điểm hôm nay (chữ "Hôm nay" / "đang làm" ở lớp HTML)
+      pix(`+${officeTotal().toLocaleString("en-US")}`, 196, 26, P.total, 2);
+    });
   }
   function ensureStatic(P, key) {
     const k2 = staticKey(P, key);
@@ -444,71 +520,146 @@ const Office = (() => {
     if (bg.width !== W || bg.height !== H) { bg.width = W; bg.height = H; }
     const main = g;
     g = bg.getContext("2d");
-    g.clearRect(0, 0, W, H);
-    drawStatic(P);
-    g = main;
+    try { g.clearRect(0, 0, W, H); drawStatic(P); } finally { g = main; ox = 0; oy = 0; }
     // chữ trên tường (lớp HTML): chỉ đổi khi số robot đang làm đổi
     const working = [...bots.values()].filter(isWorking).length, txt = `${working}/${S.profiles.length} đang làm`;
     if (wall.working.textContent !== txt) wall.working.textContent = txt;
   }
 
-  function drawWindows(t, P) {  // phần trong kính: trời theo giờ thật, mây trôi / sao nhấp nháy, mưa
+  function drawWindows(t, P) {  // phần trong kính: trời theo giờ thật, mây trôi / sao nhấp nháy, mưa; cắt theo hình bình hành của tường trái
     const hr = new Date().getHours() + new Date().getMinutes() / 60, day = hr >= 6 && hr < 18, dusk = (hr >= 17 && hr < 19) || (hr >= 5 && hr < 7);
     const sky = P.cyber ? "#1b0838" : dusk ? "#f4a06a" : day ? "#8fd0f5" : "#141a3a";
     const city = P.cyber ? ["#2b0f55", "#ff2a6d", "#05d9e8"] : day ? ["#7d93a8", "#c6d6e4", "#fff3b0"] : ["#232a52", "#2f3868", "#ffd56a"];
-    [134, 204].forEach((wx, wi) => {
-      const wy = 12, WW = 54, WH = 40;
-      g.save(); g.beginPath(); g.rect(wx, wy, WW, WH); g.clip();  // không bao giờ vẽ tràn ra khung
-      R(wx, wy, WW, WH, sky);
+    withWall("L", () => WINS.forEach((w, wi) => {
+      g.save(); g.beginPath(); g.rect(w.u, w.v, w.w, w.h); g.clip();  // không bao giờ vẽ tràn ra khung
+      R(w.u, w.v, w.w, w.h, sky);
       if (P.cyber || !day) {
-        for (let i = 0; i < 9; i++) { const sx = wx + ((i * 37 + wi * 13) % 52), sy = wy + ((i * 23) % 22); if (Math.sin(t * 2 + i) > -0.3) R(sx, sy, 1, 1, "#fff"); }
-        if (!P.cyber && wi === 1) { R(wx + 38, wy + 6, 7, 7, "#f3efd6"); R(wx + 40, wy + 6, 5, 5, sky); }
+        for (let i = 0; i < 9; i++) { const sx = w.u + ((i * 37 + wi * 13) % (w.w - 2)), sy = w.v + ((i * 23) % 16); if (Math.sin(t * 2 + i) > -0.3) R(sx, sy, 1, 1, "#fff"); }
+        if (!P.cyber && wi === WINS.length - 1) { R(w.u + 24, w.v + 5, 7, 7, "#f3efd6"); R(w.u + 26, w.v + 5, 5, 5, sky); }
       } else {
-        const cx = wx + ((t * 4 + wi * 30) % 70) - 12;  // mây trôi
-        R(cx, wy + 8, 14, 4, "#fff"); R(cx + 3, wy + 5, 8, 3, "#fff");
-        if (wi === 0) R(wx + 6, wy + 5, 6, 6, "#ffe27a");
+        const cx = w.u + ((t * 4 + wi * 30) % (w.w + 16)) - 12;  // mây trôi
+        R(cx, w.v + 8, 14, 4, "#fff"); R(cx + 3, w.v + 5, 8, 3, "#fff");
+        if (wi === 0) R(w.u + 5, w.v + 4, 6, 6, "#ffe27a");
       }
-      for (let i = 0; i < 6; i++) {  // nhà phía xa
-        const bw = 7 + ((i * 5 + wi * 3) % 5), bh = 10 + ((i * 7 + wi * 11) % 16), bx = wx + i * 9;
-        R(bx, wy + WH - bh, bw, bh, city[0]);
-        for (let yy = wy + WH + 2 - bh; yy < wy + WH - 2; yy += 4) if ((yy + i) % 3) R(bx + 2, yy, 1, 1, i % 2 ? city[2] : city[1]);
+      for (let i = 0; i < Math.floor(w.w / 9); i++) {  // nhà phía xa
+        const bw = 7 + ((i * 5 + wi * 3) % 5), bh = 8 + ((i * 7 + wi * 11) % 14), bx = w.u + i * 9;
+        R(bx, w.v + w.h - bh, bw, bh, city[0]);
+        for (let yy = w.v + w.h + 2 - bh; yy < w.v + w.h - 2; yy += 4) if ((yy + i) % 3) R(bx + 2, yy, 1, 1, i % 2 ? city[2] : city[1]);
       }
       if (S.officeRain) {
         g.fillStyle = "rgba(200,220,255,.55)";
-        for (let i = 0; i < 14; i++) { const rx = wx + ((i * 17 + Math.floor(t * 60) * 3) % WW), ry = wy + ((i * 29 + Math.floor(t * 120)) % (WH - 2)); g.fillRect(rx, ry, 1, 3); }
+        for (let i = 0; i < 10; i++) { const rx = w.u + ((i * 17 + Math.floor(t * 60) * 3) % w.w), ry = w.v + ((i * 29 + Math.floor(t * 120)) % (w.h - 2)); g.fillRect(rx, ry, 1, 3); }
       }
       g.restore();
-      R(wx + 26, wy, 2, WH, P.frame); R(wx, wy + 19, WW, 2, P.frame);  // song cửa chữ thập
-    });
+      R(w.u + w.w / 2 - 1, w.v, 2, w.h, P.frame); R(w.u, w.v + w.h / 2 - 1, w.w, 2, P.frame);  // song cửa chữ thập
+    }));
   }
-  function drawAmbient(t, P) {  // vài chi tiết động trên nền tĩnh: dấu ":" đồng hồ, đèn máy cà phê, hơi nước, màn hình máy game
-    const lt = loungeTop();
-    if (new Date().getSeconds() % 2) { R(285, 19, 2, 2, P.clock); R(285, 23, 2, 2, P.clock); }
-    R(125, lt + 33, 2, 2, Math.sin(t * 3) > 0 ? "#ff4d4d" : "#4dff88");
-    if (Math.floor(t * 2) % 3 === 0) R(128, lt + 41, 1, 3, "rgba(255,255,255,.6)");
-    for (let i = 0; i < 3; i++) R(346 + i * 6, lt + 28 + ((Math.floor(t * 4) + i) % 3) * 3, 3, 3, ["#4dff88", "#ffd23f", "#4fd1c5"][i]);
+  function drawAmbient(t, P) {  // vài chi tiết động trên nền tĩnh: dấu ":" đồng hồ (tường phải), đèn máy cà phê, hơi nước, màn hình máy game
+    if (new Date().getSeconds() % 2) withWall("R", () => { R(125, 17, 2, 2, P.clock); R(125, 21, 2, 2, P.clock); });
+    for (const f of FURN) {
+      if (f.key === "coffee") {
+        const [lx, ly] = qz(0.15, 0.8, 22), [sx2, sy2] = qz(0.42, 0.8, 16);
+        R(f.sx + lx, f.sy + ly, 2, 2, Math.sin(t * 3) > 0 ? "#ff4d4d" : "#4dff88");
+        if (Math.floor(t * 2) % 3 === 0) R(f.sx + sx2, f.sy + sy2 - 4, 1, 3, "rgba(255,255,255,.6)");
+      } else if (f.key === "arcade") {
+        for (let i = 0; i < 3; i++) {
+          const [lx, ly] = qz(0.22 + i * 0.22, 0.9, 27 + ((Math.floor(t * 4) + i) % 3) * 3);
+          R(f.sx + lx, f.sy + ly, 3, 3, ["#4dff88", "#ffd23f", "#4fd1c5"][i]);
+        }
+      }
+    }
   }
+
+  // ------------------------------------------------------------ sprite đồ đạc: vẽ sẵn 1 lần cho mỗi giao diện, mỗi khung hình chỉ dán
+  function mk(w, h, ax, ay, fn) {  // (ax, ay) = vị trí điểm neo (gx0, gy0, độ cao 0) trong sprite; fn vẽ bằng tọa độ cục bộ
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    const main = g, mox = ox, moy = oy;
+    g = c.getContext("2d"); g.translate(ax, ay); ox = 0; oy = 0;
+    try { fn(); } finally { g = main; ox = mox; oy = moy; }
+    return { c, ax, ay };
+  }
+  const MUGS = ["#e05d5d", "#5d8fe0", "#5dc08a", "#e0b85d"];
+  const MONQ = qz(0.55, 0.5, 11);                           // chân màn hình trên mặt bàn (cục bộ trong sprite bàn)
+  const MON = { x: MONQ[0] - 13, y: MONQ[1] - 19 };         // góc trên-trái vùng hiển thị 26 x 15 so với điểm neo của bàn
+  function buildSprite(name, P) {
+    const dk = (c) => shade(c, -0.3);
+    switch (name) {
+      case "desk0": case "desk1": case "desk2": case "desk3": {
+        const mug = MUGS[+name.slice(4)], kb = P.cyber ? "#05d9e8" : "#e8e8ec";
+        return mk(76, 70, 26, 34, () => {
+          flat(-0.1, -0.1, 2.2, 1.2, 0, P.shadow);
+          box(1.7, 0.1, 1.9, 0.3, 0, 9, P.leg, P.leg, P.leg); box(0.1, 0.1, 0.3, 0.3, 0, 9, P.leg, P.leg, P.leg);
+          box(1.7, 0.7, 1.9, 0.9, 0, 9, P.leg, P.leg, P.leg); box(0.1, 0.7, 0.3, 0.9, 0, 9, P.leg, P.leg, P.leg);
+          box(0, 0, 2, 1, 9, 11, P.deskTop, P.desk, P.deskSide);
+          g.fillStyle = P.deskEdge; const a = pt(0, 1, 11), b = pt(2, 1, 11); g.fillRect(a[0], a[1], b[0] - a[0], 1);  // viền sáng mép trước
+          box(1.1, 0.35, 1.7, 0.65, 11, 11.8, kb, shade(kb, -0.15), dk(kb));                                         // bàn phím
+          box(1.75, 0.15, 1.95, 0.35, 11, 16, mug, mug, dk(mug));                                                    // cốc
+          const [mx, my] = MONQ;                                                                                       // màn hình quay mặt ra người xem
+          R(mx - 15, my - 21, 30, 19, P.monEdge); R(mx - 13, my - 19, 26, 15, P.mon); R(mx - 2, my - 2, 4, 2, P.monEdge);
+        });
+      }
+      case "chair":  // ghế xoay: lưng ghế ở phía sau lưng robot (phía -gy), chân ghế, mặt ghế
+        return mk(40, 40, 20, 24, () => {
+          flat(-0.05, -0.05, 0.8, 0.8, 0, P.shadow);
+          box(0, 0, 0.7, 0.12, SEAT_Z, 15, P.chairHi, P.chair, P.chairSide);
+          box(0.3, 0.3, 0.4, 0.4, 0, SEAT_Z - 1, P.outline, P.outline, P.outline);
+          box(0, 0, 0.7, 0.7, SEAT_Z - 2, SEAT_Z, P.chairHi, P.chair, P.chairSide);
+        });
+      case "sofa":
+        return mk(80, 64, 24, 24, () => {
+          flat(-0.1, -0.1, 3.2, 1.2, 0, P.shadow);
+          box(0, 0, 3, 1, 0, 5, P.sofa2, P.sofa, P.sofaSide);
+          box(0, 0, 3, 0.3, 5, 15, P.sofa2, P.sofa, P.sofaSide);
+          box(0, 0.3, 0.3, 1, 5, 10, P.sofa2, P.sofa, P.sofaSide); box(2.7, 0.3, 3, 1, 5, 10, P.sofa2, P.sofa, P.sofaSide);
+          box(0.3, 0.3, 1.5, 1, 5, 7.5, P.sofa2, P.sofa, P.sofaSide); box(1.5, 0.3, 2.7, 1, 5, 7.5, P.sofa2, P.sofa, P.sofaSide);
+        });
+      case "coffee": {
+        const body = P.cyber ? "#2b2050" : "#d9dde6";
+        return mk(40, 46, 20, 30, () => {
+          flat(-0.1, -0.1, 0.9, 0.9, 0, P.shadow);
+          box(0, 0, 0.8, 0.8, 0, 26, shade(body, 0.15), body, dk(body));
+          faceL(0.2, 0.6, 14, 20, 0.8, "#222"); faceL(0.35, 0.5, 8, 12, 0.8, "#fff");
+        });
+      }
+      case "water": {
+        const body = P.cyber ? "#33246a" : "#e6e9ef";
+        return mk(40, 48, 20, 32, () => {
+          flat(-0.1, -0.1, 0.8, 0.8, 0, P.shadow);
+          box(0, 0, 0.7, 0.7, 0, 14, shade(body, 0.15), body, dk(body));
+          box(0.1, 0.1, 0.6, 0.6, 14, 28, "#c7e8fb", "#9fd3f5", "#7fb8de");
+        });
+      }
+      case "plant":
+        return mk(48, 64, 24, 40, () => {
+          flat(-0.1, -0.1, 0.9, 0.9, 0, P.shadow);
+          box(0.1, 0.1, 0.7, 0.7, 0, 9, shade(P.pot, 0.2), P.pot, dk(P.pot));
+          const [cx, cy] = pt(0.4, 0.4, 9), blob = (x, y, rx, ry, c) => { g.fillStyle = c; g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, 7); g.fill(); };
+          blob(cx, cy - 11, 12, 9, dk(P.plant)); blob(cx - 3, cy - 17, 8, 7, P.plant); blob(cx + 4, cy - 21, 6, 6, shade(P.plant, 0.2));
+        });
+      case "arcade": {
+        const body = P.cyber ? "#ff2a6d" : "#5a3fa0";
+        return mk(50, 66, 22, 50, () => {
+          flat(-0.1, -0.1, 1.1, 1, 0, P.shadow);
+          box(0, 0, 1, 0.9, 0, 44, shade(body, 0.2), body, dk(body));
+          faceL(0.12, 0.88, 24, 38, 0.9, "#08080f"); faceL(0.12, 0.88, 14, 19, 0.9, shade(body, 0.25));
+          for (const [x, c] of [[0.3, "#ffd23f"], [0.5, "#ff5d73"], [0.7, "#4fd1c5"]]) { const p = pt(x, 0.9, 16); R(p[0], p[1], 2, 2, c); }
+        });
+      }
+    }
+    return null;
+  }
+  function spr(name, P) { return sprites[name] || (sprites[name] = buildSprite(name, P)); }
+  function blit(name, P, x, y) { const s = spr(name, P); g.drawImage(s.c, Math.round(x) - s.ax, Math.round(y) - s.ay); }
 
   function drawDesk(i, P, t) {
-    const { col, row } = cellOf(i), x = col * CELL, top = deskTop(row);
-    R(x + 14, top, 74, 6, P.deskTop); R(x + 14, top + 6, 74, 10, P.desk); R(x + 14, top, 74, 1, P.deskEdge);
-    R(x + 18, top + 16, 4, 8, P.leg); R(x + 80, top + 16, 4, 8, P.leg);
-    R(x + 16, top + 26, 70, 2, P.shadow);
-    // màn hình
-    R(x + 18, top - 21, 30, 19, P.monEdge); R(x + 20, top - 19, 26, 15, P.mon); R(x + 31, top - 2, 4, 2, P.monEdge);
+    const { col, row } = cellOf(i), a = iso(deskGx(col), deskGy(row)), x = Math.round(a.x), y = Math.round(a.y);
+    blit("desk" + (i % 4), P, x, y);
     const b = bots.get(S.profiles[i]?.name);
-    drawScreen(b && b.act ? b.act.screen : "off", x + 20, top - 19, t + i, P, b);
-    // bàn phím, cốc
-    R(x + 54, top + 1, 18, 3, P.cyber ? "#05d9e8" : "#e8e8ec"); R(x + 79, top - 5, 5, 6, ["#e05d5d", "#5d8fe0", "#5dc08a", "#e0b85d"][i % 4]);
+    drawScreen(b && b.act ? b.act.screen : "off", x + MON.x, y + MON.y, t + i, P, b);
   }
-
-  function drawChair(i, P) {  // ghế xoay sau lưng robot (robot ngồi quay mặt ra ngoài): lưng ghế thấp, bo góc
-    const { col, row } = cellOf(i), x = col * CELL + 64, top = deskTop(row);
-    R(x - 9, top - 15, 18, 1, P.outline); R(x - 10, top - 14, 20, 13, P.outline);
-    R(x - 8, top - 14, 16, 12, P.chair); R(x - 9, top - 13, 18, 10, P.chair); R(x - 7, top - 13, 14, 2, P.chairHi);
-    R(x - 1, top - 2, 2, 2, P.outline);
-  }
-
+  function drawChair(i, P) { const s = seat(i), a = iso(s.gx - 0.35, s.gy - 0.35); blit("chair", P, a.x, a.y); }
+  function deskCenter(i) { const { col, row } = cellOf(i), a = iso(deskGx(col), deskGy(row)); return { x: Math.round(a.x) + MON.x + 13, y: Math.round(a.y) + MON.y + 7 }; }
   function drawScreen(kind, x, y, t, P, b) {
     const w = 26, h = 15, blinkOn = Math.floor(t * 2) % 2;
     const fill = (c) => R(x, y, w, h, c);
@@ -562,6 +713,8 @@ const Office = (() => {
     if (P.cyber && kind !== "off") { g.fillStyle = "rgba(0,0,0,.18)"; for (let yy = y; yy < y + h; yy += 2) g.fillRect(x, yy, w, 1); }
   }
 
+  function drawFurn(f, P) { blit(f.key, P, f.sx, f.sy); }
+
   function drawBot(b, t, P, beat, now) {
     const moving = b.path.length > 0, sit = !moving && b.pose === "sit";
     const cele = b.celebrate > now;
@@ -569,16 +722,17 @@ const Office = (() => {
     if (cele) bob = -Math.abs(Math.sin(t * 9)) * 6;
     else if (moving) bob = Math.floor(t * 8) % 2 ? -1 : 0;
     else if (beat !== null && b.act && b.act.at !== "desk") bob = Math.sin(beat * Math.PI) ** 2 > 0.6 ? -1 : 0;  // nhún theo nhạc
-    const x = Math.round(b.x), y = Math.round(b.y + bob), base = sit ? y - 2 : y, O = P.outline;
-    R(x - 7, b.y - 1, 14, 2, P.shadow);
+    const x = b.sx, y = Math.round(b.sy - b.lift + bob), base = sit ? y - 2 : y, O = P.outline;
+    const s = b.dir < 0 ? -1 : 1;  // quay mặt theo hướng đi (mặt phải luôn là mặt khuất sáng); ngồi thì nhìn về phía màn hình
+    if (!sit) { R(x - 6, b.sy - 2, 12, 3, P.shadow); R(x - 4, b.sy - 3, 8, 1, P.shadow); R(x - 4, b.sy + 1, 8, 1, P.shadow); }  // bóng elip trên sàn
     // chân
     if (!sit) {
       const sw = moving ? (Math.floor(t * 8) % 2 ? 1 : -1) : 0;
       R(x - 4, base - 5 + Math.max(0, sw), 3, 5 - Math.max(0, sw), O); R(x + 1, base - 5 + Math.max(0, -sw), 3, 5 - Math.max(0, -sw), O);
     }
     const bodyY = base - (sit ? 9 : 14);
-    // thân + đèn ngực
-    R(x - 7, bodyY - 1, 14, 11, O); R(x - 6, bodyY, 12, 9, b.color); R(x - 6, bodyY, 12, 2, b.light);
+    // thân + mặt khuất sáng + đèn ngực
+    R(x - 7, bodyY - 1, 14, 11, O); R(x - 6, bodyY, 12, 9, b.color); R(x - 6, bodyY, 12, 2, b.light); R(x + 3, bodyY + 2, 3, 7, b.dark);
     const working = b.act && b.act.at === "desk" && b.act.screen !== "error";
     R(x - 1, bodyY + 4, 3, 3, working ? (Math.floor(t * 4) % 2 ? "#4dff88" : "#1f8f4e") : b.act && b.act.screen === "error" ? "#ff4d4d" : b.dark);
     // tay
@@ -593,11 +747,11 @@ const Office = (() => {
     }
     if (act.prop === "phone" && !moving) { R(x + 4, bodyY - 3, 5, 8, "#2a2e38"); R(x + 5, bodyY - 2, 3, 5, Math.floor(t * 3) % 2 ? "#5fc9e8" : "#9fe6ff"); }
     if (act.prop === "mug" && !moving) { R(x + 6, bodyY + 1, 4, 4, "#f4f4f4"); R(x + 10, bodyY + 2, 1, 2, "#f4f4f4"); if (Math.floor(t * 2) % 2) R(x + 7, bodyY - 2, 1, 2, "rgba(255,255,255,.6)"); }
-    // đầu + mặt màn hình
+    // đầu + mặt màn hình (lệch 1px về phía đang nhìn) + mặt khuất sáng
     const headY = bodyY - 11;
-    R(x - 8, headY - 1, 16, 12, O); R(x - 7, headY, 14, 10, b.color); R(x - 7, headY, 14, 2, b.light);
-    R(x - 5, headY + 2, 10, 6, "#10131c");
-    drawFace(b, x, headY + 2, now, cele ? "happy" : sleeping(b) ? "sleep" : act.face || "idle");
+    R(x - 8, headY - 1, 16, 12, O); R(x - 7, headY, 14, 10, b.color); R(x - 7, headY, 14, 2, b.light); R(x + 5, headY + 2, 2, 8, b.dark);
+    R(x - 5 + s, headY + 2, 10, 6, "#10131c");
+    drawFace(b, x + s, headY + 2, now, cele ? "happy" : sleeping(b) ? "sleep" : act.face || "idle");
     // ăng-ten
     R(x, headY - 4, 1, 3, O);
     const ant = working ? (Math.floor(t * 3) % 2 ? "#4dff88" : "#ffd23f") : act.screen === "error" ? (Math.floor(t * 4) % 2 ? "#ff4d4d" : "#7a1d1d") : b.light;
@@ -651,10 +805,11 @@ const Office = (() => {
     }
     for (const b of bots.values()) {  // hiệu ứng liên tục theo trạng thái
       if (!b.act || b.path.length) continue;
-      if (b.act.fx === "smoke" && Math.random() < dt * 3) fx.push({ kind: "smoke", x: b.x - 2 + Math.random() * 4, y: b.y - 34, vx: (Math.random() - 0.5) * 6, vy: -12, life: 1.6, age: 0 });
-      if (sleeping(b) && Math.random() < dt * 0.8) fx.push({ kind: "zzz", x: b.x + 6, y: b.y - 30, vx: 4, vy: -8, life: 2.2, age: 0 });
+      const top = b.sy - b.lift;
+      if (b.act.fx === "smoke" && Math.random() < dt * 3) fx.push({ kind: "smoke", x: b.sx - 2 + Math.random() * 4, y: top - 34, vx: (Math.random() - 0.5) * 6, vy: -12, life: 1.6, age: 0 });
+      if (sleeping(b) && Math.random() < dt * 0.8) fx.push({ kind: "zzz", x: b.sx + 6, y: top - 30, vx: 4, vy: -8, life: 2.2, age: 0 });
       if (Lofi.on && b.act.at === "lounge" && !sleeping(b) && Math.random() < dt * 0.35)
-        fx.push({ kind: "note", x: b.x + 5, y: b.y - 30, vx: 3, vy: -9, life: 2.4, age: 0, c: ["#ffd23f", "#ff8fb1", "#7fe3ff"][Math.floor(Math.random() * 3)] });
+        fx.push({ kind: "note", x: b.sx + 5, y: top - 30, vx: 3, vy: -9, life: 2.4, age: 0, c: ["#ffd23f", "#ff8fb1", "#7fe3ff"][Math.floor(Math.random() * 3)] });
     }
     if (fx.length > 300) fx.splice(0, fx.length - 300);
   }
@@ -662,24 +817,21 @@ const Office = (() => {
   function step(dt, now) {
     for (const b of bots.values()) {
       if (b.path.length) {
-        const p = b.path[0], dx = p.x - b.x, dy = p.y - b.y, d = Math.hypot(dx, dy), mv = SPEED * dt;
-        if (d <= mv) { b.x = p.x; b.y = p.y; b.path.shift(); if (!b.path.length) b.pose = b.where.pose; }
-        else { b.x += (dx / d) * mv; b.y += (dy / d) * mv; }
+        const p = b.path[0], dx = p.gx - b.gx, dy = p.gy - b.gy, d = Math.hypot(dx, dy), mv = SPEED * dt;
+        if (Math.abs(dx - dy) > 1e-6) b.dir = dx - dy > 0 ? 1 : -1;  // hướng trên màn hình = dấu của (dgx - dgy)
+        if (d <= mv) {
+          b.gx = p.gx; b.gy = p.gy; b.path.shift();
+          if (!b.path.length) { b.pose = b.where.pose; if (b.pose === "sit") b.dir = -1; }
+        } else { b.gx += (dx / d) * mv; b.gy += (dy / d) * mv; }
       } else if (b.act && b.act.at === "lounge") {
         if (b.celebrate && b.celebrate < now && b.where && b.where.kind === "desk") { b.celebrate = 0; walk(b, pickSpot(b)); }
         else if (b.where && b.where.kind === "lounge" && now > b.until && !sleeping(b)) walk(b, pickSpot(b));  // đổi chỗ chơi
       }
+      locate(b);
     }
   }
 
   // ------------------------------------------------------------ lớp HTML: chỉ chạm DOM khi có gì thật sự đổi
-  function bubbleText(b, now) {
-    if (b.logUntil > now && b.act && b.act.at === "desk") return [b.log, "log"];
-    if (b.celebrate > now) return [tr("Xong việc rồi!"), ""];
-    const a = b.act;
-    if (!a || !a.say) return null;  // đang đi tới bàn cũng nói luôn việc sắp làm
-    return [tr(a.say), a.screen === "error" ? "err" : ""];
-  }
   function drawLayer(now) {
     for (const b of bots.values()) {
       const bt = bubbleText(b, now), c = b.bub, el = b.bubEl;
@@ -691,7 +843,7 @@ const Office = (() => {
       }
       if (text === null) continue;
       if (bt[1] !== c.cls) { el.className = "ob-bubble" + (bt[1] ? " " + bt[1] : ""); c.cls = bt[1]; }
-      const bx = Math.round(b.x), by = Math.round(b.y - (b.pose === "sit" && !b.path.length ? 26 : 31));
+      const bx = b.sx, by = Math.round(b.sy - b.lift - (b.pose === "sit" && !b.path.length ? 26 : 31));
       if (bx !== c.x || by !== c.y) {
         el.style.left = (bx / W * 100) + "%"; el.style.top = (by / H * 100) + "%";
         c.x = bx; c.y = by;
@@ -714,23 +866,34 @@ const Office = (() => {
     const dt = Math.min(0.25, (ts - (lastT || ts)) / 1000);
     lastT = ts;
     const t = ts / 1000, now = performance.now(), key = themeKey(), P = PALETTES[key], beat = Lofi.beat();
+    if (key !== sprKey) { sprites = {}; sprKey = key; }  // đổi giao diện: vẽ lại sprite
     step(dt, now);
     ensureStatic(P, key);
+    g.clearRect(0, 0, W, H);
     g.drawImage(bg, 0, 0);
     drawWindows(t, P);
     drawAmbient(t, P);
-    // vẽ theo chiều sâu: vật ở trên (y nhỏ) vẽ trước để vật ở dưới che lên
+    // vẽ theo độ sâu gx + gy: vật xa người xem (nhỏ) vẽ trước, vật gần che lên; cùng độ sâu thì đồ đạc trước robot
     order.length = 0;
-    for (let i = 0; i < S.profiles.length; i++) order.push({ y: deskTop(cellOf(i).row) + 16, desk: i, b: null });
-    for (const b of bots.values()) order.push({ y: b.y, desk: -1, b });
-    order.sort((a, c) => a.y - c.y);
-    for (const it of order) it.b ? drawBot(it.b, t, P, beat, now) : drawDesk(it.desk, P, t);
+    S.profiles.forEach((_, i) => {
+      const s = seat(i), c = cellOf(i);
+      order.push({ d: deskGx(c.col) + 1 + deskGy(c.row) + 0.5, k: 0, desk: i }, { d: s.gx + s.gy - 0.05, k: 1, chair: i });
+    });
+    for (const f of FURN) order.push({ d: f.d, k: 0, f });
+    for (const b of bots.values()) order.push({ d: b.depth, k: 3, b });
+    order.sort((a, c) => a.d - c.d || a.k - c.k);
+    for (const it of order) {
+      if (it.b) drawBot(it.b, t, P, beat, now);
+      else if (it.f) drawFurn(it.f, P);
+      else if (it.chair !== undefined) drawChair(it.chair, P);
+      else drawDesk(it.desk, P, t);
+    }
     for (const b of bots.values()) {
-      if (b.act && b.act.fx === "flash" && !b.path.length && Math.floor(t * 1.5) % 4 === 0) {  // Visual Search: chớp sáng quanh bàn
-        const fx0 = cellOf(b.index).col * CELL + 33, fy0 = deskTop(cellOf(b.index).row) - 12;
-        const grad = g.createRadialGradient(fx0, fy0, 2, fx0, fy0, 40);
+      if (b.act && b.act.fx === "flash" && !b.path.length && Math.floor(t * 1.5) % 4 === 0) {  // Visual Search: chớp sáng quanh màn hình
+        const c = deskCenter(b.index);
+        const grad = g.createRadialGradient(c.x, c.y, 2, c.x, c.y, 40);
         grad.addColorStop(0, "rgba(255,255,255,.55)"); grad.addColorStop(1, "rgba(255,255,255,0)");
-        g.fillStyle = grad; g.fillRect(fx0 - 40, fy0 - 40, 80, 80);
+        g.fillStyle = grad; g.fillRect(c.x - 40, c.y - 40, 80, 80);
       }
     }
     drawFx(dt);
@@ -747,15 +910,24 @@ const Office = (() => {
     if (!stage) return;
     const dpr = window.devicePixelRatio || 1, cssW = Math.max(200, stage.clientWidth);
     let k = Math.max(1, Math.floor((cssW * dpr) / W));  // phóng to theo số nguyên lần pixel thiết bị -> pixel đều, sắc nét
-    if (cssW * dpr / W < 1.5) k = (cssW * dpr) / W;    // màn hình quá hẹp: chấp nhận co lẻ
+    if (cssW * dpr / W < 1.5) k = (cssW * dpr) / W;    // màn hình hẹp: chấp nhận co lẻ (luôn vừa chiều ngang, không bị cắt)
     if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; bgKey = ""; }  // canvas chỉ to bằng thế giới
     const px = k / dpr;
     inner.style.width = W * px + "px"; inner.style.height = H * px + "px";
     inner.style.setProperty("--px", px + "px");  // chữ trên tường (HTML) co giãn theo cùng tỉ lệ
-    const at = (el, x, y, w, h) => Object.assign(el.style, { left: x / W * 100 + "%", top: y / H * 100 + "%", width: w / W * 100 + "%", height: h / H * 100 + "%" });
-    at(wall.sign, 12, 16, 100, 22); at(wall.sub, 10, 42, 104, 10);
-    at(wall.today, 314, 13, 76, 11); at(wall.working, 314, 44, 76, 11);
+    // chữ trên tường: điểm (u, v) trên tường phải ứng với (OX + u, OY - WALLH + v + u / 2); skewY(26.565deg) ở CSS khớp độ nghiêng 2:1
+    const at = (el, u, v, w, h) => Object.assign(el.style, { left: (OX + u) / W * 100 + "%", top: (OY - WALLH + v + u / 2) / H * 100 + "%",
+      width: w / W * 100 + "%", height: h / H * 100 + "%" });
+    at(wall.sign, 14, 12, 72, 22); at(wall.sub, 12, 38, 76, 10);
+    at(wall.today, 162, 11, 68, 11); at(wall.working, 162, 40, 68, 11);
     if (visible) wake();
+  }
+  function bubbleText(b, now) {
+    if (b.logUntil > now && b.act && b.act.at === "desk") return [b.log, "log"];
+    if (b.celebrate > now) return [tr("Xong việc rồi!"), ""];
+    const a = b.act;
+    if (!a || !a.say) return null;  // đang đi tới bàn cũng nói luôn việc sắp làm
+    return [tr(a.say), a.screen === "error" ? "err" : ""];
   }
 
   function bindControls() {
@@ -777,7 +949,10 @@ const Office = (() => {
     volume.oninput = () => { const v = +volume.value / 100; Lofi.setVolume(v); pref.set("officeVolume", v); };
     cv.addEventListener("click", (e) => {  // bấm vào robot -> mở tổng quan của tài khoản đó
       const r = cv.getBoundingClientRect(), wx = (e.clientX - r.left) / r.width * W, wy = (e.clientY - r.top) / r.height * H;
-      const hit = [...bots.values()].find((b) => Math.abs(b.x - wx) < 9 && wy > b.y - 30 && wy < b.y + 2);
+      let hit = null;  // robot gần người xem nhất (độ sâu lớn nhất) trong vùng bấm
+      for (const b of bots.values()) {
+        if (Math.abs(b.sx - wx) < 9 && wy > b.sy - b.lift - 30 && wy < b.sy + 2 && (!hit || b.depth > hit.depth)) hit = b;
+      }
       if (hit) { S.selected = hit.name; go("dashboard"); }
     });
     paint();
@@ -796,10 +971,10 @@ const Office = (() => {
     init() {
       cv = $("#office-canvas"); stage = $("#office-stage"); inner = $("#office-inner"); layer = $("#office-layer");
       if (!cv) return;
-      g = cv.getContext("2d", { alpha: false });
+      g = cv.getContext("2d");  // nền trong suốt ngoài khối văn phòng: lộ màu nền của khung
       bg = document.createElement("canvas");
-      layer.insertAdjacentHTML("afterbegin", `<div class="ow ow-sign">REWARDS HQ</div><div class="ow ow-sub">Văn phòng bot</div>`
-        + `<div class="ow ow-today">Hôm nay</div><div class="ow ow-working"></div>`);
+      layer.insertAdjacentHTML("afterbegin", `<div class="ow ow-right ow-sign">REWARDS HQ</div><div class="ow ow-right ow-sub">Văn phòng bot</div>`
+        + `<div class="ow ow-right ow-today">Hôm nay</div><div class="ow ow-right ow-working"></div>`);
       wall = { sign: $(".ow-sign", layer), sub: $(".ow-sub", layer), today: $(".ow-today", layer), working: $(".ow-working", layer) };
       bindControls();
       new ResizeObserver(() => resize()).observe(stage);
@@ -819,6 +994,25 @@ const Office = (() => {
       if (visible) wake();
     },
     onLog,
+    // chỉ để kiểm thử: khung (client) của màn hình từng bàn, kể cả khung viền
+    _screens() {
+      if (!cv) return [];
+      const r = cv.getBoundingClientRect();
+      return S.profiles.map((_, i) => {
+        const c = deskCenter(i);
+        return { left: r.left + (c.x - 15) / W * r.width, right: r.left + (c.x + 15) / W * r.width,
+                 top: r.top + (c.y - 15) / H * r.height, bottom: r.top + (c.y + 9) / H * r.height };
+      });
+    },
+    // chỉ để kiểm thử: vị trí hiện tại + các điểm còn phải đi (tọa độ sàn)
+    _path(name) { const b = bots.get(name); return b ? [{ gx: b.gx, gy: b.gy }, ...b.path.map((p) => ({ gx: p.gx, gy: p.gy }))] : []; },
+    // chỉ để kiểm thử: tọa độ (client) giữa thân robot, null nếu chưa có
+    _pos(name) {
+      const b = bots.get(name);
+      if (!b || !cv) return null;
+      const r = cv.getBoundingClientRect();
+      return { x: r.left + b.sx / W * r.width, y: r.top + (b.sy - b.lift - 12) / H * r.height, depth: b.depth, moving: b.path.length > 0 };
+    },
   };
 })();
 window.Office = Office;  // const ở cấp cao nhất không thành thuộc tính của window; app.js gọi qua window.Office

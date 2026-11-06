@@ -190,6 +190,28 @@ def test_pages_render_without_errors(server):
                 break
             pg.wait_for_timeout(500)
         assert pg.evaluate(said)
+        # góc nhìn isometric: bảng tên nằm trong khung và không trùng nhau, bong bóng nằm trong lớp phủ,
+        # bấm đúng chỗ robot (vị trí chiếu) thì mở tổng quan của tài khoản đó
+        tags = pg.evaluate("[...document.querySelectorAll('#office-layer .ob-tag')].map((e) => [parseFloat(e.style.left), parseFloat(e.style.top)])")
+        assert tags and all(0 <= x <= 100 and 0 <= y <= 100 for x, y in tags), tags
+        assert len({tuple(t) for t in tags}) == len(tags), tags
+        inside = pg.evaluate("""(() => { const L = document.querySelector('#office-layer').getBoundingClientRect();
+            const b = [...document.querySelectorAll('#office-layer .ob-bubble')].find((e) => !e.hidden && e.textContent === 'Search PC 3/30');
+            const r = b.getBoundingClientRect();
+            return r.left >= L.left - 1 && r.right <= L.right + 1 && r.top >= L.top - 1 && r.bottom <= L.bottom + 1; })()""")
+        assert inside
+        pg.evaluate("document.querySelector('#office-canvas').scrollIntoView({block: 'center'})")
+        pos = pg.evaluate(f"Office._pos({json.dumps(name)})")
+        assert pos and pos["x"] > 0 and pos["y"] > 0, pos
+        pg.mouse.click(pos["x"], pos["y"])
+        assert pg.evaluate("S.page") == "dashboard"
+        pg.evaluate("go('office')")
+        # Cyberpunk và giao diện tối: dựng lại sprite + nền, không lỗi JS
+        for theme in ("cyberpunk", "dark"):
+            pg.click(f".theme-switch button[data-theme={theme}]")
+            pg.wait_for_timeout(600)
+            assert pg.evaluate("document.querySelector('#office-canvas').width") > 0
+        pg.click(".theme-switch button[data-theme=light]")
         pg.click("#office-music")
         assert "Tắt nhạc lofi" in pg.locator("#office-music").inner_text()
         pg.click("#office-music")
@@ -286,3 +308,82 @@ def test_pages_render_without_errors(server):
         b.close()
     assert errors == []
     assert dialogs == []  # tên/tiêu đề chứa HTML không được chạy
+
+
+def test_office_many_accounts_layout(server):
+    """7 tài khoản: bảng tên / bong bóng không đè nhau, chữ trên tường không bị màn hình hàng sau che, robot không đi chéo qua đồ."""
+    boot = boot_data()
+    proto = boot["profiles"][0]
+    first = proto["name"]
+    names = [f"acc{i}" for i in range(7)]
+    boot["profiles"] = [{**proto, "name": n, "dir": f"d{i}"} for i, n in enumerate(names)]
+    boot["pstate"] = {n: json.loads(json.dumps(boot["pstate"][first])) for n in names}
+    boot["history"] = {n: boot["history"][first] for n in names}
+    boot["avatars"], boot["goals"], boot["credentials"] = {}, {}, {"supported": True, "emails": {}}
+    mock = ("window.__B = " + json.dumps(boot) + ";"
+            "window.pywebview = { api: new Proxy({}, { get: (_, k) => async () => k === 'bootstrap' ? window.__B"
+            " : {ok: true, running: [], settings: window.__B.settings, profiles: window.__B.profiles} }) };"
+            "window.addEventListener('load', () => window.dispatchEvent(new Event('pywebviewready')));")
+
+    def status(pg, name, state, prog=""):
+        pg.evaluate(f"window.onEvents([{{type: 'status', name: {json.dumps(name)}, data: {{state: {json.dumps(state)}, progress: {json.dumps(prog)}}}}}])")
+
+    with playwright.sync_playwright() as p:
+        try:
+            b = p.chromium.launch(channel="msedge", headless=True)
+        except Exception:
+            pytest.skip("không mở được Edge")
+        pg = b.new_page(viewport={"width": 1400, "height": 1000})
+        errors = []
+        pg.on("pageerror", lambda e: errors.append(str(e)))
+        pg.add_init_script(mock)
+        pg.goto(server + "/index.html")
+        pg.wait_for_function("document.querySelectorAll('.chip').length >= 1", timeout=10000)
+        pg.evaluate("go('office')")
+        # đổi việc giữa lúc đang đi: mọi đoạn đường phải chạy dọc 1 trục sàn (không đi chéo qua đồ đạc)
+        status(pg, "acc6", "Đang chạy", "Khởi động")
+        pg.wait_for_timeout(1500)
+        status(pg, "acc6", "Đang chạy", "Search PC 1/30")
+        path = pg.evaluate("Office._path('acc6')")
+        assert len(path) >= 3
+        for a, c in zip(path, path[1:]):
+            assert abs(a["gx"] - c["gx"]) < 1e-6 or abs(a["gy"] - c["gy"]) < 1e-6, path
+        status(pg, "acc6", "Sẵn sàng")
+        pg.wait_for_timeout(300)
+        for n, (s, q) in {"acc0": ("Đang chạy", "Search PC 3/30"), "acc1": ("Đang chạy", "Search Mobile 4/20"),
+                          "acc2": ("Đang chạy", "Visual Search"), "acc3": ("Đang chạy", "Browse 5 phút"),
+                          "acc4": ("Lỗi", "Lỗi mạng"), "acc5": ("Đang chờ", ""), "acc6": ("Đang chạy", "Quest 1/3")}.items():
+            status(pg, n, s, q)
+        for _ in range(60):  # chờ robot ngồi vào bàn (đi bộ từ khu nghỉ)
+            if not any(pg.evaluate(f"Office._pos('acc{i}').moving") for i in range(7)):
+                break
+            pg.wait_for_timeout(500)
+        pg.wait_for_timeout(500)
+        res = pg.evaluate("""(() => {
+            const R = (e) => { const r = e.getBoundingClientRect(); return {l: r.left, r: r.right, t: r.top, b: r.bottom}; };
+            const hit = (a, c, s = 1) => a.l < c.r - s && c.l < a.r - s && a.t < c.b - s && c.t < a.b - s;
+            const tags = [...document.querySelectorAll('#office-layer .ob-tag')].map(R);
+            const bubs = [...document.querySelectorAll('#office-layer .ob-bubble')].filter((e) => !e.hidden).map(R);
+            const out = {tagTag: 0, tagBub: 0, bubBub: 0, wallMon: [], nb: bubs.length};
+            tags.forEach((a, i) => tags.forEach((c, j) => { if (i < j && hit(a, c)) out.tagTag++; }));
+            tags.forEach((a) => bubs.forEach((c) => { if (hit(a, c)) out.tagBub++; }));
+            bubs.forEach((a, i) => bubs.forEach((c, j) => { if (i < j && hit(a, c)) out.bubBub++; }));
+            // chữ trên tường là hình bình hành (skewY 2:1): so với khung màn hình các bàn
+            const inner = document.querySelector('#office-inner').getBoundingClientRect();
+            const mons = Office._screens();
+            for (const e of document.querySelectorAll('#office-layer .ow')) {
+                const l = inner.left + e.offsetLeft, t = inner.top + e.offsetTop, w = e.offsetWidth, h = e.offsetHeight;
+                mons.forEach((m, i) => {
+                    const x0 = Math.max(l, m.left), x1 = Math.min(l + w, m.right);
+                    if (x1 <= x0) return;
+                    const top = (x) => t + (x - l) / 2, lo = Math.min(top(x0), top(x1)), hi = Math.max(top(x0), top(x1)) + h;
+                    if (lo < m.bottom && hi > m.top) out.wallMon.push([e.className, i]);
+                });
+            }
+            return out;
+        })()""")
+        assert res["nb"] >= 3, res
+        assert res["tagTag"] == 0 and res["tagBub"] == 0 and res["bubBub"] == 0, res
+        assert res["wallMon"] == [], res
+        b.close()
+    assert errors == []
