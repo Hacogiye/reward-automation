@@ -14,8 +14,7 @@ const I18N = (() => {
     "Tiếng mưa": "Rain sounds", "Âm lượng": "Volume", "Nhạc đang tắt": "Music is off", "Lofi tự sinh": "Generated lofi",
     "mưa": "rain", "# robot đang làm việc": "# robots working", "# đang nghỉ": "# on break", "đang làm": "working", "# đang làm": "# working",
     "Xong việc rồi!": "All done!", "Xem tổng quan của tài khoản này": "Open this account's overview",
-    "Chưa có tài khoản nào. Thêm tài khoản ở trang Tài khoản để có nhân viên.":
-      "No accounts yet. Add one on the Accounts page to hire a robot.",
+    "Chưa có tài khoản nào. Bấm dấu + để thêm nhân viên đầu tiên.": "No accounts yet. Click + to hire your first robot.",
     "Văn phòng: mỗi robot là một tài khoản đang được bot chạy": "Office: each robot is one account the bot runs",
     "Tổng quan": "Overview", "Tài khoản": "Accounts", "Nhật ký": "Log", "Lịch sử": "History", "Cài đặt": "Settings",
     "Hướng dẫn": "Guide", "# tài khoản": "# accounts", "Đang nghỉ": "Idle", "Sáng": "Light", "Tối": "Dark",

@@ -220,6 +220,7 @@
           <span class="office-now text-secondary small" id="office-now"></span>
           <button type="button" class="btn" id="office-music"><i class="ti ti-player-play"></i><span>Bật nhạc lofi</span></button>
           <button type="button" class="btn btn-icon" id="office-rain" title="Tiếng mưa" aria-label="Tiếng mưa"><i class="ti ti-cloud-rain"></i></button>
+          <button type="button" class="btn btn-icon" id="office-settings" title="Cài đặt" aria-label="Cài đặt"><i class="ti ti-settings"></i></button>
           <label class="office-vol" title="Âm lượng"><i class="ti ti-volume"></i>
             <input type="range" class="form-range" id="office-volume" min="0" max="100" value="60" aria-label="Âm lượng"></label>
         </div>
@@ -230,7 +231,7 @@
             <div class="office-inner" id="office-inner">
               <canvas id="office-canvas" aria-label="Văn phòng: mỗi robot là một tài khoản đang được bot chạy"></canvas>
               <div class="office-layer" id="office-layer"></div>
-              <div class="office-empty" id="office-empty" hidden>Chưa có tài khoản nào. Thêm tài khoản ở trang Tài khoản để có nhân viên.</div>
+              <div class="office-empty" id="office-empty" hidden>Chưa có tài khoản nào. Bấm dấu + để thêm nhân viên đầu tiên.</div>
             </div>
           </div>
         </div>
@@ -293,8 +294,9 @@
         <h2 class="page-title">Cài đặt</h2>
         <div class="ms-auto"><button class="btn btn-primary" id="btn-save-settings"><i class="ti ti-device-floppy"></i>Lưu cài đặt</button></div>
       </div></div>
-      <div class="page-body"><div class="container-xl">
-        <div class="row row-cards">
+      <div class="page-body"><div class="container-xl" id="settings-home">
+        <!-- khối này được chuyển tạm vào hộp #settings-dialog khi mở Cài đặt từ trang Văn phòng, đóng hộp thì trả về đây -->
+        <div class="row row-cards" id="settings-cards">
           <div class="col-lg-7">
             <div class="card">
               <div class="card-header"><h3 class="card-title">Search &amp; trình duyệt</h3></div>
@@ -336,7 +338,7 @@
                 </div>
               </div>
             </div>
-            <div class="card">
+            <div class="card settings-help">
               <div class="card-header"><h3 class="card-title">Chạy nhiều cửa sổ cùng lúc</h3></div>
               <div class="card-body help" data-lang="vi">
                 <p><strong>Cửa sổ riêng</strong> (nên dùng): mỗi tài khoản có thư mục riêng trong <code>data/profiles</code>. Bấm <em>Đăng nhập</em> một lần cho mỗi tài khoản rồi chạy.</p>
@@ -581,6 +583,16 @@
     </section>
   </div>
 </div>
+
+<dialog id="settings-dialog" class="dlg dlg-wide" aria-labelledby="sd-title">
+  <div class="dlg-head"><h3 class="m-0" id="sd-title">Cài đặt</h3>
+    <button type="button" class="btn-close" id="sd-close" aria-label="Đóng"></button></div>
+  <div class="dlg-body" id="sd-body"></div>
+  <div class="dlg-foot">
+    <button type="button" class="btn" id="sd-cancel">Đóng</button>
+    <button type="button" class="btn btn-primary" id="sd-save"><i class="ti ti-device-floppy"></i>Lưu cài đặt</button>
+  </div>
+</dialog>
 
 <dialog id="profile-dialog" class="dlg">
   <form method="dialog" id="profile-form">

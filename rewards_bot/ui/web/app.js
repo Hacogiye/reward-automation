@@ -221,6 +221,7 @@ function bindStatic() {
   $("#btn-copy-log").onclick = copyLog;
   $("#log-filter").onchange = renderLog;
   $("#btn-save-settings").onclick = saveSettingsForm;
+  bindSettingsDialog();
   $("#max-parallel").onchange = (e) => saveSettings({ max_parallel: Math.max(1, +e.target.value || 1) });
   bindProfileDialog();
   bindGoalDialog();
@@ -1051,4 +1052,20 @@ async function saveSettingsForm() {
   const ok = await saveSettings(partial);
   renderSettings();
   if (ok) toast("Đã lưu cài đặt");
+  return ok;
+}
+// Cài đặt ngay trên trang Văn phòng: mượn nguyên khối cài đặt (#settings-cards) đặt vào hộp thoại, đóng thì trả về trang Cài đặt.
+// Không nhân đôi form nên mọi id / sự kiện (giao diện, ngôn ngữ, cập nhật) vẫn là một.
+function openSettingsDialog() {
+  const dlg = $("#settings-dialog");
+  $("#sd-body").appendChild($("#settings-cards"));
+  renderSettings();
+  dlg.showModal();
+}
+function bindSettingsDialog() {
+  const dlg = $("#settings-dialog");
+  $("#office-settings").onclick = openSettingsDialog;
+  $("#sd-close").onclick = $("#sd-cancel").onclick = () => dlg.close();
+  $("#sd-save").onclick = async () => { if (await saveSettingsForm()) dlg.close(); };
+  dlg.addEventListener("close", () => $("#settings-home").appendChild($("#settings-cards")));
 }

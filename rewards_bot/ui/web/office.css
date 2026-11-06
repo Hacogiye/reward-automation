@@ -40,6 +40,15 @@
 [data-skin="cyberpunk"] .ob-bubble.err { border-color: #ff2a6d; color: #ff2a6d; }
 [data-skin="cyberpunk"] .office-stage { background: #07091a; }
 
+/* nút "+" ở chỗ bàn trống kế tiếp: bấm để thêm tài khoản (chỉ có 1 nút) */
+.ob-add { position: absolute; z-index: 1; transform: translate(-50%, -50%); pointer-events: auto; display: grid; place-items: center;
+  width: 30px; height: 30px; padding: 0; border-radius: 50%; border: 2px dashed rgba(var(--tblr-primary-rgb), .7);
+  background: rgba(var(--tblr-primary-rgb), .1); color: var(--tblr-primary); font-size: 16px; cursor: pointer;
+  transition: transform .12s ease, background .12s ease; }
+.ob-add:hover, .ob-add:focus-visible { background: var(--tblr-primary); color: #fff; border-style: solid; transform: translate(-50%, -50%) scale(1.1); }
+[data-skin="cyberpunk"] .ob-add { border-radius: 0; border-color: #05d9e8; color: #05d9e8; background: rgba(5, 217, 232, .08); }
+[data-skin="cyberpunk"] .ob-add:hover, [data-skin="cyberpunk"] .ob-add:focus-visible { background: #05d9e8; color: #07091a; }
+
 @media (max-width: 640px) {
   .ob-tag { font-size: 9px; padding-right: 4px; }
   .ob-tag b { display: none; }

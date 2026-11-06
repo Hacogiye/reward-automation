@@ -385,5 +385,31 @@ def test_office_many_accounts_layout(server):
         assert res["nb"] >= 3, res
         assert res["tagTag"] == 0 and res["tagBub"] == 0 and res["bubBub"] == 0, res
         assert res["wallMon"] == [], res
+        # đúng 1 nút "+" ở chỗ bàn trống, không đè bảng tên nào; bấm vào mở hộp thêm tài khoản
+        assert pg.locator("#office-layer .ob-add").count() == 1
+        add_hits = pg.evaluate("""(() => {
+            const R = (e) => e.getBoundingClientRect(), a = R(document.querySelector('#office-layer .ob-add'));
+            return [...document.querySelectorAll('#office-layer .ob-tag')].map(R)
+              .filter((c) => a.left < c.right && c.left < a.right && a.top < c.bottom && c.top < a.bottom).length;
+        })()""")
+        assert add_hits == 0
+        pg.click("#office-layer .ob-add")
+        assert pg.locator("#profile-dialog").is_visible()
+        assert pg.locator("#pd-title").inner_text() == "Thêm tài khoản"
+        pg.click("#profile-dialog .btn-close")
+        assert not pg.locator("#profile-dialog").is_visible()
+        # cài đặt ngay trên trang Văn phòng: mượn khối cài đặt vào hộp thoại, lưu thì đóng và trả khối về trang Cài đặt
+        pg.click("#office-settings")
+        assert pg.locator("#settings-dialog").is_visible()
+        assert pg.locator("#settings-dialog #set-browser").count() == 1
+        assert pg.locator("#settings-dialog .settings-help").is_hidden()
+        pg.click("#sd-save")
+        assert not pg.locator("#settings-dialog").is_visible()
+        assert pg.evaluate("document.querySelector('#settings-cards').parentElement.id") == "settings-home"
+        pg.click("#office-settings")
+        pg.keyboard.press("Escape")
+        assert pg.evaluate("document.querySelector('#settings-cards').parentElement.id") == "settings-home"
+        pg.evaluate("go('settings')")
+        assert pg.locator("#page-settings #set-browser").is_visible()
         b.close()
     assert errors == []

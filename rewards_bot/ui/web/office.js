@@ -201,7 +201,7 @@ const Office = (() => {
   const FPS = 30, IDLE_FPS = 6;                       // có gì chuyển động / tất cả đang nghỉ
   const BODY = ["#6c9cf0", "#f07a8e", "#8fcf6a", "#e9b45f", "#b096f0", "#5fc9e8", "#f09a5f", "#7fd6b5"];
   const tr = (s) => (typeof I18N !== "undefined" && I18N.lang === "en" && I18N.tr(s)) || s;
-  let cv = null, g = null, layer = null, stage = null, inner = null, wall = null;
+  let cv = null, g = null, layer = null, stage = null, inner = null, wall = null, addBtn = null;
   let bg = null, bgKey = "";        // canvas nền vẽ sẵn + khóa: đổi khóa thì vẽ lại
   let GX = 15, GY = 8, OX = 0, OY = 0, W = 400, H = 300;   // cỡ sàn (ô), gốc chiếu, cỡ thế giới (px)
   let rows = 1, raf = 0, tmo = 0, lastT = 0, visible = false, layoutKey = "";
@@ -220,6 +220,7 @@ const Office = (() => {
   const deskGx = (col) => col * CW + 0.8, deskGy = (row) => TOP + row * ROWD;   // góc gx/gy nhỏ nhất của bàn (rộng 2 x sâu 1)
   const seat = (i) => { const { col, row } = cellOf(i); return { gx: deskGx(col) + SEAT_DX, gy: seatGy(row) }; };
   const gapX = (col) => col * CW + 3.9;             // khe giữa các cột bàn: lối đi xuống hành lang
+  const slotCenter = (i) => { const { col, row } = cellOf(i); return iso(deskGx(col) + 1, deskGy(row) + 0.5); };  // giữa chỗ bàn thứ i
   const LOUNGE_SPOTS = () => {
     const L = loungeTop(), fy = frontY();
     return [
@@ -329,7 +330,7 @@ const Office = (() => {
   // ------------------------------------------------------------ robot
   function sync() {
     const names = S.profiles.map((p) => p.name);
-    rows = Math.max(1, Math.ceil(names.length / COLS));
+    rows = Math.max(1, Math.ceil((names.length + 1) / COLS));  // +1: luôn chừa đúng 1 chỗ bàn trống cho nút thêm tài khoản
     geom();
     for (const n of [...bots.keys()]) if (!names.includes(n)) { bots.get(n).el.remove(); bots.delete(n); }
     names.forEach((name, i) => {
@@ -358,6 +359,8 @@ const Office = (() => {
       b.bub.x = -1;  // W / H có thể đổi: đặt lại vị trí bong bóng ở khung hình tới
     });
     const key = names.join("\n") + "|" + rows;
+    const slot = slotCenter(names.length);  // nút "+" ở giữa chỗ bàn trống kế tiếp (chỉ có 1 nút)
+    addBtn.style.left = (slot.x / W * 100) + "%"; addBtn.style.top = (slot.y / H * 100) + "%";
     if (key !== layoutKey) {  // đổi danh sách tài khoản: dựng lại kích thước, đặt robot thẳng vào chỗ (không đi bộ)
       layoutKey = key;
       resize();
@@ -485,6 +488,12 @@ const Office = (() => {
       g.stroke();
     }
     flat(0, L, GX, L + 0.1, 0, P.base);  // vạch ngăn khu nghỉ
+    {  // chỗ bàn trống kế tiếp: khung nét đứt trên sàn (nút "+" ở lớp HTML)
+      const { col, row } = cellOf(S.profiles.length), x0 = deskGx(col), y0 = deskGy(row);
+      g.save(); g.setLineDash([3, 3]); g.lineWidth = 1; g.strokeStyle = P.cyber ? "rgba(5,217,232,.7)" : P.dark ? "rgba(255,255,255,.3)" : "rgba(60,40,20,.35)";
+      g.beginPath(); [pt(x0, y0), pt(x0 + 2, y0), pt(x0 + 2, y0 + 1), pt(x0, y0 + 1)].forEach((q, i) => (i ? g.lineTo(q[0] + 0.5, q[1] + 0.5) : g.moveTo(q[0] + 0.5, q[1] + 0.5)));
+      g.closePath(); g.stroke(); g.restore();
+    }
     poly([pt(0, GY), pt(GX, GY), pt(GX, GY, -5), pt(0, GY, -5)], P.wallL);                    // gờ sàn phía trước-trái
     poly([pt(GX, 0), pt(GX, GY), pt(GX, GY, -5), pt(GX, 0, -5)], shade(P.wallL, -0.3));        // gờ sàn phía trước-phải
     // thảm (hình thoi phẳng, lồng 3 lớp)
@@ -1020,6 +1029,9 @@ const Office = (() => {
       layer.insertAdjacentHTML("afterbegin", `<div class="ow ow-right ow-sign">REWARDS HQ</div><div class="ow ow-right ow-sub">Văn phòng bot</div>`
         + `<div class="ow ow-right ow-today">Hôm nay</div><div class="ow ow-right ow-working"></div>`);
       wall = { sign: $(".ow-sign", layer), sub: $(".ow-sub", layer), today: $(".ow-today", layer), working: $(".ow-working", layer) };
+      layer.insertAdjacentHTML("beforeend", `<button type="button" class="ob-add" title="Thêm tài khoản" aria-label="Thêm tài khoản"><i class="ti ti-plus"></i></button>`);
+      addBtn = $(".ob-add", layer);
+      addBtn.onclick = () => window.openProfileDialog(null);
       bindControls();
       new ResizeObserver(() => resize()).observe(stage);
       document.addEventListener("visibilitychange", () => this.render());

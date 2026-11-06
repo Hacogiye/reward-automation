@@ -81,7 +81,12 @@ python -m rewards_bot --run-all --headless # what Task Scheduler runs
   low back (`chairBack`, after it). Robots are drawn as isometric boxes (`boxO`, body + head + arms/legs); `b.fa`
   (`+gy`/`+gx`/`-gy`/`-gx`) is the facing, set from the walk direction or `restFace()`, and the visor/face is drawn
   on a visible side with `onFace()`; facing away shows only the visor edge. A waiting robot stands behind its own
-  chair. Test hooks (read-only): `Office._pos(name)`, `_path(name)`, `_screens()`. The `activity()` regexes did not change with the isometric view. The page draws about 30 fps when something
+  chair. Test hooks (read-only): `Office._pos(name)`, `_path(name)`, `_screens()`.
+  There is always exactly one free desk slot (index `S.profiles.length`, so `rows = ceil((n+1)/4)`): a dashed outline
+  in the static layer plus one HTML `.ob-add` "+" button that calls `openProfileDialog(null)`. The gear button
+  `#office-settings` opens `#settings-dialog`, which borrows the settings page's `#settings-cards` block (moved in on
+  open, moved back to `#settings-home` on close) so the form, ids and handlers exist only once; `.settings-help` is
+  hidden inside the dialog. The `activity()` regexes did not change with the isometric view. The page draws about 30 fps when something
   moves and 6 fps when all robots are idle, and stops when the page is hidden. Numbers use a 3x5 pixel font (`pix`).
   Vietnamese wall text is HTML (`.ow`). The back desk row sits 2 tiles from the right wall and the wall is 84 px tall
   so sprites and bubbles never cover the sign or score board; rows are 4.6 tiles apart so name tags (anchored under each
