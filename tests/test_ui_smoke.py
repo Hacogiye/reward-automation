@@ -417,6 +417,12 @@ def test_office_many_accounts_layout(server):
         pts = [{"gx": cat["gx"], "gy": cat["gy"]}] + cat["path"]
         for a, c in zip(pts, pts[1:]):
             assert abs(a["gx"] - c["gx"]) < 1e-6 or abs(a["gy"] - c["gy"]) < 1e-6, cat
+        # nhật ký của robot: tóm tắt từ dữ liệu thật, có bản tiếng Anh cho từng dòng (trừ dòng Search giống nhau 2 thứ tiếng)
+        diary = pg.evaluate("Office._diary('acc0')")
+        assert diary[0] == "Nhật ký: hôm nay +98 điểm" and any(d.startswith("Search PC 60/90") for d in diary), diary
+        en = pg.evaluate("Office._diary('acc0').map((d) => I18N.tr(d))")
+        assert all(e for d, e in zip(diary, en) if not d.startswith("Search")), list(zip(diary, en))
+        assert en[0] == "Diary: +98 points today", en
         # đúng 1 nút "+" ở chỗ bàn trống, không đè bảng tên nào; bấm vào mở hộp thêm tài khoản
         assert pg.locator("#office-layer .ob-add").count() == 1
         add_hits = pg.evaluate("""(() => {

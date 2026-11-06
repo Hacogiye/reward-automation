@@ -1151,9 +1151,31 @@ const Office = (() => {
     at(wall.today, 162, 11, 68, 11); at(wall.working, 162, 40, 68, 11);
     if (visible) wake();
   }
+  // nhật ký của robot (khi ngồi sofa viết nhật ký): tóm tắt ngày hôm nay từ dữ liệu thật của tài khoản đó
+  function diaryLines(name) {
+    const s = st(name), x = s.stats || {}, out = [];
+    if (typeof s.today === "number") out.push(`Nhật ký: hôm nay +${fmt(s.today)} điểm`);
+    if (x.pc_max) out.push(`Search PC ${x.pc}/${x.pc_max} · Mobile ${x.mobile || 0}/${x.mobile_max || 0}`);  // giống nhau ở 2 ngôn ngữ
+    const streak = (s.streak && s.streak.daily_streak) || x.daily_streak;
+    if (streak) out.push(`Chuỗi ${streak} ngày liên tiếp`);
+    const tasks = s.tasks || [];
+    if (tasks.length) out.push(`Đã xong ${tasks.filter((k) => k.done).length}/${tasks.length} việc hôm nay`);
+    const goal = (S.goals || {})[name];
+    if (goal && goal.points && typeof s.points === "number") {
+      const left = goal.points - s.points;
+      out.push(left > 0 ? `Còn ${fmt(left)} điểm nữa là tới mục tiêu` : "Đủ điểm đổi quà rồi!");
+    }
+    return out.length ? out : ["Hôm nay chưa có gì để ghi"];
+  }
   function bubbleText(b, now) {
     if (b.logUntil > now && b.act && b.act.at === "desk") return [b.log, "log"];
     if (b.celebrate > now) return [tr("Xong việc rồi!"), ""];
+    if (loungeTask(b) === "diary") {  // mỗi lượt 4,5 giây; 2 chỗ trên sofa thay phiên nhau "đọc" để bong bóng không đè nhau
+      const slot = Math.floor(now / 4500), seat = b.where.gx > 2 ? 1 : 0;
+      if ((slot + seat) % 2) return null;
+      const lines = diaryLines(b.name);
+      return [tr(lines[Math.floor(slot / 2) % lines.length]), "log"];
+    }
     const a = b.act;
     if (!a || !a.say) return null;  // đang đi tới bàn cũng nói luôn việc sắp làm
     return [tr(a.say), a.screen === "error" ? "err" : ""];
@@ -1346,6 +1368,8 @@ const Office = (() => {
     },
     // chỉ để kiểm thử: vị trí hiện tại + các điểm còn phải đi (tọa độ sàn)
     _path(name) { const b = bots.get(name); return b ? [{ gx: b.gx, gy: b.gy }, ...b.path.map((p) => ({ gx: p.gx, gy: p.gy }))] : []; },
+    // chỉ để kiểm thử: các dòng nhật ký của 1 tài khoản (tiếng Việt, chưa dịch)
+    _diary(name) { return diaryLines(name); },
     // chỉ để kiểm thử: trạng thái mèo (tọa độ sàn) + các điểm còn phải đi
     _cat() { return { st: cat.st, gx: cat.gx, gy: cat.gy, path: cat.path.map((p) => ({ gx: p.gx, gy: p.gy })), GX, GY }; },
     // chỉ để kiểm thử: tên tài khoản đang mở thẻ thông tin (null nếu không mở)

@@ -99,7 +99,11 @@ python -m rewards_bot --run-all --headless # what Task Scheduler runs
   walks only on the corridor and the lane in front of the lounge (`catLane()`), switching lanes at `GAP_L`, with the
   bowl (`bowlAt()`, an oval in front of the arcade; the cat eats from its -gx side facing +gx) and the rug bed as straight stubs, so its path is axis-aligned like the
   robots'. Hunger rises over time; it eats when hungry, sleeps more at night. Clicking the cat shows hearts. Test hook
-  `Office._cat()`. The `activity()` regexes did not change with the isometric view. The page draws about 30 fps when something
+  `Office._cat()`.
+  Diary: a robot doing "diary" on the sofa shows an italic bubble (`log` class) cycling `diaryLines(name)` every 4.5 s:
+  today's points, `Search PC x/y · Mobile x/y` (same in both languages), daily streak, tasks done, points left to the
+  reward goal. The two sofa seats take turns so their bubbles never overlap. Each line has an `I18N` entry with `#` for
+  the numbers. Test hook `Office._diary(name)`. The `activity()` regexes did not change with the isometric view. The page draws about 30 fps when something
   moves and 6 fps when all robots are idle, and stops when the page is hidden. Numbers use a 3x5 pixel font (`pix`).
   Vietnamese wall text is HTML (`.ow`). The back desk row sits 2 tiles from the right wall and the wall is 84 px tall
   so sprites and bubbles never cover the sign or score board; rows are 4.6 tiles apart so name tags (anchored under each
