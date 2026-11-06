@@ -11,5 +11,6 @@ venv/
 build/
 dist/
 
-# cấu hình riêng của từng máy (quyền, đường dẫn), không đưa lên git
-.claude/settings.local.json
+# cấu hình trợ lý AI (agent, skill, hook, quyền) của riêng máy này, không đưa lên git
+.claude/
+.agents/
