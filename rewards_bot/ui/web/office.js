@@ -225,8 +225,8 @@ const Office = (() => {
     const L = loungeTop(), fy = frontY();
     return [
       { gx: 1.5, gy: L + 1.15, pose: "sit", what: "sofa", z: 7.5, bias: 1.5 }, { gx: 2.7, gy: L + 1.15, pose: "sit", what: "sofa", z: 7.5, bias: 1.5 },
-      { gx: 5.3, gy: fy, pose: "stand", what: "coffee" }, { gx: 6.55, gy: fy, pose: "stand", what: "water" },
-      { gx: 7.9, gy: fy, pose: "stand", what: "plant" }, { gx: 13.4, gy: fy, pose: "stand", what: "arcade" },
+      { gx: 5.3, gy: fy, pose: "stand", what: "coffee" }, { gx: 6.55, gy: fy, pose: "stand", what: "water", face: "-gy" },
+      { gx: 7.9, gy: fy, pose: "stand", what: "plant", face: "-gy" }, { gx: 13.4, gy: fy, pose: "stand", what: "arcade", face: "-gy" },
       { gx: 9.5, gy: fy, pose: "stand", what: "rug" }, { gx: 11.5, gy: fy, pose: "stand", what: "rug" },
     ];
   };
@@ -282,7 +282,7 @@ const Office = (() => {
     4: "101 101 111 001 001", 5: "111 100 111 001 111", 6: "111 100 111 101 111", 7: "111 001 010 010 010",
     8: "111 101 111 101 111", 9: "111 101 111 001 111", "+": "000 010 111 010 000", ":": "0 1 0 1 0",
     ",": "00 00 00 01 10", " ": "0 0 0 0 0", z: "111 001 010 100 111", "(": "01 10 10 10 01",
-    "♪": "0110 0101 0100 1100 1100",
+    "♪": "0110 0101 0100 1100 1100", "♥": "01010 11111 11111 01110 00100",
   };
   const FONT = Object.fromEntries(Object.entries(GLYPHS).map(([c, s]) => [c, s.split(" ")]));
   function pixWidth(s, sc) { let w = 0; for (const ch of s) w += ((FONT[ch] || FONT[" "])[0].length + 1) * sc; return w - sc; }
@@ -407,13 +407,23 @@ const Office = (() => {
     if (act.at === "wait") return { kind: "desk", col, row, gx: s.gx, gy: s.gy + 1.2, pose: "stand", face: "+gy" };  // đứng chờ ngay sau ghế của mình
     return pickSpot(b);
   }
+  // việc làm ở từng chỗ trong khu nghỉ (chọn ngẫu nhiên khi tới): nằm nghỉ / viết nhật ký trên sofa, pha cà phê, uống nước,
+  // tưới cây, chơi máy game, nhảy theo nhạc / vươn vai trên thảm; robot ở thảm cạnh mèo đang ngủ thì vuốt ve mèo
+  const TASKS = { sofa: ["rest", "diary"], coffee: ["coffee"], water: ["drink"], plant: ["water"], arcade: ["game"], rug: ["dance", "stretch"] };
+  function loungeTask(b) {  // việc đang làm (chỉ khi đứng yên ở khu nghỉ), null nếu không
+    if (!b.act || b.act.at !== "lounge" || b.path.length || !b.where || b.where.kind !== "lounge" || b.celebrate > performance.now()) return null;
+    if (b.where.what === "rug" && catNear(b)) return "pet";
+    return b.task || null;
+  }
   function pickSpot(b) {
     const taken = new Set([...bots.values()].filter((o) => o !== b && o.spot).map((o) => o.spot.what + o.spot.gx));
     const free = LOUNGE_SPOTS().filter((s) => !taken.has(s.what + s.gx));
     const s = free.length ? free[Math.floor(Math.random() * free.length)]
       : { gx: 6 + Math.random() * 6, gy: frontY() + Math.random() * 0.6, pose: "stand", what: "rug" };
     b.spot = s;
-    b.until = performance.now() + 8000 + Math.random() * 12000;
+    const tasks = TASKS[s.what] || ["dance"];
+    b.task = tasks[Math.floor(Math.random() * tasks.length)];
+    b.until = performance.now() + (b.task === "rest" || b.task === "diary" ? 18000 : 8000) + Math.random() * 12000;
     return { kind: "lounge", ...s };
   }
   function update(b) {
@@ -432,6 +442,137 @@ const Office = (() => {
     if (!to) return;
     if (act.at !== "lounge") b.spot = null;
     if (!b.where) place(b, to); else walk(b, to);
+  }
+
+  // ------------------------------------------------------------ con mèo văn phòng: đi dạo, ăn ở bát, ngủ trên thảm, ngồi liếm lông
+  // Đi theo 2 lối thoáng như robot: hành lang (gy = corridorY) và lối trước khu nghỉ (gy = frontY + 0.6); đổi lối qua khe GAP_L.
+  // Bát ăn và chỗ ngủ là "nhánh" thẳng góc từ lối trước, nên mọi đoạn đường đều dọc 1 trục sàn, không xuyên đồ đạc.
+  const CAT_SPEED = 1.5;
+  const cat = { gx: 0, gy: 0, sx: 0, sy: 0, path: [], st: "sleep", goal: "sleep", until: 0, fa: "+gy", hunger: 0.4, food: 1, placed: false };
+  const catLane = () => frontY() + 0.6;
+  const bowlAt = () => ({ gx: 14.4, gy: loungeTop() + 1.6 });  // góc phải, trước máy game một chút
+  const catSpot = (goal) => (goal === "eat" ? { gx: bowlAt().gx - 0.55, gy: bowlAt().gy } : goal === "sleep" ? { gx: 10.6, gy: frontY() + 0.35 } : null);
+  function catNear(b) {  // robot đứng sát mèo đang ngủ trên thảm -> vuốt ve
+    return cat.st === "sleep" && !cat.path.length && Math.abs(b.gx - cat.gx) < 1.3 && Math.abs(b.gy - cat.gy) < 0.8;
+  }
+  function catRoute(to) {
+    const pts = [], cy = corridorY(), fl = catLane(), eps = 1e-6;
+    const add = (gx, gy) => { const l = pts.length ? pts[pts.length - 1] : cat; if (Math.abs(l.gx - gx) > eps || Math.abs(l.gy - gy) > eps) pts.push({ gx, gy }); };
+    const inCorr = Math.abs(cat.gy - cy) < eps, toCorr = Math.abs(to.gy - cy) < eps;
+    if (!inCorr) add(cat.gx, fl);                       // từ bát / chỗ ngủ: lùi về lối trước
+    if (inCorr && !toCorr) { add(GAP_L, cy); add(GAP_L, fl); }
+    if (!inCorr && toCorr) { add(GAP_L, fl); add(GAP_L, cy); }
+    if (toCorr) add(to.gx, cy); else { add(to.gx, fl); add(to.gx, to.gy); }
+    cat.path = pts;
+  }
+  function catThink(now) {  // chọn việc tiếp theo: đói thì đi ăn, tối hay vừa ăn xong thì ngủ, còn lại đi dạo rồi ngồi / liếm lông
+    const r = Math.random(), night = isNight();
+    let goal;
+    if (cat.hunger > 1 && cat.food > 0.15) goal = "eat";
+    else if (cat.st === "eat" || r < (night ? 0.7 : 0.2)) goal = "sleep";  // ban ngày chủ yếu đi dạo
+    else if (r < 0.8) goal = "sit";
+    else goal = "groom";
+    let to = catSpot(goal);
+    if (!to && goal === "sit") {  // đi dạo tới 1 điểm ngẫu nhiên trên hành lang hoặc lối trước rồi ngồi
+      to = Math.random() < 0.5 ? { gx: 0.6 + Math.random() * 13.8, gy: corridorY() } : { gx: 4.6 + Math.random() * 9.6, gy: catLane() };
+    }
+    cat.goal = goal;
+    if (to) catRoute(to); else cat.path = [];
+    if (cat.path.length) cat.st = "walk"; else catArrive(now);
+  }
+  function catArrive(now) {
+    cat.st = cat.goal;
+    if (cat.goal === "eat") cat.fa = "+gx";                          // bát ở phía +gx: mèo quay mặt ra người xem khi ăn
+    else if (cat.goal !== "walk" && cat.fa[0] === "-") cat.fa = cat.fa === "-gy" ? "+gx" : "+gy";  // ngồi / ngủ: quay mặt ra người xem
+    cat.until = now + (cat.goal === "eat" ? 6000 : cat.goal === "sleep" ? (isNight() ? 40000 : 15000) + Math.random() * 20000 : 5000 + Math.random() * 7000);
+  }
+  function catStep(dt, now) {
+    if (!cat.placed) { const s = catSpot("sleep"); cat.gx = s.gx; cat.gy = s.gy; cat.placed = true; cat.until = now + 8000 + Math.random() * 10000; }
+    cat.hunger += dt / 90;
+    if (cat.st === "eat") { cat.hunger = Math.max(0, cat.hunger - dt / 5); cat.food = Math.max(0, cat.food - dt * 0.06); }
+    else cat.food = Math.min(1, cat.food + dt / 150);  // bát tự đầy lại từ từ
+    if (cat.path.length) {
+      const p = cat.path[0], dx = p.gx - cat.gx, dy = p.gy - cat.gy, d = Math.hypot(dx, dy), mv = CAT_SPEED * dt;
+      if (Math.abs(dx) > 1e-6 || Math.abs(dy) > 1e-6) cat.fa = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "+gx" : "-gx") : (dy > 0 ? "+gy" : "-gy");  // nhìn theo hướng đi
+      if (d <= mv) { cat.gx = p.gx; cat.gy = p.gy; cat.path.shift(); if (!cat.path.length) catArrive(now); }
+      else { cat.gx += (dx / d) * mv; cat.gy += (dy / d) * mv; }
+    } else if (now > cat.until) catThink(now);
+    const s = iso(cat.gx, cat.gy); cat.sx = Math.round(s.x); cat.sy = Math.round(s.y);
+  }
+  function drawBowl(P) {  // bát bầu dục 2:1 nằm trên sàn: thành bát dày 2 px, trong lòng là hạt thức ăn
+    const b = bowlAt(), s = iso(b.gx, b.gy), x = Math.round(s.x) + 0.5, y = Math.round(s.y), rim = P.cyber ? "#ff2a6d" : "#d9534f";
+    const ell = (cy, rx, ry, c) => { g.fillStyle = c; g.beginPath(); g.ellipse(x, cy, rx, ry, 0, 0, Math.PI * 2); g.fill(); };
+    ell(y + 1, 7, 3, P.shadow);
+    ell(y, 6, 3, shade(rim, -0.3));                  // thân bát (phần khuất)
+    ell(y - 2, 6, 3, rim);                            // miệng bát
+    ell(y - 2, 4, 2, cat.food > 0.05 ? "#b7793a" : shade(rim, -0.45));
+    if (cat.food > 0.5) { R(x - 2.5, y - 4, 2, 1, "#d69a55"); R(x + 0.5, y - 3, 2, 1, "#d69a55"); }
+  }
+  // mèo khối isometric như robot: thân, đầu, tai, đuôi, chân là các hộp; hướng mặt cat.fa ("+gx" / "-gx" / "+gy" / "-gy").
+  // Tọa độ cục bộ (f = phía trước theo hướng mặt, s = sang ngang) đổi sang (gx, gy) rồi vẽ các khối từ xa tới gần.
+  function drawCat(t, P) {
+    const O = P.cyber ? P.outline : "#6b3a17", body = "#f0a24b", dark = "#c8742c", light = "#ffd59a", fa = cat.fa || "+gy";
+    const K = 1.45;  // cỡ mèo: mọi số đo cục bộ bên dưới nhân K (khoảng 1/2 chiều cao robot)
+    const st = cat.st, walk = st === "walk", stepA = walk ? Math.floor(t * 8) % 2 : 0;
+    const sg = fa[0] === "-" ? -1 : 1, alongX = fa[2] === "x";
+    const toG = (f, s) => (alongX ? [sg * f, s] : [s, sg * f]);
+    const parts = [];
+    const part = (f0, f1, s0, s1, z0, z1, top, left, right, outline = true) => {
+      const [ax, ay] = toG(f0 * K, s0 * K), [bx, by] = toG(f1 * K, s1 * K);
+      z0 *= K; z1 *= K;
+      const x0 = Math.min(ax, bx), x1 = Math.max(ax, bx), y0 = Math.min(ay, by), y1 = Math.max(ay, by);
+      parts.push({ d: (x0 + x1) / 2 + (y0 + y1) / 2, z0, draw: () => (outline ? boxO(x0, y0, x1, y1, z0, z1, top, left, right, O) : box(x0, y0, x1, y1, z0, z1, top, left, right)) });
+    };
+    const head = { f0: 0, f1: 0, z0: 0, z1: 0 };
+    const mox = ox, moy = oy;
+    ox = cat.sx; oy = cat.sy;
+    try {
+      flat(-0.2 * K, -0.2 * K, 0.2 * K, 0.2 * K, 0, P.shadow);
+      if (st === "sleep") {  // nằm cuộn tròn: thân dẹt, đầu gối lên thân, đuôi quấn phía trước
+        part(-0.18, 0.14, -0.12, 0.12, 0, 4, light, body, dark);
+        part(0.06, 0.24, -0.1, 0.08, 1, 5.5, light, body, dark); Object.assign(head, { f0: 0.06, f1: 0.24, s0: -0.1, s1: 0.08, z1: 5.5 });
+        part(0.1, 0.15, -0.09, -0.04, 5.5, 7, dark, dark, dark, false); part(0.1, 0.15, 0.02, 0.07, 5.5, 7, dark, dark, dark, false);
+        part(-0.16, 0.1, 0.12, 0.17, 0, 1.5, dark, dark, dark, false);
+      } else if (st === "sit" || st === "groom") {  // ngồi thẳng, đuôi nằm trên sàn vẫy qua lại
+        const sway = Math.sin(t * 2) > 0 ? 0.03 : -0.03;
+        part(-0.3, -0.12, -0.03 + sway, 0.03 + sway, 0, 1.5, dark, body, dark, false);
+        part(-0.14, 0.08, -0.09, 0.09, 0, 8, light, body, dark);
+        part(-0.04, 0.14, -0.1, 0.1, 7, 12, light, body, dark); Object.assign(head, { f0: -0.04, f1: 0.14, s0: -0.1, s1: 0.1, z1: 12 });
+        part(0.02, 0.08, -0.09, -0.04, 12, 14, dark, dark, dark, false); part(0.02, 0.08, 0.04, 0.09, 12, 14, dark, dark, dark, false);
+        if (st === "groom" && Math.floor(t * 3) % 2) part(0.1, 0.17, 0.02, 0.07, 6, 10, light, body, dark, false);  // giơ chân liếm
+        else part(0.06, 0.12, -0.06, 0.06, 0, 2, light, body, dark, false);                                       // 2 chân trước
+      } else {  // đứng / đi / ăn
+        const eat = st === "eat", bob = eat && Math.floor(t * 4) % 2 ? 1 : 0;
+        for (const [f, s, ph] of [[0.12, -0.06, 0], [0.12, 0.06, 1], [-0.14, -0.06, 1], [-0.14, 0.06, 0]]) {
+          const lift = walk && (ph === stepA) ? 1 : 0;
+          part(f - 0.03, f + 0.03, s - 0.03, s + 0.03, lift, 3, dark, dark, dark, false);
+        }
+        part(-0.2, 0.16, -0.09, 0.09, 3, 8, light, body, dark);
+        const sway = walk ? (stepA ? 0.02 : -0.02) : Math.sin(t * 2) > 0 ? 0.02 : -0.02;
+        part(-0.26, -0.2, -0.025 + sway, 0.025 + sway, 6, 13, dark, body, dark, false);                     // đuôi dựng
+        const hz = eat ? 2 - bob : 7, hf = eat ? 0.18 : 0.12;
+        part(hf, hf + 0.18, -0.1, 0.1, hz, hz + 5, light, body, dark); Object.assign(head, { f0: hf, f1: hf + 0.18, s0: -0.1, s1: 0.1, z1: hz + 5 });
+        part(hf + 0.05, hf + 0.1, -0.09, -0.04, hz + 5, hz + 7, dark, dark, dark, false); part(hf + 0.05, hf + 0.1, 0.04, 0.09, hz + 5, hz + 7, dark, dark, dark, false);
+      }
+      parts.sort((a, c) => a.d - c.d || a.z0 - c.z0);
+      for (const p of parts) p.draw();
+      for (const [f0, f1] of [[-0.12, -0.09], [-0.03, 0]]) {  // sọc lưng trên mặt trên của thân
+        if (st === "sit" || st === "groom") break;
+        const [ax, ay] = toG(f0 * K, -0.09 * K), [bx, by] = toG(f1 * K, 0.09 * K);
+        flat(Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by), (st === "sleep" ? 4 : 8) * K, dark);
+      }
+      // mặt: chỉ vẽ khi đầu quay về phía người xem (+gy: mặt trái, +gx: mặt phải của khối đầu)
+      if (fa === "+gy" || fa === "+gx") {
+        const [ax, ay] = toG(head.f1 * K, head.s0 * K), [bx, by] = toG(head.f1 * K, head.s1 * K);
+        const p = fa === "+gy" ? pt(Math.min(ax, bx), ay, head.z1 * K) : pt(ax, Math.max(ay, by), head.z1 * K);
+        g.save(); g.transform(1, fa === "+gy" ? 0.5 : -0.5, 0, 1, p[0], p[1]);
+        const closed = st === "sleep" || st === "eat";
+        R(0, 4, 5, 3, light);                                                        // mõm sáng màu
+        if (closed) { R(0, 3, 2, 1, O); R(3, 3, 2, 1, O); } else { R(0, 2, 1, 2, "#1d1d1d"); R(4, 2, 1, 2, "#1d1d1d"); }
+        R(2, 4, 1, 1, "#ff8fa0");
+        g.restore();
+      }
+    } finally { ox = mox; oy = moy; }
   }
 
   // ------------------------------------------------------------ hiệu ứng (tọa độ màn hình)
@@ -772,15 +913,21 @@ const Office = (() => {
       const legs = [-0.1, 0.1], sw = moving ? (Math.floor(t * 8) % 2 ? 1 : -1) : 0;
       if (!sit) legs.forEach((k, i) => { const [a0, b0, a1, b1] = side(k, 0.06), up = Math.max(0, i ? sw : -sw); box(a0, b0, a1, b1, up, bz, O, O, O); });
       const typing = sit && act.typing && !cele, tp = Math.floor(t * (act.slow ? 3 : 10)) % 2;
-      const atDesk = sit && act.at === "desk" && fa === "-gy";
+      const atDesk = sit && act.at === "desk" && fa === "-gy", task = loungeTask(b);
+      const reach = !cele && (atDesk || task === "game" || task === "water" || task === "diary" || task === "pet");
+      const busyHands = typing || task === "game" || task === "diary", hp = Math.floor(t * (task === "diary" ? 4 : task === "game" ? 8 : act.slow ? 3 : 10)) % 2;
+      const sgn = fa[0] === "-" ? -1 : 1;
       const arm = (k, i) => {
         const [a0, b0, a1, b1] = side(k, 0.05);
-        if (atDesk && !cele) {  // ngồi bàn: tay vươn về phía bàn phím (hướng -gy), gõ phím thì nhấp lên xuống
-          const z0 = bz + 4 + (typing ? (i ? tp : 1 - tp) : 0);
-          boxO(a0, -BH - 0.24, a1, -0.02, z0, z0 + 3, b.light, b.color, b.dark, O);
+        if (reach) {  // tay vươn về phía trước (bàn phím, máy game, bình tưới, cuốn sổ, con mèo); bận tay thì nhấp lên xuống
+          const z0 = bz + 4 + (busyHands ? (i ? hp : 1 - hp) : 0), f0 = sgn * 0.02, f1 = sgn * (BH + 0.24);
+          if (alongGy) boxO(a0, Math.min(f0, f1), a1, Math.max(f0, f1), z0, z0 + 3, b.light, b.color, b.dark, O);
+          else boxO(Math.min(f0, f1), b0, Math.max(f0, f1), b1, z0, z0 + 3, b.light, b.color, b.dark, O);
           return;
         }
-        const z0 = cele ? bz + 9 : bz + 2 + (typing ? (i ? tp : 1 - tp) : 0), z1 = cele ? bz + 16 : z0 + 6;
+        const wave = task === "dance" ? (Math.floor((beat !== null ? beat : t * 1.5)) + i) % 2 === 0 : task === "stretch" && Math.floor(t / 2) % 2 === 0;
+        const up = cele || wave;
+        const z0 = up ? bz + 9 : bz + 2 + (typing ? (i ? tp : 1 - tp) : 0), z1 = up ? bz + 16 : z0 + 6;
         boxO(a0, b0, a1, b1, z0, z1, b.light, b.color, b.dark, O);
       };
       arm(-(BH + 0.05), 0);
@@ -792,7 +939,7 @@ const Office = (() => {
       arm(BH + 0.05, 1);
       // đầu + kính mặt
       boxO(-HH2, -HH2, HH2, HH2, hz, top, b.light, b.color, b.dark, O);
-      const face = cele ? "happy" : sleeping(b) ? "sleep" : act.face || "idle";
+      const face = cele || task === "pet" || task === "dance" ? "happy" : sleeping(b) ? "sleep" : task === "diary" ? "focus" : task === "game" ? "wow" : act.face || "idle";
       const eye = face === "sad" ? "#ff5d5d" : face === "happy" ? "#ffd23f" : "#6ff0ff";
       if (fa === "+gy" || fa === "+gx") {
         onFace(fa === "+gy" ? "L" : "R", HH2, top, (w) => { R(0, 2, w, 6, "#10131c"); drawFace(b, Math.round(w / 2), 2, now, face); });
@@ -803,7 +950,20 @@ const Office = (() => {
       }
       // đồ cầm tay
       if (act.prop === "phone" && !moving) { const p = pt(BH + 0.12, -0.05, hz + 6); R(p[0], p[1], 4, 7, "#2a2e38"); R(p[0] + 1, p[1] + 1, 2, 4, Math.floor(t * 3) % 2 ? "#5fc9e8" : "#9fe6ff"); }
-      if (act.prop === "mug" && !moving) { const p = pt(BH + 0.1, 0.12, bz + 7); R(p[0], p[1], 4, 4, "#f4f4f4"); R(p[0] + 4, p[1] + 1, 1, 2, "#f4f4f4"); if (Math.floor(t * 2) % 2) R(p[0] + 1, p[1] - 3, 1, 2, "rgba(255,255,255,.6)"); }
+      if (task === "diary") {  // cuốn sổ mở trên đùi + bút chì chạy theo dòng
+        box(-0.16, BH + 0.06, 0.16, BH + 0.3, bz + 5, bz + 6, "#fbfaf4", "#e6e2d4", "#cfc9b6");
+        const s0 = pt(-0.12, BH + 0.26, bz + 6), px = Math.floor(t * 3) % 6;
+        R(s0[0] + 1, s0[1] - 3, 5, 1, "#9aa3b5"); R(s0[0] + 1, s0[1] - 1, px, 1, "#606878");
+        R(s0[0] + 1 + px, s0[1] - 4, 1, 3, "#e0b85d");
+      }
+      if (task === "water") {  // bình tưới ở tay phải, vòi chĩa về chậu cây
+        const p = pt(BH + 0.05, -BH - 0.3, bz + 4); R(p[0] - 1, p[1] - 4, 5, 4, "#7fa7c9"); R(p[0] - 1, p[1] - 5, 5, 1, "#a9c7e0"); R(p[0] + 4, p[1] - 6, 3, 1, "#7fa7c9");
+      }
+      if (task === "coffee" || task === "drink") {  // cốc cà phê (bốc hơi) / cốc nước
+        const p = pt(BH + 0.1, 0.12, bz + 7), c = task === "coffee" ? "#f4f4f4" : "#cfe9ff";
+        R(p[0], p[1], 4, 4, c); if (task === "coffee") { R(p[0] + 4, p[1] + 1, 1, 2, c); if (Math.floor(t * 2) % 2) R(p[0] + 1, p[1] - 3, 1, 2, "rgba(255,255,255,.6)"); }
+      }
+      if (act.prop === "mug" && !moving && !task) { const p = pt(BH + 0.1, 0.12, bz + 7); R(p[0], p[1], 4, 4, "#f4f4f4"); R(p[0] + 4, p[1] + 1, 1, 2, "#f4f4f4"); if (Math.floor(t * 2) % 2) R(p[0] + 1, p[1] - 3, 1, 2, "rgba(255,255,255,.6)"); }
       // ăng-ten
       const a = pt(0, 0, top), ant = working ? (Math.floor(t * 3) % 2 ? "#4dff88" : "#ffd23f") : act.screen === "error" ? (Math.floor(t * 4) % 2 ? "#ff4d4d" : "#7a1d1d") : b.light;
       R(a[0], a[1] - 3, 1, 3, O); R(a[0] - 1, a[1] - 5, 3, 2, ant);
@@ -817,7 +977,7 @@ const Office = (() => {
     return nightCache.night;
   }
   function sleeping(b) {
-    return !!(b.act && b.act.at === "lounge" && b.spot && b.spot.what === "sofa" && !b.path.length && isNight());
+    return !!(b.act && b.act.at === "lounge" && b.spot && b.spot.what === "sofa" && !b.path.length && (isNight() || loungeTask(b) === "rest"));
   }
   function drawFace(b, x, y, now, face) {
     if (now > b.blink) b.blink = now + 2500 + Math.random() * 3000;
@@ -852,6 +1012,8 @@ const Office = (() => {
       else if (p.kind === "smoke") R(p.x, p.y, 3 + p.age * 3, 3 + p.age * 3, "rgba(120,120,130,.55)");
       else if (p.kind === "note") pix("♪", p.x + Math.sin(p.age * 4) * 2, p.y, p.c);
       else if (p.kind === "zzz") pix("z", p.x + Math.sin(p.age * 3) * 2, p.y, "#a9b4d6");
+      else if (p.kind === "drop") R(p.x, p.y, 1, 2, "#6fc3ff");
+      else if (p.kind === "heart") pix("♥", p.x + Math.sin(p.age * 4), p.y, "#ff6b8b");
       else if (p.kind === "text") { pix(p.text, p.x + 1, p.y + 1, "rgba(0,0,0,.5)"); pix(p.text, p.x, p.y, "#ffd23f"); }
       g.globalAlpha = 1;
     }
@@ -860,9 +1022,16 @@ const Office = (() => {
       const top = b.sy - b.lift;
       if (b.act.fx === "smoke" && Math.random() < dt * 3) fx.push({ kind: "smoke", x: b.sx - 2 + Math.random() * 4, y: top - 34, vx: (Math.random() - 0.5) * 6, vy: -12, life: 1.6, age: 0 });
       if (sleeping(b) && Math.random() < dt * 0.8) fx.push({ kind: "zzz", x: b.sx + 6, y: top - 30, vx: 4, vy: -8, life: 2.2, age: 0 });
+      const task = loungeTask(b);
+      if (task === "water" && Math.random() < dt * 6) {  // giọt nước rơi từ vòi bình tưới xuống chậu
+        const p = iso(b.gx + BH + 0.05, b.gy - BH - 0.3, 15);
+        fx.push({ kind: "drop", x: p.x + 6 + Math.random() * 2, y: p.y, vx: 6, vy: 18, life: 0.7, age: 0 });
+      }
+      if (task === "pet" && Math.random() < dt * 0.9) fx.push({ kind: "heart", x: cat.sx - 2, y: cat.sy - 12, vx: (Math.random() - 0.5) * 6, vy: -10, life: 1.6, age: 0 });
       if (Lofi.on && b.act.at === "lounge" && !sleeping(b) && Math.random() < dt * 0.35)
         fx.push({ kind: "note", x: b.sx + 5, y: top - 30, vx: 3, vy: -9, life: 2.4, age: 0, c: ["#ffd23f", "#ff8fb1", "#7fe3ff"][Math.floor(Math.random() * 3)] });
     }
+    if (cat.st === "sleep" && !cat.path.length && Math.random() < dt * 0.4) fx.push({ kind: "zzz", x: cat.sx + 4, y: cat.sy - 12, vx: 3, vy: -6, life: 2, age: 0 });
     if (fx.length > 300) fx.splice(0, fx.length - 300);
   }
 
@@ -879,8 +1048,10 @@ const Office = (() => {
         if (b.celebrate && b.celebrate < now && b.where && b.where.kind === "desk") { b.celebrate = 0; walk(b, pickSpot(b)); }
         else if (b.where && b.where.kind === "lounge" && now > b.until && !sleeping(b)) walk(b, pickSpot(b));  // đổi chỗ chơi
       }
+      if (b.where && b.where.what === "rug" && !b.path.length && catNear(b)) b.fa = b.gx < cat.gx ? "+gx" : "-gx";  // quay sang vuốt mèo
       locate(b);
     }
+    catStep(dt, now);
   }
 
   // ------------------------------------------------------------ lớp HTML: chỉ chạm DOM khi có gì thật sự đổi
@@ -905,7 +1076,7 @@ const Office = (() => {
 
   // ------------------------------------------------------------ vòng vẽ
   function busy(now) {  // có gì đang chuyển động thì chạy nhanh, không thì chỉ vài khung/giây cho nháy mắt, mây trôi
-    if (Lofi.on || S.officeRain || fx.length) return true;
+    if (Lofi.on || S.officeRain || fx.length || cat.path.length || cat.st === "eat" || cat.st === "groom") return true;
     for (const b of bots.values()) {
       if (b.path.length || b.celebrate > now || isWorking(b) || (b.act && b.act.fx)) return true;
     }
@@ -934,9 +1105,13 @@ const Office = (() => {
     });
     for (const f of FURN) order.push({ d: f.d, k: 0, f });
     for (const b of bots.values()) order.push({ d: b.depth, k: 3, b });
+    const bw = bowlAt();
+    order.push({ d: bw.gx + bw.gy, k: 0, bowl: true }, { d: cat.gx + cat.gy, k: 2, cat: true });
     order.sort((a, c) => a.d - c.d || a.k - c.k);
     for (const it of order) {
       if (it.b) drawBot(it.b, t, P, beat, now);
+      else if (it.cat) drawCat(t, P);
+      else if (it.bowl) drawBowl(P);
       else if (it.f) drawFurn(it.f, P);
       else if (it.chair !== undefined) drawChair(it.chair, P, it.part);
       else drawDesk(it.desk, P, t);
@@ -1002,11 +1177,16 @@ const Office = (() => {
     volume.oninput = () => { const v = +volume.value / 100; Lofi.setVolume(v); pref.set("officeVolume", v); };
     cv.addEventListener("click", (e) => {  // bấm vào robot -> mở tổng quan của tài khoản đó
       const r = cv.getBoundingClientRect(), wx = (e.clientX - r.left) / r.width * W, wy = (e.clientY - r.top) / r.height * H;
-      let hit = null;  // robot gần người xem nhất (độ sâu lớn nhất) trong vùng bấm
+      let hit = null;  // robot gần người xem nhất (độ sâu lớn nhất) trong vùng bấm; robot luôn được ưu tiên hơn mèo
       for (const b of bots.values()) {
         if (Math.abs(b.sx - wx) < 9 && wy > b.sy - b.lift - 30 && wy < b.sy + 2 && (!hit || b.depth > hit.depth)) hit = b;
       }
-      if (hit) { S.selected = hit.name; go("dashboard"); }
+      if (hit) { S.selected = hit.name; go("dashboard"); return; }
+      if (Math.abs(cat.sx - wx) < 9 && wy > cat.sy - 20 && wy < cat.sy + 2) {  // bấm vào mèo: thả tim, mèo thức dậy ngồi một lúc
+        for (let i = 0; i < 4; i++) fx.push({ kind: "heart", x: cat.sx - 3 + i * 2, y: cat.sy - 18, vx: (i - 1.5) * 6, vy: -14, life: 1.4, age: 0 });
+        if (!cat.path.length && cat.st !== "eat") { cat.goal = "sit"; cat.st = "sit"; cat.until = performance.now() + 5000; }
+        wake();
+      }
     });
     paint();
     // lần trước để nhạc bật: bật lại ở lần bấm chuột đầu tiên (trình duyệt không cho tự phát tiếng khi chưa bấm gì)
@@ -1062,6 +1242,8 @@ const Office = (() => {
     },
     // chỉ để kiểm thử: vị trí hiện tại + các điểm còn phải đi (tọa độ sàn)
     _path(name) { const b = bots.get(name); return b ? [{ gx: b.gx, gy: b.gy }, ...b.path.map((p) => ({ gx: p.gx, gy: p.gy }))] : []; },
+    // chỉ để kiểm thử: trạng thái mèo (tọa độ sàn) + các điểm còn phải đi
+    _cat() { return { st: cat.st, gx: cat.gx, gy: cat.gy, path: cat.path.map((p) => ({ gx: p.gx, gy: p.gy })), GX, GY }; },
     // chỉ để kiểm thử: tọa độ (client) giữa thân robot, null nếu chưa có
     _pos(name) {
       const b = bots.get(name);

@@ -86,7 +86,15 @@ python -m rewards_bot --run-all --headless # what Task Scheduler runs
   in the static layer plus one HTML `.ob-add` "+" button that calls `openProfileDialog(null)`. The gear button
   `#office-settings` opens `#settings-dialog`, which borrows the settings page's `#settings-cards` block (moved in on
   open, moved back to `#settings-home` on close) so the form, ids and handlers exist only once; `.settings-help` is
-  hidden inside the dialog. The `activity()` regexes did not change with the isometric view. The page draws about 30 fps when something
+  hidden inside the dialog.
+  Lounge tasks: on arrival `pickSpot` picks `b.task` from `TASKS` (sofa: rest/diary, coffee, drink at the water cooler,
+  water the plant, arcade game, rug: dance/stretch); `loungeTask(b)` returns it only while the robot stands still in
+  the lounge, and a robot on the rug next to the sleeping cat does "pet" (hearts). Spots that face their object use
+  `face: "-gy"`. The office cat (`cat`, `catStep/catThink/catRoute`, `drawCat`: isometric boxes like the robots, scaled by `K`, facing `cat.fa`, parts depth-sorted)
+  walks only on the corridor and the lane in front of the lounge (`catLane()`), switching lanes at `GAP_L`, with the
+  bowl (`bowlAt()`, an oval in front of the arcade; the cat eats from its -gx side facing +gx) and the rug bed as straight stubs, so its path is axis-aligned like the
+  robots'. Hunger rises over time; it eats when hungry, sleeps more at night. Clicking the cat shows hearts. Test hook
+  `Office._cat()`. The `activity()` regexes did not change with the isometric view. The page draws about 30 fps when something
   moves and 6 fps when all robots are idle, and stops when the page is hidden. Numbers use a 3x5 pixel font (`pix`).
   Vietnamese wall text is HTML (`.ow`). The back desk row sits 2 tiles from the right wall and the wall is 84 px tall
   so sprites and bubbles never cover the sign or score board; rows are 4.6 tiles apart so name tags (anchored under each

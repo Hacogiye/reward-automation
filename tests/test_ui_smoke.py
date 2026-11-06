@@ -385,6 +385,13 @@ def test_office_many_accounts_layout(server):
         assert res["nb"] >= 3, res
         assert res["tagTag"] == 0 and res["tagBub"] == 0 and res["bubBub"] == 0, res
         assert res["wallMon"] == [], res
+        # con mèo: trạng thái hợp lệ, nằm trong sàn, đường đi (nếu đang đi) dọc 1 trục sàn
+        cat = pg.evaluate("Office._cat()")
+        assert cat["st"] in ("walk", "sit", "groom", "eat", "sleep"), cat
+        assert 0 <= cat["gx"] <= cat["GX"] and 0 <= cat["gy"] <= cat["GY"], cat
+        pts = [{"gx": cat["gx"], "gy": cat["gy"]}] + cat["path"]
+        for a, c in zip(pts, pts[1:]):
+            assert abs(a["gx"] - c["gx"]) < 1e-6 or abs(a["gy"] - c["gy"]) < 1e-6, cat
         # đúng 1 nút "+" ở chỗ bàn trống, không đè bảng tên nào; bấm vào mở hộp thêm tài khoản
         assert pg.locator("#office-layer .ob-add").count() == 1
         add_hits = pg.evaluate("""(() => {
@@ -407,8 +414,8 @@ def test_office_many_accounts_layout(server):
         assert not pg.locator("#settings-dialog").is_visible()
         assert pg.evaluate("document.querySelector('#settings-cards').parentElement.id") == "settings-home"
         pg.click("#office-settings")
-        pg.keyboard.press("Escape")
-        assert pg.evaluate("document.querySelector('#settings-cards').parentElement.id") == "settings-home"
+        pg.keyboard.press("Escape")  # sự kiện "close" chạy sau một nhịp: chờ khối cài đặt về chỗ cũ
+        pg.wait_for_function("document.querySelector('#settings-cards').parentElement.id === 'settings-home'", timeout=3000)
         pg.evaluate("go('settings')")
         assert pg.locator("#page-settings #set-browser").is_visible()
         b.close()
