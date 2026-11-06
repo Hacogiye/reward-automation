@@ -18,8 +18,9 @@ playwright = pytest.importorskip("playwright.sync_api")
 def test_app_js_syntax():
     if not shutil.which("node"):
         pytest.skip("không có node")
-    r = subprocess.run(["node", "--check", str(WEB / "app.js")], capture_output=True, text=True)
-    assert r.returncode == 0, r.stderr
+    for js in ("app.js", "office.js", "i18n.js"):
+        r = subprocess.run(["node", "--check", str(WEB / js)], capture_output=True, text=True)
+        assert r.returncode == 0, js + ": " + r.stderr
 
 
 @pytest.fixture(scope="module")
@@ -83,6 +84,7 @@ def test_pages_render_without_errors(server):
         errors, dialogs = [], []
         pg.on("pageerror", lambda e: errors.append(str(e)))
         pg.on("console", lambda m: m.type == "error" and "favicon" not in m.text and "Failed to load resource" not in m.text
+              and "AudioContext" not in m.text  # Edge headless không có thiết bị âm thanh
               and errors.append(m.text))
         pg.on("dialog", lambda d: (dialogs.append(d.message), d.dismiss()))
         pg.add_init_script(mock)
@@ -165,6 +167,25 @@ def test_pages_render_without_errors(server):
         assert pg.locator("#profile-table .avatar.has-img").count() == 1
         pg.evaluate("go('dashboard')")
         assert pg.locator("#hero-avatar.has-img").count() == 1
+        # Văn phòng: mỗi tài khoản 1 robot có bảng tên; robot làm theo trạng thái thật; nhạc lofi bật / tắt được
+        name = pg.evaluate("S.profiles[0].name")
+        pg.evaluate("go('office')")
+        assert pg.locator("#office-layer .ob-tag").count() == pg.evaluate("S.profiles.length")
+        assert pg.evaluate("document.querySelector('#office-canvas').width") > 0
+        pg.evaluate(f"window.onEvents([{{type: 'status', name: {json.dumps(name)}, data: {{state: 'Đang chạy', progress: 'Search PC 3/30'}}}}])")
+        # CSP của app chặn eval nên không dùng wait_for_function nhiều lượt; tự hỏi lại vài lần
+        said = "[...document.querySelectorAll('#office-layer .ob-bubble')].some((b) => !b.hidden && b.textContent === 'Search PC 3/30')"
+        for _ in range(30):
+            if pg.evaluate(said):
+                break
+            pg.wait_for_timeout(500)
+        assert pg.evaluate(said)
+        pg.click("#office-music")
+        assert "Tắt nhạc lofi" in pg.locator("#office-music").inner_text()
+        pg.click("#office-music")
+        assert "Bật nhạc lofi" in pg.locator("#office-music").inner_text()
+        pg.evaluate(f"window.onEvents([{{type: 'status', name: {json.dumps(name)}, data: {{state: 'Sẵn sàng', progress: ''}}}}, {{type: 'done', name: {json.dumps(name)}}}])")
+        pg.evaluate("go('dashboard')")
         # ngôn ngữ: EN dịch cả chữ vẽ sau (đổi trang), số trong câu giữ nguyên; về VI thì trả lại chữ gốc
         pg.click(".lang-switch button[data-set-lang=en]")
         assert pg.evaluate("document.documentElement.lang") == "en"

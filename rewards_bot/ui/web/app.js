@@ -79,6 +79,7 @@ window.addEventListener("pywebviewready", async () => {
   Object.assign(S, b, { running: new Set(b.running) });
   S.selected = S.profiles[0]?.name ?? null;
   bindStatic();
+  window.Office?.init();
   applyTheme();
   applyLanguage();
   renderAll();
@@ -135,6 +136,7 @@ window.onEvents = (batch) => {
       S.logs.push(e);
       if (/^\s*(lỗi|cảnh báo)/i.test(e.msg)) S.unreadErr++;
       if (S.page === "log") appendLog(e);
+      window.Office?.onLog(e);
     } else if (e.type === "status") {
       const st = (S.pstate[e.name] ||= {});
       Object.assign(st, e.data);
@@ -148,7 +150,7 @@ window.onEvents = (batch) => {
     }
   }
   if (S.logs.length > 4000) S.logs = S.logs.slice(-3000);
-  if (dirty) { renderSide(); if (S.page === "dashboard") renderDashboard(); if (S.page === "profiles") renderProfiles(); }
+  if (dirty) { renderSide(); if (S.page === "dashboard") renderDashboard(); if (S.page === "profiles") renderProfiles(); window.Office?.render(); }
   renderLogBadge();
 };
 
@@ -251,6 +253,7 @@ function renderAll() {
   if (S.page === "log") renderLog();
   if (S.page === "history") renderHistory();
   if (S.page === "settings") renderSettings();
+  window.Office?.render();  // tự dừng vẽ khi không ở trang Văn phòng
   renderLogBadge();
 }
 

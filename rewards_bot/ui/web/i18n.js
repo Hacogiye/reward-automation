@@ -8,6 +8,14 @@
 const I18N = (() => {
   const EN = {
     // ---- khung, menu, chung
+    // ---- văn phòng
+    "Văn phòng": "Office", "Văn phòng bot": "Bot office", "Bật nhạc lofi": "Play lofi", "Tắt nhạc lofi": "Stop lofi",
+    "Tiếng mưa": "Rain sounds", "Âm lượng": "Volume", "Nhạc đang tắt": "Music is off", "Lofi tự sinh": "Generated lofi",
+    "mưa": "rain", "# robot đang làm việc": "# robots working", "# đang nghỉ": "# on break", "đang làm": "working",
+    "Xong việc rồi!": "All done!", "Xem tổng quan của tài khoản này": "Open this account's overview",
+    "Chưa có tài khoản nào. Thêm tài khoản ở trang Tài khoản để có nhân viên.":
+      "No accounts yet. Add one on the Accounts page to hire a robot.",
+    "Văn phòng: mỗi robot là một tài khoản đang được bot chạy": "Office: each robot is one account the bot runs",
     "Tổng quan": "Overview", "Tài khoản": "Accounts", "Nhật ký": "Log", "Lịch sử": "History", "Cài đặt": "Settings",
     "Hướng dẫn": "Guide", "# tài khoản": "# accounts", "Đang nghỉ": "Idle", "Sáng": "Light", "Tối": "Dark",
     "Theo Windows": "Follow Windows", "Giao diện": "Appearance", "Ngôn ngữ": "Language", "Lưu": "Save", "Hủy": "Cancel",

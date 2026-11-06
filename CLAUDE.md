@@ -58,6 +58,12 @@ python -m rewards_bot --run-all --headless # what Task Scheduler runs
   shown as a sub-switch of Browse, and the "Làm tất cả" button = `Api.start(names, "everything")`, which runs with
   every `do_*` forced on (`webapp.EVERYTHING`) without saving. Avatars: `Api.set_avatar` stores PNG/JPEG/WebP (magic
   bytes checked, at most 300 KB) as `data/avatars/<profile dir>.<ext>`, so renames keep the photo.
+- Office page (`ui/web/office.js` + `office.css`): one pixel robot per account, drawn on a canvas, with no image files.
+  `activity()` maps `S.pstate` state/progress strings (for example `Search PC`, `Search Mobile`, `Visual Search`,
+  `Browse`) to a desk/lounge pose and screen, so if you change progress text in `bot.py`, update those regexes. Name
+  tags and speech bubbles are an HTML layer on top (bubbles are `data-no-i18n`; canvas text goes through `I18N.tr`).
+  The lofi music is generated with Web Audio (`Lofi`), so there are no audio files and the CSP is unchanged. It only
+  starts after a click (autoplay policy). Volume and rain are kept in `localStorage` (`pref`).
 - Reward goal per account: `settings["goals"]`, set through `Api.set_goal`. It follows profile renames and deletes.
 - `search/catalog.py`: the query catalog. `search/bank.py` hands out queries without repeats across accounts or
   across `history_days`.
