@@ -2,6 +2,11 @@
 // Trang "Văn phòng": mỗi tài khoản là một con robot có bàn làm việc riêng. Robot làm gì là theo trạng thái thật của bot
 // (S.pstate / S.running trong app.js): search PC thì gõ phím, Mobile thì cầm điện thoại, xong thì ra sofa uống cà phê...
 // Mọi hình đều vẽ pixel bằng canvas, nhạc lofi tự sinh bằng Web Audio: không có file ảnh / nhạc ngoài (CSP chỉ cho 'self').
+//
+// Hiệu năng: canvas chỉ to bằng "thế giới" (400 x H px), GPU phóng to bằng CSS image-rendering: pixelated. Phần không
+// động (sàn, tường, đồ đạc, ghế, đồng hồ, bảng điểm) vẽ sẵn vào canvas nền, mỗi khung hình chỉ dán lại. Khoảng 30 khung
+// hình/giây khi có gì chuyển động, 6 khi tất cả đang nghỉ; dừng hẳn khi rời trang. Chữ tiếng Việt nằm ở lớp HTML phía
+// trên (nét ở mọi cỡ), số vẽ bằng font pixel 3x5 tự làm.
 
 // ===================================================================== nhạc lofi tự sinh
 const Lofi = (() => {
@@ -13,8 +18,9 @@ const Lofi = (() => {
     [[45, [55, 59, 60, 64]], [41, [55, 57, 60, 64]], [36, [52, 55, 59, 62]], [43, [50, 55, 57, 62]]],  // Am9 Fmaj9 Cmaj7 G6/9
   ];
   const MELODY = [72, 74, 76, 79, 81, 84];  // ngũ cung Đô trưởng
+  const CLOSE_AFTER = 3 * 60 * 1000;        // tắt nhạc quá 3 phút: đóng hẳn AudioContext để trả luồng âm thanh cho máy
   const hz = (m) => 440 * 2 ** ((m - 69) / 12);
-  let ctx = null, master, music, drums, wow, rainGain, crackleGain, noiseBuf, timer = 0;
+  let ctx = null, master, music, drums, wow, rainGain, noiseBuf, hatBus, snareBus, timer = 0, closeTimer = 0;
   let on = false, rain = false, vol = 0.6, step = 0, bar = 0, nextTime = 0, t0 = 0, prog = PROGS[0], lastNote = 2;
 
   function buffer(seconds, fill) {
@@ -44,14 +50,15 @@ const Lofi = (() => {
     master.connect(filter("lowpass", 5200)).connect(comp).connect(ctx.destination);
     music = gain(0.8); music.connect(master);
     drums = gain(0.9); drums.connect(filter("lowpass", 3400)).connect(master);  // trống "bụi" kiểu băng cassette
+    hatBus = filter("highpass", 7500); hatBus.connect(drums);                     // dùng chung, không tạo bộ lọc mỗi nhịp
+    snareBus = filter("bandpass", 1700, 0.9); snareBus.connect(drums);
     const lfo = ctx.createOscillator();  // băng cassette chạy hơi lệch tốc độ (wow) -> phím đàn hơi chao
     lfo.frequency.value = 0.33; wow = gain(6); lfo.connect(wow); lfo.start();
     noiseBuf = buffer(2, (d) => { for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; });
     const crackle = buffer(5, (d) => {  // tiếng lách tách của đĩa than + chút xì nền
       for (let i = 0; i < d.length; i++) d[i] = Math.random() < 0.0005 ? (Math.random() * 2 - 1) * 0.8 : (Math.random() * 2 - 1) * 0.01;
     });
-    crackleGain = gain(0.35);
-    loop(crackle, filter("highpass", 900), crackleGain).connect(master);
+    loop(crackle, filter("highpass", 900), gain(0.35)).connect(master);
     const brown = buffer(6, (d) => {  // tiếng mưa: nhiễu nâu lọc dải
       let b = 0;
       for (let i = 0; i < d.length; i++) { b = (b + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = b * 3.5; }
@@ -92,11 +99,11 @@ const Lofi = (() => {
     o.connect(g).connect(music);
     for (const x of [o, vib]) { x.start(t); x.stop(t + dur + 0.05); }
   }
-  function noise(t, dur, vel, type, freq) {
+  function noise(t, dur, vel, bus) {
     const src = ctx.createBufferSource(), g = ctx.createGain();
     src.buffer = noiseBuf;
     g.gain.setValueAtTime(vel, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    src.connect(filter(type, freq, type === "bandpass" ? 0.9 : 0.7)).connect(g).connect(drums);
+    src.connect(g).connect(bus);
     src.start(t, Math.random()); src.stop(t + dur + 0.02);
   }
   function kick(t, vel) {
@@ -107,7 +114,7 @@ const Lofi = (() => {
     o.start(t); o.stop(t + 0.4);
   }
   function snare(t, vel) {
-    noise(t, 0.2, vel, "bandpass", 1700);
+    noise(t, 0.2, vel, snareBus);
     const o = ctx.createOscillator(), g = ctx.createGain();
     o.frequency.value = 185;
     g.gain.setValueAtTime(vel * 0.5, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
@@ -129,20 +136,23 @@ const Lofi = (() => {
     if (pos === 10) bass(Math.random() < 0.6 ? root : root + 7, t, STEP * 4, 0.24);
     if (pos === 0 || pos === 10 || (pos === 7 && Math.random() < 0.3)) kick(t, 0.75 * hum());
     if (pos === 4 || pos === 12) snare(t, 0.32 * hum());
-    if (pos % 2 === 0 && Math.random() < 0.9) noise(t, 0.045, (pos % 4 === 0 ? 0.09 : 0.05) * hum(), "highpass", 7500);
+    if (pos % 2 === 0 && Math.random() < 0.9) noise(t, 0.045, (pos % 4 === 0 ? 0.09 : 0.05) * hum(), hatBus);
     if (pos % 2 === 0 && bar % 4 !== 3 && Math.random() < 0.2) {  // giai điệu thưa, đi bậc liền
       lastNote = Math.max(0, Math.min(MELODY.length - 1, lastNote + [-2, -1, -1, 1, 1, 2][Math.floor(Math.random() * 6)]));
       lead(MELODY[lastNote], t, STEP * (2 + Math.floor(Math.random() * 3)), 0.05);
     }
   }
-  // xếp lịch trước ~1,5 giây: cửa sổ bị thu nhỏ thì setInterval chạy chậm (1 lần/giây) mà nhạc vẫn liền
+  // xếp lịch trước 0,5 giây khi cửa sổ đang hiện (ít node âm thanh sống cùng lúc); cửa sổ bị ẩn / thu nhỏ thì
+  // setInterval chỉ chạy khoảng 1 lần/giây, nên xếp trước 1,5 giây để nhạc vẫn liền
   function tick() {
-    while (nextTime < ctx.currentTime + 1.5) { schedule(step, nextTime); nextTime += STEP; step++; }
+    const ahead = document.hidden ? 1.5 : 0.5;
+    while (nextTime < ctx.currentTime + ahead) { schedule(step, nextTime); nextTime += STEP; step++; }
   }
 
   async function start() {
     if (on) return;
     on = true;  // bật ngay để nút đổi trạng thái liền; nhạc bắt đầu khi âm thanh sẵn sàng
+    clearTimeout(closeTimer);
     try {
       if (!ctx) init();
       await ctx.resume();
@@ -152,7 +162,7 @@ const Lofi = (() => {
     master.gain.cancelScheduledValues(ctx.currentTime);
     master.gain.setTargetAtTime(vol, ctx.currentTime, 0.4);
     tick();
-    timer = setInterval(tick, 250);
+    timer = setInterval(tick, 200);
   }
   function stop() {
     if (!on) return;
@@ -160,14 +170,15 @@ const Lofi = (() => {
     clearInterval(timer);
     master.gain.cancelScheduledValues(ctx.currentTime);
     master.gain.setTargetAtTime(0, ctx.currentTime, 0.15);
-    setTimeout(() => { if (!on) ctx.suspend(); }, 700);  // các nốt đã xếp lịch tắt theo, không kêu tiếp
+    setTimeout(() => { if (!on && ctx) ctx.suspend(); }, 700);  // các nốt đã xếp lịch tắt theo, không kêu tiếp
+    closeTimer = setTimeout(() => { if (!on && ctx) { ctx.close(); ctx = null; } }, CLOSE_AFTER);
   }
   return {
     start, stop,
     toggle() { return on ? (stop(), false) : (start(), true); },
     get on() { return on; },
     get rain() { return rain; },
-    setRain(v) { rain = !!v; if (rainGain) rainGain.gain.setTargetAtTime(rain ? 0.5 : 0, ctx.currentTime, 0.5); },
+    setRain(v) { rain = !!v; if (ctx && rainGain) rainGain.gain.setTargetAtTime(rain ? 0.5 : 0, ctx.currentTime, 0.5); },
     setVolume(v) { vol = Math.max(0, Math.min(1, v)); if (ctx && on) master.gain.setTargetAtTime(vol, ctx.currentTime, 0.1); },
     beat() { return on && ctx ? (ctx.currentTime - t0) / BEAT : null; },  // số phách đã chơi, để robot nhún theo nhạc
     BPM,
@@ -177,13 +188,15 @@ const Lofi = (() => {
 // ===================================================================== cảnh văn phòng
 const Office = (() => {
   const W = 400, CELL = 100, COLS = 4, WALL = 74, ROW = 80, LOUNGE = 84;
-  const SPEED = 34;  // px thế giới / giây
+  const SPEED = 34;                 // px thế giới / giây
+  const FPS = 30, IDLE_FPS = 6;     // có gì chuyển động / tất cả đang nghỉ
   const BODY = ["#6c9cf0", "#f07a8e", "#8fcf6a", "#e9b45f", "#b096f0", "#5fc9e8", "#f09a5f", "#7fd6b5"];
   const tr = (s) => (typeof I18N !== "undefined" && I18N.lang === "en" && I18N.tr(s)) || s;
-  let cv = null, g = null, layer = null, stage = null, inner = null;
-  let H = WALL + ROW + LOUNGE, rows = 1, k = 1, raf = 0, lastT = 0, visible = false, layoutKey = "";
-  const bots = new Map();  // tên tài khoản -> robot
-  const fx = [];           // hạt hiệu ứng: khói, pháo giấy, "+điểm", nốt nhạc, zzz
+  let cv = null, g = null, layer = null, stage = null, inner = null, wall = null;
+  let bg = null, bgKey = "";        // canvas nền vẽ sẵn + khóa: đổi khóa thì vẽ lại
+  let H = WALL + ROW + LOUNGE, rows = 1, raf = 0, tmo = 0, lastT = 0, visible = false, layoutKey = "";
+  const bots = new Map();           // tên tài khoản -> robot
+  const fx = [];                    // hạt hiệu ứng: khói, pháo giấy, "+điểm", nốt nhạc, zzz
 
   const loungeTop = () => WALL + rows * ROW;
   const corridorY = () => loungeTop() + 12;
@@ -202,22 +215,56 @@ const Office = (() => {
   };
   const hash = (s) => [...String(s)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
 
-  // ------------------------------------------------------------ bảng màu theo giao diện
-  function palette() {
-    const cyber = document.documentElement.getAttribute("data-skin") === "cyberpunk";
-    const dark = document.documentElement.getAttribute("data-bs-theme") === "dark";
-    if (cyber) return { cyber, dark: true, wall: "#140c2c", wall2: "#1d1240", base: "#05d9e8", floor: "#120a26", floor2: "#170e30",
+  // ------------------------------------------------------------ bảng màu theo giao diện (tính 1 lần cho mỗi giao diện)
+  const PALETTES = {
+    cyber: { cyber: true, dark: true, wall: "#140c2c", wall2: "#1d1240", base: "#05d9e8", floor: "#120a26",
       grid: "rgba(5,217,232,.16)", desk: "#25184a", deskTop: "#33246a", deskEdge: "#05d9e8", leg: "#0d0820",
       mon: "#0b0f1f", monEdge: "#ff2a6d", sofa: "#5a1846", sofa2: "#7a2160", rug: "#2a1150", rug2: "#ff2a6d",
-      text: "#fcee0a", sign: "#ff2a6d", shadow: "rgba(0,0,0,.45)", outline: "#05030d", plant: "#05d9e8", pot: "#3a2470" };
-    if (dark) return { cyber, dark, wall: "#2b3042", wall2: "#323850", base: "#1d2130", floor: "#3a3546", floor2: "#36313f",
+      shadow: "rgba(0,0,0,.45)", outline: "#05030d", plant: "#05d9e8", pot: "#3a2470",
+      chair: "#3a1f66", chairHi: "#ff2a6d", clock: "#fcee0a", board: "#05d9e8", boardBg: "#0b0f1f", total: "#fcee0a",
+      signBox: "#0b0617", signBg: "#1a0b33", frame: "#05d9e8", sill: "#ff2a6d" },
+    dark: { cyber: false, dark: true, wall: "#2b3042", wall2: "#323850", base: "#1d2130", floor: "#3a3546",
       grid: null, desk: "#5a3e2e", deskTop: "#76523b", deskEdge: "#8d6448", leg: "#2c1f17",
       mon: "#1a1d26", monEdge: "#444b5e", sofa: "#4a5d8a", sofa2: "#5c71a3", rug: "#4b3a52", rug2: "#6a5470",
-      text: "#e6e8f0", sign: "#f4c14f", shadow: "rgba(0,0,0,.35)", outline: "#12141b", plant: "#4f9a5c", pot: "#8a5a44" };
-    return { cyber, dark, wall: "#ece6da", wall2: "#e2dacb", base: "#b9a98f", floor: "#d6c4a6", floor2: "#cfbc9d",
+      shadow: "rgba(0,0,0,.35)", outline: "#12141b", plant: "#4f9a5c", pot: "#8a5a44",
+      chair: "#2f6f8f", chairHi: "#4a8fb0", clock: "#7dfc9a", board: "#9aa0ac", boardBg: "#fbfcfe", total: "#1f8f4e",
+      signBox: "#12141b", signBg: "#23283a", frame: "#12141b", sill: "#1d2130" },
+    light: { cyber: false, dark: false, wall: "#ece6da", wall2: "#e2dacb", base: "#b9a98f", floor: "#d6c4a6",
       grid: null, desk: "#93603f", deskTop: "#b07a52", deskEdge: "#c48c61", leg: "#5e3d28",
       mon: "#2a2e38", monEdge: "#4a5060", sofa: "#5b7cc4", sofa2: "#7393d6", rug: "#c97f6a", rug2: "#e0a08d",
-      text: "#2b2f3a", sign: "#2a78d6", shadow: "rgba(60,40,20,.18)", outline: "#2a2420", plant: "#4f9a5c", pot: "#b5694a" };
+      shadow: "rgba(60,40,20,.18)", outline: "#2a2420", plant: "#4f9a5c", pot: "#b5694a",
+      chair: "#3f7fa8", chairHi: "#62a2c8", clock: "#7dfc9a", board: "#9aa0ac", boardBg: "#fbfcfe", total: "#1f8f4e",
+      signBox: "#2a2420", signBg: "#fdfbf6", frame: "#2a2420", sill: "#b9a98f" },
+  };
+  const themeKey = () => (document.documentElement.getAttribute("data-skin") === "cyberpunk" ? "cyber"
+    : document.documentElement.getAttribute("data-bs-theme") === "dark" ? "dark" : "light");
+
+  // ------------------------------------------------------------ font pixel 3x5 cho số (nét ở canvas 1x)
+  const GLYPHS = {
+    0: "111 101 101 101 111", 1: "010 110 010 010 111", 2: "111 001 111 100 111", 3: "111 001 111 001 111",
+    4: "101 101 111 001 001", 5: "111 100 111 001 111", 6: "111 100 111 101 111", 7: "111 001 010 010 010",
+    8: "111 101 111 101 111", 9: "111 101 111 001 111", "+": "000 010 111 010 000", ":": "0 1 0 1 0",
+    ",": "00 00 00 01 10", " ": "0 0 0 0 0", z: "111 001 010 100 111", "(": "01 10 10 10 01",
+    "♪": "0110 0101 0100 1100 1100",
+  };
+  const FONT = Object.fromEntries(Object.entries(GLYPHS).map(([c, s]) => [c, s.split(" ")]));
+  function pixWidth(s, sc) { let w = 0; for (const ch of s) w += ((FONT[ch] || FONT[" "])[0].length + 1) * sc; return w - sc; }
+  // vẽ chuỗi bằng font pixel; mỗi hàng của một ký tự gộp các ô liền nhau thành 1 lệnh fillRect
+  function pix(s, x, y, c, sc = 1, align = "center") {
+    let cx = Math.round(align === "center" ? x - pixWidth(s, sc) / 2 : x);
+    g.fillStyle = c;
+    for (const ch of s) {
+      const rowsOf = FONT[ch] || FONT[" "];
+      rowsOf.forEach((r, ry) => {
+        for (let i = 0; i < r.length; i++) {
+          if (r[i] !== "1") continue;
+          let j = i; while (r[j + 1] === "1") j++;
+          g.fillRect(cx + i * sc, Math.round(y) + ry * sc, (j - i + 1) * sc, sc);
+          i = j;
+        }
+      });
+      cx += (rowsOf[0].length + 1) * sc;
+    }
   }
 
   // ------------------------------------------------------------ bot đang làm gì (theo trạng thái thật)
@@ -253,15 +300,27 @@ const Office = (() => {
     names.forEach((name, i) => {
       let b = bots.get(name);
       if (!b) {
-        b = { name, x: 0, y: 0, path: [], where: null, pose: "stand", act: null, spot: null, until: 0, color: BODY[hash(name) % BODY.length],
-              blink: 0, say: "", sayUntil: 0, log: "", logUntil: 0, celebrate: 0, today: st(name).today, el: document.createElement("div") };
+        const color = BODY[hash(name) % BODY.length];
+        b = { name, x: 0, y: 0, path: [], where: null, pose: "stand", act: null, spot: null, until: 0, color,
+              dark: shade(color, -0.35), light: shade(color, 0.25), blink: 0, log: "", logUntil: 0, celebrate: 0,
+              today: st(name).today, el: document.createElement("div"), bub: { text: null, cls: "", x: -1, y: -1 } };
         b.el.className = "ob";
-        b.el.innerHTML = `<div class="ob-bubble" data-no-i18n></div><button type="button" class="ob-tag"></button>`;
-        b.el.querySelector(".ob-tag").onclick = () => { S.selected = name; go("dashboard"); };
+        b.el.innerHTML = `<div class="ob-bubble" data-no-i18n hidden></div><button type="button" class="ob-tag"></button>`;
+        b.tagEl = b.el.querySelector(".ob-tag"); b.bubEl = b.el.querySelector(".ob-bubble");
+        b.tagEl.onclick = () => { S.selected = name; go("dashboard"); };
+        b.tagEl.title = "Xem tổng quan của tài khoản này";
         layer.appendChild(b.el);
         bots.set(name, b);
       }
       b.index = i;
+      // bảng tên: chỉ dựng lại khi điểm / ảnh đại diện đổi; vị trí theo bàn (đổi khi số hàng bàn đổi)
+      const s = st(name), html = `${avatarHtml(name, "avatar-xs rounded-circle")}<span>${esc(name)}</span>`
+        + `<b>${typeof s.points === "number" ? fmt(s.points) : ""}</b>`;
+      if (b.tagHtml !== html) { b.tagEl.innerHTML = html; b.tagHtml = html; }
+      const { col, row } = cellOf(i);
+      b.tagEl.style.left = ((col * CELL + 51) / W * 100) + "%";
+      b.tagEl.style.top = ((deskTop(row) + 28) / H * 100) + "%";
+      b.bub.x = -1;  // H có thể đổi: đặt lại vị trí bong bóng ở khung hình tới
     });
     const key = names.join("\n") + "|" + rows;
     if (key !== layoutKey) {  // đổi danh sách tài khoản: dựng lại kích thước, đặt robot thẳng vào chỗ (không đi bộ)
@@ -326,7 +385,7 @@ const Office = (() => {
                 c: cols[i % cols.length] });
     }
   }
-  function floatText(b, text) { fx.push({ kind: "text", text, x: b.x, y: b.y - 34, vx: 0, vy: -10, life: 2.2, age: 0 }); }
+  function floatText(b, text) { fx.push({ kind: "text", text, x: b.x, y: b.y - 36, vx: 0, vy: -10, life: 2.2, age: 0 }); }
   function onLog(e) {
     const b = bots.get(e.name);
     if (!b || !e.msg) return;
@@ -336,37 +395,70 @@ const Office = (() => {
 
   // ------------------------------------------------------------ vẽ
   function R(x, y, w, h, c) { g.fillStyle = c; g.fillRect(Math.round(x), Math.round(y), w, h); }
-  function txt(s, x, y, c, size = 7, align = "center", weight = "bold") {
-    g.font = `${weight} ${size}px ui-monospace, Consolas, monospace`;
-    g.textAlign = align; g.textBaseline = "alphabetic"; g.fillStyle = c; g.fillText(s, x, y);
-  }
 
-  function drawRoom(t, P) {
+  // nền tĩnh: chỉ vẽ lại khi giao diện / số bàn / giờ:phút / điểm hôm nay / số robot đang làm đổi
+  function staticKey(P, key) {
+    const now = new Date(), total = officeTotal(), working = [...bots.values()].filter(isWorking).length;
+    return `${key}|${layoutKey}|${now.getHours()}:${now.getMinutes()}|${total}|${working}|${S.officeRain ? 1 : 0}`;
+  }
+  function officeTotal() { return S.profiles.reduce((a, p) => a + (typeof st(p.name).today === "number" ? st(p.name).today : 0), 0); }
+  function drawStatic(P) {
+    const lt = loungeTop();
     R(0, 0, W, WALL, P.wall);
     for (let x = 0; x < W; x += 16) R(x, 0, 8, WALL, P.wall2);  // giấy dán tường sọc
     R(0, WALL - 5, W, 5, P.base);
-    const lt = loungeTop();
-    for (let y = WALL; y < H; y += 10) for (let x = 0; x < W; x += 10) R(x, y, 10, 10, ((x + y) / 10) % 2 ? P.floor : P.floor2);
+    R(0, WALL, W, H - WALL, P.floor);  // sàn
     if (P.grid) { g.fillStyle = P.grid; for (let x = 0; x < W; x += 20) g.fillRect(x, WALL, 1, H - WALL); for (let y = WALL; y < H; y += 20) g.fillRect(0, y, W, 1); }
     R(0, lt, W, 2, P.base);  // vạch ngăn khu nghỉ
 
-    // biển tên công ty
-    R(10, 14, 104, 26, P.cyber ? "#0b0617" : P.outline);
-    R(12, 16, 100, 22, P.cyber ? "#1a0b33" : (P.dark ? "#23283a" : "#fdfbf6"));
-    const flick = P.cyber && Math.sin(t * 13) > 0.97 ? 0.35 : 1;
-    g.globalAlpha = flick;
-    if (P.cyber) { g.shadowColor = P.sign; g.shadowBlur = 6 * k; }
-    txt("REWARDS HQ", 62, 31, P.sign, 10);
-    g.shadowBlur = 0; g.globalAlpha = 1;
-    txt(tr("Văn phòng bot"), 62, 50, P.text, 6, "center", "normal");
+    R(10, 14, 104, 26, P.signBox); R(12, 16, 100, 22, P.signBg);  // biển tên (chữ ở lớp HTML)
+    // khung cửa sổ + bậu (phần trong kính vẽ động)
+    for (const wx of [134, 204]) {
+      const wy = 12;
+      R(wx - 2, wy - 2, 58, 2, P.frame); R(wx - 2, wy + 40, 58, 2, P.frame); R(wx - 2, wy, 2, 40, P.frame); R(wx + 54, wy, 2, 40, P.frame);
+      R(wx - 4, wy + 42, 62, 3, P.sill);
+    }
+    // đồng hồ số (dấu ":" nhấp nháy vẽ động)
+    const now = new Date();
+    R(264, 14, 44, 16, P.outline); R(266, 16, 40, 12, "#0d1410");
+    pix(`${String(now.getHours()).padStart(2, "0")} ${String(now.getMinutes()).padStart(2, "0")}`, 286, 17, P.clock, 2);
+    // bảng điểm hôm nay (chữ "Hôm nay" / "đang làm" ở lớp HTML, con số vẽ pixel)
+    R(312, 10, 80, 50, P.board); R(314, 12, 76, 46, P.boardBg);
+    pix(`+${officeTotal().toLocaleString("en-US")}`, 352, 28, P.total, 2);
+    // khu nghỉ: thảm, sofa, máy cà phê, bình nước, cây, máy game (đèn / hơi nước vẽ động)
+    R(240, lt + 44, 96, 36, P.rug); R(244, lt + 48, 88, 28, P.rug2); R(248, lt + 52, 80, 20, P.rug);
+    R(16, lt + 36, 66, 14, P.sofa2); R(14, lt + 48, 70, 16, P.sofa); R(12, lt + 44, 6, 22, P.sofa2); R(80, lt + 44, 6, 22, P.sofa2);
+    R(118, lt + 26, 22, 30, P.outline); R(120, lt + 28, 18, 26, P.cyber ? "#2b2050" : "#d9dde6");
+    R(124, lt + 32, 10, 6, "#222"); R(126, lt + 44, 6, 6, "#fff");
+    R(166, lt + 22, 16, 14, "#9fd3f5"); R(167, lt + 23, 14, 12, "#c7e8fb"); R(164, lt + 36, 20, 22, P.cyber ? "#33246a" : "#e6e9ef");
+    R(222, lt + 48, 14, 12, P.pot); R(220, lt + 30, 18, 18, P.plant); R(224, lt + 24, 10, 8, P.plant); R(226, lt + 36, 2, 12, "#2f6b3a");
+    R(340, lt + 20, 26, 40, P.cyber ? "#ff2a6d" : "#5a3fa0"); R(343, lt + 24, 20, 14, "#08080f");
+    R(345, lt + 42, 4, 4, "#ffd23f"); R(355, lt + 42, 3, 3, "#ff5d73"); R(360, lt + 44, 3, 3, "#4fd1c5");
+    // ghế luôn nằm sau robot (robot ngồi quay mặt ra ngoài, lối đi không cắt qua ghế) nên vẽ sẵn được
+    S.profiles.forEach((_, i) => drawChair(i, P));
+  }
+  function ensureStatic(P, key) {
+    const k2 = staticKey(P, key);
+    if (k2 === bgKey && bg.width === W && bg.height === H) return;
+    bgKey = k2;
+    if (bg.width !== W || bg.height !== H) { bg.width = W; bg.height = H; }
+    const main = g;
+    g = bg.getContext("2d");
+    g.clearRect(0, 0, W, H);
+    drawStatic(P);
+    g = main;
+    // chữ trên tường (lớp HTML): chỉ đổi khi số robot đang làm đổi
+    const working = [...bots.values()].filter(isWorking).length, txt = `${working}/${S.profiles.length} đang làm`;
+    if (wall.working.textContent !== txt) wall.working.textContent = txt;
+  }
 
-    // cửa sổ: trời theo giờ thật; mưa khi bật tiếng mưa
+  function drawWindows(t, P) {  // phần trong kính: trời theo giờ thật, mây trôi / sao nhấp nháy, mưa
     const hr = new Date().getHours() + new Date().getMinutes() / 60, day = hr >= 6 && hr < 18, dusk = (hr >= 17 && hr < 19) || (hr >= 5 && hr < 7);
-    [[134, 12], [204, 12]].forEach(([wx, wy], wi) => {
-      const WW = 54, WH = 40, frame = P.cyber ? "#05d9e8" : P.outline;
-      const sky = P.cyber ? "#1b0838" : dusk ? "#f4a06a" : day ? "#8fd0f5" : "#141a3a";
-      // mọi thứ bên trong ô kính bị cắt theo khung, khung vẽ sau cùng nên không bao giờ bị đè
-      g.save(); g.beginPath(); g.rect(wx, wy, WW, WH); g.clip();
+    const sky = P.cyber ? "#1b0838" : dusk ? "#f4a06a" : day ? "#8fd0f5" : "#141a3a";
+    const city = P.cyber ? ["#2b0f55", "#ff2a6d", "#05d9e8"] : day ? ["#7d93a8", "#c6d6e4", "#fff3b0"] : ["#232a52", "#2f3868", "#ffd56a"];
+    [134, 204].forEach((wx, wi) => {
+      const wy = 12, WW = 54, WH = 40;
+      g.save(); g.beginPath(); g.rect(wx, wy, WW, WH); g.clip();  // không bao giờ vẽ tràn ra khung
       R(wx, wy, WW, WH, sky);
       if (P.cyber || !day) {
         for (let i = 0; i < 9; i++) { const sx = wx + ((i * 37 + wi * 13) % 52), sy = wy + ((i * 23) % 22); if (Math.sin(t * 2 + i) > -0.3) R(sx, sy, 1, 1, "#fff"); }
@@ -376,9 +468,7 @@ const Office = (() => {
         R(cx, wy + 8, 14, 4, "#fff"); R(cx + 3, wy + 5, 8, 3, "#fff");
         if (wi === 0) R(wx + 6, wy + 5, 6, 6, "#ffe27a");
       }
-      // nhà phía xa
-      const city = P.cyber ? ["#2b0f55", "#ff2a6d", "#05d9e8"] : day ? ["#7d93a8", "#c6d6e4", "#fff3b0"] : ["#232a52", "#2f3868", "#ffd56a"];
-      for (let i = 0; i < 6; i++) {
+      for (let i = 0; i < 6; i++) {  // nhà phía xa
         const bw = 7 + ((i * 5 + wi * 3) % 5), bh = 10 + ((i * 7 + wi * 11) % 16), bx = wx + i * 9;
         R(bx, wy + WH - bh, bw, bh, city[0]);
         for (let yy = wy + WH + 2 - bh; yy < wy + WH - 2; yy += 4) if ((yy + i) % 3) R(bx + 2, yy, 1, 1, i % 2 ? city[2] : city[1]);
@@ -388,37 +478,15 @@ const Office = (() => {
         for (let i = 0; i < 14; i++) { const rx = wx + ((i * 17 + Math.floor(t * 60) * 3) % WW), ry = wy + ((i * 29 + Math.floor(t * 120)) % (WH - 2)); g.fillRect(rx, ry, 1, 3); }
       }
       g.restore();
-      // khung 2px bốn cạnh + song cửa chữ thập + bậu cửa
-      R(wx - 2, wy - 2, WW + 4, 2, frame); R(wx - 2, wy + WH, WW + 4, 2, frame);
-      R(wx - 2, wy, 2, WH, frame); R(wx + WW, wy, 2, WH, frame);
-      R(wx + WW / 2 - 1, wy, 2, WH, frame); R(wx, wy + WH / 2 - 1, WW, 2, frame);
-      R(wx - 4, wy + WH + 2, WW + 8, 3, P.cyber ? "#ff2a6d" : P.base);
+      R(wx + 26, wy, 2, WH, P.frame); R(wx, wy + 19, WW, 2, P.frame);  // song cửa chữ thập
     });
-
-    // đồng hồ số
-    const now = new Date(), hh = String(now.getHours()).padStart(2, "0"), mm = String(now.getMinutes()).padStart(2, "0");
-    R(268, 14, 36, 16, P.outline); R(270, 16, 32, 12, "#0d1410");
-    txt(`${hh}${now.getSeconds() % 2 ? ":" : " "}${mm}`, 286, 26, P.cyber ? "#fcee0a" : "#7dfc9a", 8);
-
-    // bảng trắng: tổng điểm hôm nay của cả văn phòng
-    const total = S.profiles.reduce((a, p) => a + (typeof st(p.name).today === "number" ? st(p.name).today : 0), 0);
-    const working = [...bots.values()].filter(isWorking).length;
-    R(312, 10, 80, 50, P.cyber ? "#05d9e8" : "#9aa0ac"); R(314, 12, 76, 46, P.cyber ? "#0b0f1f" : "#fbfcfe");
-    txt(tr("Hôm nay"), 352, 22, P.cyber ? "#05d9e8" : "#5a6070", 6, "center", "normal");
-    txt(`+${total.toLocaleString("en-US")}`, 352, 36, P.cyber ? "#fcee0a" : "#1f8f4e", 11);
-    txt(`${working}/${S.profiles.length} ${tr("đang làm")}`, 352, 50, P.cyber ? "#ff2a6d" : "#5a6070", 6, "center", "normal");
-
-    // khu nghỉ: thảm, sofa, máy cà phê, bình nước, cây, máy game
-    R(240, lt + 44, 96, 36, P.rug); R(244, lt + 48, 88, 28, P.rug2); R(248, lt + 52, 80, 20, P.rug);
-    R(16, lt + 36, 66, 14, P.sofa2); R(14, lt + 48, 70, 16, P.sofa); R(12, lt + 44, 6, 22, P.sofa2); R(80, lt + 44, 6, 22, P.sofa2);
-    R(118, lt + 26, 22, 30, P.outline); R(120, lt + 28, 18, 26, P.cyber ? "#2b2050" : "#d9dde6");
-    R(124, lt + 32, 10, 6, "#222"); R(125, lt + 33, 2, 2, Math.sin(t * 3) > 0 ? "#ff4d4d" : "#4dff88"); R(126, lt + 44, 6, 6, "#fff");
-    if (Math.floor(t * 2) % 3 === 0) R(128, lt + 41, 1, 3, "rgba(255,255,255,.6)");  // hơi cà phê
-    R(166, lt + 22, 16, 14, "#9fd3f5"); R(167, lt + 23, 14, 12, "#c7e8fb"); R(164, lt + 36, 20, 22, P.cyber ? "#33246a" : "#e6e9ef");
-    R(222, lt + 48, 14, 12, P.pot); R(220, lt + 30, 18, 18, P.plant); R(224, lt + 24, 10, 8, P.plant); R(226, lt + 36, 2, 12, "#2f6b3a");
-    R(340, lt + 20, 26, 40, P.cyber ? "#ff2a6d" : "#5a3fa0"); R(343, lt + 24, 20, 14, "#08080f");
+  }
+  function drawAmbient(t, P) {  // vài chi tiết động trên nền tĩnh: dấu ":" đồng hồ, đèn máy cà phê, hơi nước, màn hình máy game
+    const lt = loungeTop();
+    if (new Date().getSeconds() % 2) { R(285, 19, 2, 2, P.clock); R(285, 23, 2, 2, P.clock); }
+    R(125, lt + 33, 2, 2, Math.sin(t * 3) > 0 ? "#ff4d4d" : "#4dff88");
+    if (Math.floor(t * 2) % 3 === 0) R(128, lt + 41, 1, 3, "rgba(255,255,255,.6)");
     for (let i = 0; i < 3; i++) R(346 + i * 6, lt + 28 + ((Math.floor(t * 4) + i) % 3) * 3, 3, 3, ["#4dff88", "#ffd23f", "#4fd1c5"][i]);
-    R(345, lt + 42, 4, 4, "#ffd23f"); R(355, lt + 42, 3, 3, "#ff5d73"); R(360, lt + 44, 3, 3, "#4fd1c5");
   }
 
   function drawDesk(i, P, t) {
@@ -430,15 +498,14 @@ const Office = (() => {
     R(x + 18, top - 21, 30, 19, P.monEdge); R(x + 20, top - 19, 26, 15, P.mon); R(x + 31, top - 2, 4, 2, P.monEdge);
     const b = bots.get(S.profiles[i]?.name);
     drawScreen(b && b.act ? b.act.screen : "off", x + 20, top - 19, t + i, P, b);
-    // bàn phím, cốc, cây nhỏ
+    // bàn phím, cốc
     R(x + 54, top + 1, 18, 3, P.cyber ? "#05d9e8" : "#e8e8ec"); R(x + 79, top - 5, 5, 6, ["#e05d5d", "#5d8fe0", "#5dc08a", "#e0b85d"][i % 4]);
   }
 
   function drawChair(i, P) {  // ghế xoay sau lưng robot (robot ngồi quay mặt ra ngoài): lưng ghế thấp, bo góc
     const { col, row } = cellOf(i), x = col * CELL + 64, top = deskTop(row);
-    const c = P.cyber ? "#3a1f66" : P.dark ? "#2f6f8f" : "#3f7fa8", hi = P.cyber ? "#ff2a6d" : P.dark ? "#4a8fb0" : "#62a2c8";
     R(x - 9, top - 15, 18, 1, P.outline); R(x - 10, top - 14, 20, 13, P.outline);
-    R(x - 8, top - 14, 16, 12, c); R(x - 9, top - 13, 18, 10, c); R(x - 7, top - 13, 14, 2, hi);
+    R(x - 8, top - 14, 16, 12, P.chair); R(x - 9, top - 13, 18, 10, P.chair); R(x - 7, top - 13, 14, 2, P.chairHi);
     R(x - 1, top - 2, 2, 2, P.outline);
   }
 
@@ -485,7 +552,7 @@ const Office = (() => {
       }
       case "refresh": { fill("#1d2433"); for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2 + t * 4; R(x + 12 + Math.cos(a) * 5, y + 7 + Math.sin(a) * 5, 1 + (i > 5), 1 + (i > 5), i > 5 ? "#5fc9e8" : "#3c4b66"); } break; }
       case "boot": fill("#0e1320"); R(x + 4, y + 9, 18, 3, "#2a3550"); R(x + 4, y + 9, Math.floor((t * 6) % 18), 3, "#5fc9e8"); R(x + 10, y + 3, 6, 4, "#2a78d6"); break;
-      case "error": fill("#2456c8"); txt(":(", x + 7, y + 10, "#fff", 7); R(x + 15, y + 5, 8, 1, "#c8d6ff"); R(x + 15, y + 8, 6, 1, "#c8d6ff"); break;
+      case "error": fill("#2456c8"); pix(":(", x + 4, y + 5, "#fff", 1, "left"); R(x + 13, y + 5, 9, 1, "#c8d6ff"); R(x + 13, y + 8, 7, 1, "#c8d6ff"); break;
       case "done": fill("#103a2a"); R(x + 8, y + 8, 3, 2, "#4dff88"); R(x + 10, y + 9, 3, 2, "#4dff88"); R(x + 12, y + 5, 2, 4, "#4dff88"); R(x + 14, y + 3, 2, 3, "#4dff88"); break;
       default: {  // tắt: màn hình chờ chấm nhảy
         fill(P.mon);
@@ -495,16 +562,14 @@ const Office = (() => {
     if (P.cyber && kind !== "off") { g.fillStyle = "rgba(0,0,0,.18)"; for (let yy = y; yy < y + h; yy += 2) g.fillRect(x, yy, w, 1); }
   }
 
-  function drawBot(b, t, P) {
-    const beat = Lofi.beat(), now = performance.now();
+  function drawBot(b, t, P, beat, now) {
     const moving = b.path.length > 0, sit = !moving && b.pose === "sit";
     const cele = b.celebrate > now;
     let bob = 0;
     if (cele) bob = -Math.abs(Math.sin(t * 9)) * 6;
     else if (moving) bob = Math.floor(t * 8) % 2 ? -1 : 0;
     else if (beat !== null && b.act && b.act.at !== "desk") bob = Math.sin(beat * Math.PI) ** 2 > 0.6 ? -1 : 0;  // nhún theo nhạc
-    const x = Math.round(b.x), y = Math.round(b.y + bob), base = sit ? y - 2 : y;
-    const dark = shade(b.color, -0.35), light = shade(b.color, 0.25), O = P.outline;
+    const x = Math.round(b.x), y = Math.round(b.y + bob), base = sit ? y - 2 : y, O = P.outline;
     R(x - 7, b.y - 1, 14, 2, P.shadow);
     // chân
     if (!sit) {
@@ -513,9 +578,9 @@ const Office = (() => {
     }
     const bodyY = base - (sit ? 9 : 14);
     // thân + đèn ngực
-    R(x - 7, bodyY - 1, 14, 11, O); R(x - 6, bodyY, 12, 9, b.color); R(x - 6, bodyY, 12, 2, light);
+    R(x - 7, bodyY - 1, 14, 11, O); R(x - 6, bodyY, 12, 9, b.color); R(x - 6, bodyY, 12, 2, b.light);
     const working = b.act && b.act.at === "desk" && b.act.screen !== "error";
-    R(x - 1, bodyY + 4, 3, 3, working ? (Math.floor(t * 4) % 2 ? "#4dff88" : "#1f8f4e") : b.act && b.act.screen === "error" ? "#ff4d4d" : dark);
+    R(x - 1, bodyY + 4, 3, 3, working ? (Math.floor(t * 4) % 2 ? "#4dff88" : "#1f8f4e") : b.act && b.act.screen === "error" ? "#ff4d4d" : b.dark);
     // tay
     const act = b.act || {};
     if (sit && act.typing && !cele) {
@@ -530,23 +595,27 @@ const Office = (() => {
     if (act.prop === "mug" && !moving) { R(x + 6, bodyY + 1, 4, 4, "#f4f4f4"); R(x + 10, bodyY + 2, 1, 2, "#f4f4f4"); if (Math.floor(t * 2) % 2) R(x + 7, bodyY - 2, 1, 2, "rgba(255,255,255,.6)"); }
     // đầu + mặt màn hình
     const headY = bodyY - 11;
-    R(x - 8, headY - 1, 16, 12, O); R(x - 7, headY, 14, 10, b.color); R(x - 7, headY, 14, 2, light);
+    R(x - 8, headY - 1, 16, 12, O); R(x - 7, headY, 14, 10, b.color); R(x - 7, headY, 14, 2, b.light);
     R(x - 5, headY + 2, 10, 6, "#10131c");
-    drawFace(b, x, headY + 2, t, cele ? "happy" : sleeping(b) ? "sleep" : act.face || "idle");
+    drawFace(b, x, headY + 2, now, cele ? "happy" : sleeping(b) ? "sleep" : act.face || "idle");
     // ăng-ten
     R(x, headY - 4, 1, 3, O);
-    const ant = working ? (Math.floor(t * 3) % 2 ? "#4dff88" : "#ffd23f") : act.screen === "error" ? (Math.floor(t * 4) % 2 ? "#ff4d4d" : "#7a1d1d") : light;
+    const ant = working ? (Math.floor(t * 3) % 2 ? "#4dff88" : "#ffd23f") : act.screen === "error" ? (Math.floor(t * 4) % 2 ? "#ff4d4d" : "#7a1d1d") : b.light;
     R(x - 1, headY - 6, 3, 2, ant);
   }
-  function isWorking(b) { return !!(b.act && b.act.at === "desk" && !["error", "lock"].includes(b.act.screen)); }
-  function sleeping(b) {
-    const h = new Date().getHours();
-    return b.act && b.act.at === "lounge" && b.spot && b.spot.what === "sofa" && !b.path.length && (h >= 23 || h < 6);
+  function isWorking(b) { return !!(b.act && b.act.at === "desk" && b.act.screen !== "error" && b.act.screen !== "lock"); }
+  let nightCache = { at: 0, night: false };
+  function isNight() {  // đọc giờ tối đa 1 lần/giây
+    const now = Date.now();
+    if (now - nightCache.at > 1000) { const h = new Date().getHours(); nightCache = { at: now, night: h >= 23 || h < 6 }; }
+    return nightCache.night;
   }
-  function drawFace(b, x, y, t, face) {
-    const now = performance.now();
+  function sleeping(b) {
+    return !!(b.act && b.act.at === "lounge" && b.spot && b.spot.what === "sofa" && !b.path.length && isNight());
+  }
+  function drawFace(b, x, y, now, face) {
     if (now > b.blink) b.blink = now + 2500 + Math.random() * 3000;
-    const blink = b.blink - now < 120;
+    const blink = b.blink - now < 180;  // đủ dài để không lọt giữa 2 khung hình khi chạy 6 khung/giây
     const c = face === "sad" ? "#ff5d5d" : face === "happy" ? "#ffd23f" : "#6ff0ff";
     const eye = (ex) => {
       if (face === "sleep" || blink) R(ex, y + 3, 3, 1, c);
@@ -566,19 +635,18 @@ const Office = (() => {
     return `rgb(${ch.join(",")})`;
   }
 
-  function drawFx(dt, t) {
+  function drawFx(dt) {
     for (let i = fx.length - 1; i >= 0; i--) {
       const p = fx[i];
       p.age += dt;
       if (p.age > p.life) { fx.splice(i, 1); continue; }
       p.x += p.vx * dt; p.y += p.vy * dt;
-      const a = 1 - p.age / p.life;
-      g.globalAlpha = Math.max(0, a);
+      g.globalAlpha = Math.max(0, 1 - p.age / p.life);
       if (p.kind === "confetti") { p.vy += 90 * dt; R(p.x, p.y, 2, 2, p.c); }
       else if (p.kind === "smoke") R(p.x, p.y, 3 + p.age * 3, 3 + p.age * 3, "rgba(120,120,130,.55)");
-      else if (p.kind === "note") txt("♪", p.x + Math.sin(p.age * 4) * 2, p.y, p.c, 8);
-      else if (p.kind === "zzz") txt("z", p.x + Math.sin(p.age * 3) * 2, p.y, "#a9b4d6", 6 + p.age * 2);
-      else if (p.kind === "text") { txt(p.text, p.x + 1, p.y + 1, "rgba(0,0,0,.5)", 8); txt(p.text, p.x, p.y, "#ffd23f", 8); }
+      else if (p.kind === "note") pix("♪", p.x + Math.sin(p.age * 4) * 2, p.y, p.c);
+      else if (p.kind === "zzz") pix("z", p.x + Math.sin(p.age * 3) * 2, p.y, "#a9b4d6");
+      else if (p.kind === "text") { pix(p.text, p.x + 1, p.y + 1, "rgba(0,0,0,.5)"); pix(p.text, p.x, p.y, "#ffd23f"); }
       g.globalAlpha = 1;
     }
     for (const b of bots.values()) {  // hiệu ứng liên tục theo trạng thái
@@ -591,8 +659,7 @@ const Office = (() => {
     if (fx.length > 300) fx.splice(0, fx.length - 300);
   }
 
-  function step(dt) {
-    const now = performance.now();
+  function step(dt, now) {
     for (const b of bots.values()) {
       if (b.path.length) {
         const p = b.path[0], dx = p.x - b.x, dy = p.y - b.y, d = Math.hypot(dx, dy), mv = SPEED * dt;
@@ -605,50 +672,59 @@ const Office = (() => {
     }
   }
 
-  function bubbleText(b) {
-    const now = performance.now();
-    if (b.logUntil > now && b.act && b.act.at === "desk") return { text: b.log, log: true };
-    if (b.celebrate > now) return { text: tr("Xong việc rồi!") };
+  // ------------------------------------------------------------ lớp HTML: chỉ chạm DOM khi có gì thật sự đổi
+  function bubbleText(b, now) {
+    if (b.logUntil > now && b.act && b.act.at === "desk") return [b.log, "log"];
+    if (b.celebrate > now) return [tr("Xong việc rồi!"), ""];
     const a = b.act;
     if (!a || !a.say) return null;  // đang đi tới bàn cũng nói luôn việc sắp làm
-    return { text: tr(a.say) };
+    return [tr(a.say), a.screen === "error" ? "err" : ""];
   }
-  function drawLayer() {
+  function drawLayer(now) {
     for (const b of bots.values()) {
-      const s = st(b.name), { col, row } = cellOf(b.index);
-      const tag = b.el.querySelector(".ob-tag"), bub = b.el.querySelector(".ob-bubble");
-      const tagHtml = `${avatarHtml(b.name, "avatar-xs rounded-circle")}<span>${esc(b.name)}</span>`
-        + `<b>${typeof s.points === "number" ? fmt(s.points) : ""}</b>`;
-      if (tag._h !== tagHtml) { tag.innerHTML = tagHtml; tag._h = tagHtml; tag.title = "Xem tổng quan của tài khoản này"; }
-      tag.style.left = ((col * CELL + 51) / W * 100) + "%";
-      tag.style.top = ((deskTop(row) + 28) / H * 100) + "%";
-      const bt = bubbleText(b);
-      bub.hidden = !bt;
-      if (bt) {
-        if (bub.textContent !== bt.text) bub.textContent = bt.text;
-        bub.classList.toggle("log", !!bt.log);
-        bub.classList.toggle("err", !!(b.act && b.act.screen === "error"));
-        bub.style.left = (b.x / W * 100) + "%";
-        bub.style.top = ((b.y - (b.pose === "sit" && !b.path.length ? 26 : 31)) / H * 100) + "%";
+      const bt = bubbleText(b, now), c = b.bub, el = b.bubEl;
+      const text = bt ? bt[0] : null;
+      if (text !== c.text) {
+        el.hidden = text === null;
+        if (text !== null) el.textContent = text;
+        c.text = text;
+      }
+      if (text === null) continue;
+      if (bt[1] !== c.cls) { el.className = "ob-bubble" + (bt[1] ? " " + bt[1] : ""); c.cls = bt[1]; }
+      const bx = Math.round(b.x), by = Math.round(b.y - (b.pose === "sit" && !b.path.length ? 26 : 31));
+      if (bx !== c.x || by !== c.y) {
+        el.style.left = (bx / W * 100) + "%"; el.style.top = (by / H * 100) + "%";
+        c.x = bx; c.y = by;
       }
     }
   }
 
+  // ------------------------------------------------------------ vòng vẽ
+  function busy(now) {  // có gì đang chuyển động thì chạy nhanh, không thì chỉ vài khung/giây cho nháy mắt, mây trôi
+    if (Lofi.on || S.officeRain || fx.length) return true;
+    for (const b of bots.values()) {
+      if (b.path.length || b.celebrate > now || isWorking(b) || (b.act && b.act.fx)) return true;
+    }
+    return false;
+  }
+  const order = [];
   function frame(ts) {
     raf = 0;
     if (!visible) return;
-    const dt = Math.min(0.1, (ts - (lastT || ts)) / 1000);
+    const dt = Math.min(0.25, (ts - (lastT || ts)) / 1000);
     lastT = ts;
-    const t = ts / 1000, P = palette();
-    step(dt);
-    g.setTransform(k, 0, 0, k, 0, 0);
-    g.imageSmoothingEnabled = false;
-    drawRoom(t, P);
+    const t = ts / 1000, now = performance.now(), key = themeKey(), P = PALETTES[key], beat = Lofi.beat();
+    step(dt, now);
+    ensureStatic(P, key);
+    g.drawImage(bg, 0, 0);
+    drawWindows(t, P);
+    drawAmbient(t, P);
     // vẽ theo chiều sâu: vật ở trên (y nhỏ) vẽ trước để vật ở dưới che lên
-    const items = S.profiles.flatMap((p, i) => [{ y: deskTop(cellOf(i).row) - 30, draw: () => drawChair(i, P) },
-                                                 { y: deskTop(cellOf(i).row) + 16, draw: () => drawDesk(i, P, t) }]);
-    for (const b of bots.values()) items.push({ y: b.y, draw: () => drawBot(b, t, P) });
-    items.sort((a, b) => a.y - b.y).forEach((it) => it.draw());
+    order.length = 0;
+    for (let i = 0; i < S.profiles.length; i++) order.push({ y: deskTop(cellOf(i).row) + 16, desk: i, b: null });
+    for (const b of bots.values()) order.push({ y: b.y, desk: -1, b });
+    order.sort((a, c) => a.y - c.y);
+    for (const it of order) it.b ? drawBot(it.b, t, P, beat, now) : drawDesk(it.desk, P, t);
     for (const b of bots.values()) {
       if (b.act && b.act.fx === "flash" && !b.path.length && Math.floor(t * 1.5) % 4 === 0) {  // Visual Search: chớp sáng quanh bàn
         const fx0 = cellOf(b.index).col * CELL + 33, fy0 = deskTop(cellOf(b.index).row) - 12;
@@ -657,18 +733,29 @@ const Office = (() => {
         g.fillStyle = grad; g.fillRect(fx0 - 40, fy0 - 40, 80, 80);
       }
     }
-    drawFx(dt, t);
-    drawLayer();
-    raf = requestAnimationFrame(frame);
+    drawFx(dt);
+    drawLayer(now);
+    const delay = busy(now) ? Math.max(0, 1000 / FPS - (performance.now() - ts)) : 1000 / IDLE_FPS;
+    tmo = setTimeout(() => { tmo = 0; if (visible && !raf) raf = requestAnimationFrame(frame); }, delay);
+  }
+  function wake() {  // trạng thái vừa đổi: vẽ ngay, không chờ hết nhịp nghỉ
+    if (tmo) { clearTimeout(tmo); tmo = 0; }
+    if (visible && !raf) raf = requestAnimationFrame(frame);
   }
 
   function resize() {
     if (!stage) return;
     const dpr = window.devicePixelRatio || 1, cssW = Math.max(200, stage.clientWidth);
-    k = Math.max(1, Math.floor((cssW * dpr) / W));  // phóng to theo số nguyên lần -> pixel sắc nét
-    if (cssW * dpr / W < 1.5) k = (cssW * dpr) / W;  // màn hình quá hẹp: chấp nhận co lẻ
-    cv.width = Math.round(W * k); cv.height = Math.round(H * k);
-    inner.style.width = cv.width / dpr + "px"; inner.style.height = cv.height / dpr + "px";
+    let k = Math.max(1, Math.floor((cssW * dpr) / W));  // phóng to theo số nguyên lần pixel thiết bị -> pixel đều, sắc nét
+    if (cssW * dpr / W < 1.5) k = (cssW * dpr) / W;    // màn hình quá hẹp: chấp nhận co lẻ
+    if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; bgKey = ""; }  // canvas chỉ to bằng thế giới
+    const px = k / dpr;
+    inner.style.width = W * px + "px"; inner.style.height = H * px + "px";
+    inner.style.setProperty("--px", px + "px");  // chữ trên tường (HTML) co giãn theo cùng tỉ lệ
+    const at = (el, x, y, w, h) => Object.assign(el.style, { left: x / W * 100 + "%", top: y / H * 100 + "%", width: w / W * 100 + "%", height: h / H * 100 + "%" });
+    at(wall.sign, 12, 16, 100, 22); at(wall.sub, 10, 42, 104, 10);
+    at(wall.today, 314, 13, 76, 11); at(wall.working, 314, 44, 76, 11);
+    if (visible) wake();
   }
 
   function bindControls() {
@@ -683,6 +770,7 @@ const Office = (() => {
       music.querySelector("span").textContent = Lofi.on ? "Tắt nhạc lofi" : "Bật nhạc lofi";
       rain.classList.toggle("active", !!S.officeRain);
       $("#office-now").textContent = Lofi.on ? `Lofi tự sinh · ${Lofi.BPM} BPM${S.officeRain ? " · mưa" : ""}` : "Nhạc đang tắt";
+      wake();
     };
     music.onclick = () => { Lofi.toggle(); pref.set("officeMusic", Lofi.on); paint(); };
     rain.onclick = () => { S.officeRain = !S.officeRain; Lofi.setRain(S.officeRain); pref.set("officeRain", S.officeRain); paint(); };
@@ -708,7 +796,11 @@ const Office = (() => {
     init() {
       cv = $("#office-canvas"); stage = $("#office-stage"); inner = $("#office-inner"); layer = $("#office-layer");
       if (!cv) return;
-      g = cv.getContext("2d");
+      g = cv.getContext("2d", { alpha: false });
+      bg = document.createElement("canvas");
+      layer.insertAdjacentHTML("afterbegin", `<div class="ow ow-sign">REWARDS HQ</div><div class="ow ow-sub">Văn phòng bot</div>`
+        + `<div class="ow ow-today">Hôm nay</div><div class="ow ow-working"></div>`);
+      wall = { sign: $(".ow-sign", layer), sub: $(".ow-sub", layer), today: $(".ow-today", layer), working: $(".ow-working", layer) };
       bindControls();
       new ResizeObserver(() => resize()).observe(stage);
       document.addEventListener("visibilitychange", () => this.render());
@@ -719,10 +811,12 @@ const Office = (() => {
       sync();
       $("#office-empty").hidden = S.profiles.length > 0;
       const run = [...bots.values()].filter(isWorking).length;
-      $("#office-sub").textContent = `${run} robot đang làm việc · ${S.profiles.length - run} đang nghỉ`;
+      const sub = `${run} robot đang làm việc · ${S.profiles.length - run} đang nghỉ`;
+      if ($("#office-sub").textContent !== sub) $("#office-sub").textContent = sub;
       if (show && !visible) { visible = true; lastT = 0; resize(); }
       visible = show;
-      if (visible && !raf) raf = requestAnimationFrame(frame);
+      if (!visible && tmo) { clearTimeout(tmo); tmo = 0; }
+      if (visible) wake();
     },
     onLog,
   };

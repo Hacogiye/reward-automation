@@ -45,8 +45,11 @@ html[lang="en"] [data-lang="vi"], html:not([lang="en"]) [data-lang="en"] { displ
 .run-state { display: flex; align-items: center; gap: 8px; font-size: 13px; color: rgba(255, 255, 255, .6); }
 .run-state .status-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, .35); }
 .run-state.on { color: #fff; }
-.run-state.on .status-dot { background: #2fb344; box-shadow: 0 0 0 0 rgba(47, 179, 68, .6); animation: pulse 1.6s infinite; }
-@keyframes pulse { 70% { box-shadow: 0 0 0 7px rgba(47, 179, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(47, 179, 68, 0); } }
+.run-state.on .status-dot { position: relative; background: #2fb344; }
+/* vòng tỏa ra: animate transform + opacity (chạy trên compositor), không animate box-shadow vì nó bắt vẽ lại mỗi khung hình */
+.run-state.on .status-dot::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: rgba(47, 179, 68, .6);
+  animation: pulse 1.6s infinite; will-change: transform, opacity; }
+@keyframes pulse { 0% { transform: scale(1); opacity: 1; } 70%, 100% { transform: scale(2.75); opacity: 0; } }
 @media (min-width: 992px) {
   .side { position: fixed; top: 0; bottom: 0; left: 0; transition: width .18s ease; overflow-x: hidden; }
   .page-wrapper { margin-left: 15rem; transition: margin-left .18s ease; }
@@ -342,7 +345,7 @@ img.broken { visibility: hidden; }
 @media (max-width: 1100px) {
   .streak-body { grid-template-columns: 1fr; }
 }
-@media (prefers-reduced-motion: reduce) { .run-state.on .status-dot { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .run-state.on .status-dot::after { animation: none; display: none; } }
 
 /* icon streak (ngọn lửa) và điểm (chồng xu) của app */
 .ico-streak, .ico-point { width: 1.15em; height: 1.15em; object-fit: contain; vertical-align: -.2em; flex: none; }

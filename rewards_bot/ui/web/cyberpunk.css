@@ -153,6 +153,7 @@
 [data-skin="cyberpunk"] .lang-switch button.active { background: var(--cp-cyan); color: var(--cp-night); }
 html[lang="en"][data-skin="cyberpunk"] .hero .card-body::before { content: "EDDIES // BALANCE"; }
 [data-skin="cyberpunk"] .run-state.on .status-dot { background: var(--cp-cyan); box-shadow: 0 0 8px var(--cp-cyan); animation: none; }
+[data-skin="cyberpunk"] .run-state.on .status-dot::after { display: none; }
 
 /* ---------------------------------------------------------------- khối điểm: điểm nhấn duy nhất (glitch neon) */
 [data-skin="cyberpunk"] .hero {

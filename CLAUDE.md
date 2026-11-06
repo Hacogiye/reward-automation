@@ -64,6 +64,11 @@ python -m rewards_bot --run-all --headless # what Task Scheduler runs
   tags and speech bubbles are an HTML layer on top (bubbles are `data-no-i18n`; canvas text goes through `I18N.tr`).
   The lofi music is generated with Web Audio (`Lofi`), so there are no audio files and the CSP is unchanged. It only
   starts after a click (autoplay policy). Volume and rain are kept in `localStorage` (`pref`).
+  Performance: the canvas is world-sized (400 x H) and CSS scales it up with `pixelated`. Static parts (floor, wall,
+  furniture, chairs, clock, score board) are cached in an offscreen canvas and redrawn only when `staticKey()`
+  changes. The page draws about 30 fps when something moves and 6 fps when all robots are idle, and stops when the
+  page is hidden. Numbers use a 3x5 pixel font (`pix`). Vietnamese wall text is HTML (`.ow`). Measured 2026-11-06
+  with 7 robots, 3 of them running: 284 → ~30 ms/s main-thread time, 1.94 → 0.49 MB canvas.
 - Reward goal per account: `settings["goals"]`, set through `Api.set_goal`. It follows profile renames and deletes.
 - `search/catalog.py`: the query catalog. `search/bank.py` hands out queries without repeats across accounts or
   across `history_days`.

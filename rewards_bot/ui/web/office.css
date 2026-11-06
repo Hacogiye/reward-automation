@@ -45,3 +45,18 @@
   .ob-tag b { display: none; }
   .ob-bubble { font-size: 9px; max-width: 120px; }
 }
+
+/* chữ trên tường (biển tên, bảng điểm): HTML phủ lên canvas để nét ở mọi cỡ; --px = số px CSS của 1 pixel thế giới */
+.ow { position: absolute; display: flex; align-items: center; justify-content: center; white-space: nowrap; overflow: hidden;
+  font-family: ui-monospace, Consolas, monospace; line-height: 1; pointer-events: none; }
+.ow-sign { font-weight: 700; font-size: calc(var(--px) * 10); letter-spacing: .02em; color: #2a78d6; }
+.ow-sub { font-size: calc(var(--px) * 6); color: #2b2f3a; }
+.ow-today, .ow-working { font-size: calc(var(--px) * 6); color: #5a6070; }
+[data-bs-theme="dark"] .ow-sign { color: #f4c14f; }
+[data-bs-theme="dark"] .ow-sub { color: #e6e8f0; }
+[data-skin="cyberpunk"] .ow { font-family: ui-monospace, Consolas, monospace; }
+[data-skin="cyberpunk"] .ow-sign { color: #ff2a6d; text-shadow: 0 0 calc(var(--px) * 3) #ff2a6d; animation: cp-flicker 6s infinite; }
+[data-skin="cyberpunk"] .ow-sub { color: #fcee0a; }
+[data-skin="cyberpunk"] .ow-today { color: #05d9e8; }
+[data-skin="cyberpunk"] .ow-working { color: #ff2a6d; }
+@media (prefers-reduced-motion: reduce) { [data-skin="cyberpunk"] .ow-sign { animation: none; } }
