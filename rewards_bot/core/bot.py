@@ -634,21 +634,27 @@ class RewardsBot:
             visual_tries(self.name, add=1)
             if self._visual_upload(ctx, page, *image):
                 return
+            # Bing hay báo lỗi nhưng Rewards vẫn tính lượt đó: đọc lại trước khi thử ảnh khác,
+            # để khỏi tốn thêm một lần thử (thử nhiều Bing càng chặn)
+            if self._visual_credited(page):
+                self.log("Visual Search: Bing báo lỗi nhưng Rewards vẫn đã ghi nhận")
+                self.set_local(title, 1, 1, "lượt")
+                return
             if attempt == 1 and visual_tries(self.name) < self.VISUAL_MAX_TRIES:
                 self.log("  Visual Search: thử lại với ảnh khác")
                 self.sleep(5, 10)
             else:
                 break
-        # Bing báo lỗi nhưng đôi khi Rewards vẫn tính lượt đó: đọc lại để báo đúng
+
+    def _visual_credited(self, page: Page) -> bool:
+        """Points breakdown đã tính Visual Search hôm nay chưa (đọc lại trang Rewards)."""
         try:
             row = activity(self.read_state(page), "visual search")
         except (StopRequested, NotLoggedIn):
             raise
         except Exception:
-            row = None
-        if row and row["progress"] >= row["max"]:
-            self.log("Visual Search: Bing báo lỗi nhưng Rewards vẫn đã ghi nhận")
-            self.set_local(title, 1, 1, "lượt")
+            return False
+        return bool(row and row["progress"] >= row["max"])
 
     # Thả ảnh vào khung upload như kéo-thả thật (cách AutoRewarder dùng). Đưa ảnh qua ô chọn file thì Bing trả 400.
     _DROP_JS = r"""([b64, name, mime]) => {

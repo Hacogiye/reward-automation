@@ -247,6 +247,24 @@ def test_visual_search_respects_daily_cap(tmp_path, monkeypatch):
     assert "để mai thử lại" in logs[-1]
 
 
+@pytest.mark.parametrize("credited, uploads", [(True, 1), (False, 2)])
+def test_visual_search_checks_credit_before_retry(tmp_path, monkeypatch, credited, uploads):
+    from rewards_bot.core import bot as botmod
+    monkeypatch.setattr(botmod, "VISUAL_TRIES_FILE", tmp_path / "v.json")
+    bot, logs = make_bot()
+    bot.state = empty_state()
+    tries = []
+    bot._pick_visual_image = lambda *a: ("a.jpg", "image/jpeg", b"x")
+    bot._visual_upload = lambda *a: tries.append(1) and False
+    st = empty_state()
+    st["activity"] = [{"key": "visual search", "progress": 1 if credited else 0, "max": 1}]
+    bot.read_state = lambda page: st
+    bot.do_visual_search(None, FakePage())
+    assert len(tries) == uploads
+    assert ("vẫn đã ghi nhận" in logs[-1]) == credited
+    assert "thử lại với ảnh khác" not in " ".join(logs) if credited else True
+
+
 def test_missed_cards_are_retried_once():
     bot, logs = make_bot()
     card = {"title": "Los Angeles Sunny October", "points": 10, "done": False}
