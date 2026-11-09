@@ -114,20 +114,28 @@ def test_goal_validation_and_follows_profile(api):
     assert api._settings["goals"] == {}
 
 
-def test_update_check(api, monkeypatch):
-    monkeypatch.setattr(W.updater, "latest_release", lambda: {
-        "tag": "v9.0.0", "version": "9.0.0", "name": "v9", "notes": "", "url": "", "asset": {"name": "x", "size": 1, "api_url": ""}})
-    r = api.check_update()
-    assert r["ok"] and r["newer"] and r["latest"] == "9.0.0"
-    assert r["can_install"] is False  # chạy từ mã nguồn: không tự cài, dùng git pull
-    assert api.download_update()["ok"] is False
+def test_app_info_has_name_and_no_updater(api):
+    info = api._app_info()
+    assert info["name"] == "PrixAuto" and info["version"] == W.__version__
+    assert not hasattr(api, "check_update") and "check_updates" not in W.SETTING_SCHEMA
 
 
-def test_update_check_error_is_reported(api, monkeypatch):
-    def boom():
-        raise W.updater.UpdateError("Không kết nối được GitHub")
-    monkeypatch.setattr(W.updater, "latest_release", boom)
-    assert api.check_update() == {"ok": False, "error": "Không kết nối được GitHub", "current": W.__version__}
+@pytest.mark.parametrize("platform", ["win32", "linux"])
+def test_open_log_folder_fixed_path(api, monkeypatch, tmp_path, platform):
+    """TC-8.3: mở đúng data/logs; Windows dùng os.startfile, nơi khác dùng xdg-open. Không nhận đường dẫn từ giao diện."""
+    calls = []
+    monkeypatch.setattr(W.config, "LOG_DIR", tmp_path / "logs")
+    monkeypatch.setattr(W.sys, "platform", platform)
+    monkeypatch.setattr(W.os, "startfile", lambda p: calls.append(("startfile", p)), raising=False)
+    monkeypatch.setattr(W.subprocess, "Popen", lambda args, **k: calls.append(("popen", args)))
+    assert api.open_log_folder()["ok"]
+    assert (tmp_path / "logs").is_dir()
+    if platform == "win32":
+        assert calls == [("startfile", tmp_path / "logs")]
+    else:
+        assert calls == [("popen", ["xdg-open", str(tmp_path / "logs")])]
+    import inspect
+    assert list(inspect.signature(W.Api.open_log_folder).parameters) == ["self"]
 
 
 def test_avatar_validated_and_follows_profile(api):

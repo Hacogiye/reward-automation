@@ -35,6 +35,114 @@ python -m rewards_bot --run-all --headless # what Task Scheduler runs
   Task icons are Fluent Emoji 3D PNGs (MIT, `vendor/fluent-emoji/`, 96px), picked in `app.js` by `ICON_RULES`
   (title first, then Bing image name, then group). The Cyberpunk skin (`cyberpunk.css`, `data-skin="cyberpunk"`) uses
   Chakra Petch (OFL, `vendor/fonts/`) and the app's own `assets/skyline.svg`.
+- App name: `APP_NAME = "PrixAuto"` in `rewards_bot/__init__.py` (window title, message boxes, `_app_info()["name"]`).
+  The Python class is still `RewardsBot` and the package is still `rewards_bot`; only the product name changed.
+- Packaging: `packaging/build_exe.py` builds a PyInstaller onedir `dist/PrixAuto/` (spec `packaging/PrixAuto.spec`) plus
+  `PrixAuto-<ver>-win64.zip`. When frozen (`config.FROZEN`), `BASE_DIR` is the folder of `PrixAuto.exe`, so `data/`
+  sits next to it. `packaging/launcher.py` writes uncaught errors to `data/crash.log`. The windowed exe has no usable
+  stdout, and printing Vietnamese crashed it until `__main__._safe_console()` was added. Keep that.
+- No auto-update (removed 2026-11-09 with `core/updater.py`, the `check_updates` setting and the update bar). Users
+  download a new zip. Pushing tag `v<ver>` still runs `.github/workflows/release.yml` (test, build, GitHub Release with
+  the zip and its `.sha256`); the tag must match `__version__`. `Api.__init__` still deletes an old `github_token` secret.
+- Settings > About (`#about-card`): name, version, data folder (`_app_info()["data_dir"]`), risk line and the licence
+  list (full texts are in `ui/web/vendor/*/LICENSE`, `OFL-ChakraPetch.txt`). `Api.open_log_folder()` opens the fixed
+  `config.LOG_DIR` (`os.startfile` on Windows, `xdg-open` elsewhere) and takes no argument; buttons on the Log page and
+  the About card call it.
+- Quests (2026-10-23): `rewards_page` parses `/earn/quest/...` cards into `state["quests"]`. A quest page lists steps under
+  `H2: Activities` as `H3` rows; a step that can be done in a browser is a link there (`SCRAPE_JS` section "Activities").
+  Steps locked behind the Microsoft Rewards desktop app have no link ("Install the Desktop Rewards App"), so
+  `do_quest_tasks` skips them. No unfinished browser-doable quest was available on 2026-10-23 to verify a real click.
+- Settings page: `SETTING_GROUPS` in app.js renders grouped cards, one row per setting (label + hint left, control
+  right; `[key, label, unit, hint, min, max]` for numbers, `{sw}` for switches). Number rows are validated against
+  min/max before saving. Bot limits that are settings: `stall_after` (instance `STALL_AFTER`), `visual_max_tries`
+  (instance `VISUAL_MAX_TRIES`), `log_keep_days` (`FileLog.prune`, run on every `Runner.start`).
+- Fun mode (`fun_mode` setting, default off, 2026-11-09): the default look is a neutral professional dashboard
+  (one blue accent, Tabler line icons, "Tiến độ hôm nay" list, compact streak rows, heatmap and sources under
+  "Thêm biểu đồ"). Fun mode on brings back the Office page, the Cyberpunk skin, Fluent Emoji / coin / flame and the
+  stamp discs. `applyFun()` in app.js applies it without a reload. Off hides the Office nav (`go('office')` goes to
+  the dashboard), renders a saved `theme="cyberpunk"` as dark without rewriting it, and calls `Office.setFun(false)`
+  to stop the lofi music. Shared UI pieces: `stateBlock()` empty states, a persistent `.alert-danger` banner for
+  action errors, a styled delete `<dialog>` and a kebab dropdown on each account row.
+- Sidebar (2026-11-09): nav order Overview, Accounts, History, Log, Settings, Guide, then Office (fun mode only). Light/dark
+  is chosen only in Settings (`#theme-choice`); the sidebar keeps VI/EN, run state, `#side-version` and the collapse button.
+  Tests switch theme with `setTheme(...)`.
+- Onboarding (2026-11-09): settings `onboarded` (bool) and `risk_ack` (app version when the user accepted the risk text, ""
+  = not yet; validated by a regex in `SETTING_SCHEMA`). `Welcome` in app.js opens `#welcome-dialog` on boot when
+  `onboarded` is false (language -> risk checkbox -> add first account). `start()` opens step 2 instead of running
+  `run`/`everything` while `risk_ack` is empty. UI only: `--run-all` from Task Scheduler is not gated. After `login`,
+  `#login-dialog` shows the 3 sign-in steps and a Check button (`start([name], "check")`).
+- Accessibility: one `:focus-visible` outline for every focusable element; charts get `role=img` + a summary `aria-label`
+  through `chartLabel()`; every `[role=img]` must have an `aria-label` (smoke test). `test_english_has_no_vietnamese_left`
+  fails if any visible text, title, placeholder or aria-label is still Vietnamese in English mode, so new UI text needs an
+  `I18N` entry (remember `NUM` turns `1/3` or `1.2.3.4:1080` into a single `#`).
+- UI language (`language` setting, "vi"/"en"): the UI is written in Vietnamese. `ui/web/i18n.js` (`I18N.apply`) walks
+  text nodes and title/placeholder/aria-label, and a MutationObserver translates anything rendered later. Dictionary
+  keys are the Vietnamese text with whitespace collapsed and every number replaced by `#`; strings that embed user data
+  go in `PATTERNS`; text joined with " · " is translated part by part. Long prose (the Guide page, a few form hints)
+  has a hand-written English copy in `data-lang="en"` blocks instead. Bot log lines (`#logbox .msg`) are never
+  translated. When you add UI text, add its English entry to `I18N`.
+- Accounts page: `do_quest_tasks` (Quests, separate from `do_quests` = Daily Set + Keep earning), `browse_auto_stop`
+  shown as a sub-switch of Browse, and the "Làm tất cả" button = `Api.start(names, "everything")`, which runs with
+  every `do_*` forced on (`webapp.EVERYTHING`) without saving. Avatars: `Api.set_avatar` stores PNG/JPEG/WebP (magic
+  bytes checked, at most 300 KB) as `data/avatars/<profile dir>.<ext>`, so renames keep the photo.
+- Office page (`ui/web/office.js` + `office.css`): one pixel robot per account, drawn on a canvas, with no image files.
+  `activity()` maps `S.pstate` state/progress strings (for example `Search PC`, `Search Mobile`, `Visual Search`,
+  `Browse`) to a desk/lounge pose and screen, so if you change progress text in `bot.py`, update those regexes. Name
+  tags and speech bubbles are an HTML layer on top (bubbles are `data-no-i18n`; canvas text goes through `I18N.tr`).
+  The lofi music is generated with Web Audio (`Lofi`), so there are no audio files and the CSP is unchanged. It only
+  starts after a click (autoplay policy). Volume and rain are kept in `localStorage` (`pref`).
+  Clicking a robot (or its name tag) opens one info card (`.ob-card`, `openCard`/`renderCard`/`placeCard`) above its
+  head instead of leaving the page: linked account (saved email from `S.credentials`, plus proxy/CDP), points, today,
+  state, current progress, today's tasks split into to-do / done, and Run/Stop + Overview buttons. It follows the robot,
+  shrinks to the free space above (or flips below) and is re-rendered only when its HTML changes. Esc, clicking empty
+  floor or clicking outside closes it. Test hook `Office._card()`.
+  Isometric 2:1 view (tile 32 x 16 px): logic runs in floor coordinates `b.gx`/`b.gy` (tile units), `iso(gx, gy, z)`
+  projects to the canvas and the depth is `gx + gy` (bigger = nearer the viewer, drawn later). Desks run along `gx`
+  (`COLS=4`), rows along `gy`, then a corridor, then the lounge strip nearest the viewer. Robots walk along floor axes
+  only (desk gap -> corridor -> `GAP_L` -> front row), never through furniture; `locate(b)` computes `b.sx/sy/depth`
+  once per frame and drawing, bubbles, hit-test and FX use that (FX stay in screen space). The world size comes from
+  `geom()` and depends on the number of desk rows (`W = (GX+GY)*16+12`). Window frames (left wall), the sign, clock
+  and score board (right wall) use wall-local coordinates with a 2:1 shear (`withWall`); the HTML wall text (`.ow-right`)
+  uses `skewY(26.565deg)` to match. Static layer (`drawStatic`, redrawn only when `staticKey()` changes): floor, walls,
+  rug and wall items, i.e. only things nothing can stand behind. Desks, chairs, sofa, coffee machine, water cooler,
+  plant and arcade are pre-rendered sprites (`sprites[name]`, rebuilt when `themeKey()` changes) in the depth-sorted
+  list with the robots; only monitor screens, windows and LEDs are drawn per frame. The monitor is a thin box at the
+  back of the desk whose glass faces `+gy`; `drawScreen` content (26 x 15) is drawn onto it with `transform(1, 0.5, 0,
+  1, ...)`. The chair stands in front of the desk (`SEAT_DX/SEAT_DY`, the viewer's side), so a seated robot shows its
+  back and looks at the screen up-right (1-2 o'clock). The chair is two sprites: seat (drawn before the robot) and a
+  low back (`chairBack`, after it). Robots are drawn as isometric boxes (`boxO`, body + head + arms/legs); `b.fa`
+  (`+gy`/`+gx`/`-gy`/`-gx`) is the facing, set from the walk direction or `restFace()`, and the visor/face is drawn
+  on a visible side with `onFace()`; facing away shows only the visor edge. A waiting robot stands behind its own
+  chair. Test hooks (read-only): `Office._pos(name)`, `_path(name)`, `_screens()`.
+  There is always exactly one free desk slot (index `S.profiles.length`, so `rows = ceil((n+1)/4)`): a dashed outline
+  in the static layer plus one HTML `.ob-add` "+" button that calls `openProfileDialog(null)`. The gear button
+  `#office-settings` opens `#settings-dialog`, which borrows the settings page's `#settings-cards` block (moved in on
+  open, moved back to `#settings-home` on close) so the form, ids and handlers exist only once; `.settings-help` is
+  hidden inside the dialog.
+  Lounge tasks: on arrival `pickSpot` picks `b.task` from `TASKS` (sofa: rest/diary, coffee, drink at the water cooler,
+  water the plant, arcade game, rug: dance/stretch); `loungeTask(b)` returns it only while the robot stands still in
+  the lounge, and a robot on the rug next to the sleeping cat does "pet" (hearts). Spots that face their object use
+  `face: "-gy"`. The office cat (`cat`, `catStep/catThink/catRoute`, `drawCat`: isometric boxes like the robots, scaled by `K`, facing `cat.fa`, parts depth-sorted)
+  walks only on the corridor and the lane in front of the lounge (`catLane()`), switching lanes at `GAP_L`, with the
+  bowl (`bowlAt()`, an oval in front of the arcade; the cat eats from its -gx side facing +gx) and the rug bed as straight stubs, so its path is axis-aligned like the
+  robots'. Hunger rises over time; it eats when hungry, sleeps more at night. Clicking the cat shows hearts. Test hook
+  `Office._cat()`.
+  Diary: a robot doing "diary" on the sofa shows an italic bubble (`log` class) cycling `diaryLines(name)` every 4.5 s:
+  today's points, `Search PC x/y · Mobile x/y` (same in both languages), daily streak, tasks done, points left to the
+  reward goal. The two sofa seats take turns so their bubbles never overlap. Each line has an `I18N` entry with `#` for
+  the numbers. Test hook `Office._diary(name)`. The `activity()` regexes did not change with the isometric view. The page draws about 30 fps when something
+  moves and 6 fps when all robots are idle, and stops when the page is hidden. Numbers use a 3x5 pixel font (`pix`).
+  Vietnamese wall text is HTML (`.ow`). The back desk row sits 2 tiles from the right wall and the wall is 84 px tall
+  so sprites and bubbles never cover the sign or score board; rows are 4.6 tiles apart so name tags (anchored under each
+  seat) do not hit the next row. `walk()` routes from the robot's real `gx/gy` (desk gap, corridor, `GAP_L`, front
+  row), also when the target changes mid-walk. Measured 2026-11-06 with 7 robots, 3 running (CDP `TaskDuration`, 8 s,
+  old and new back to back): old top-down 34-52 ms/s, isometric 50-64 ms/s (about 1.25-1.5x, noisy); canvas
+  0.49 -> 0.63 MB (492 x 338). After the box robots and chairs in front of the desks: 43-74 ms/s over 3 runs (noisy).
+- Reward goal per account: `settings["goals"]`, set through `Api.set_goal`. It follows profile renames and deletes.
+- Between searches `do_searches` calls `_idle_browse(page, delay)`: it scrolls the results page and, for
+  `search_click_pct` % of searches, clicks one organic result (`SERP_RESULT`, ads and file links skipped), scrolls
+  that page (closing it if it opened a new tab), then sleeps the rest. The total wait is unchanged. Setting
+  `search_browse` turns it off. It is for user-like behaviour only, not points.
 - `search/catalog.py`: the query catalog. `search/bank.py` hands out queries without repeats across accounts or
   across `history_days`.
 - `data/` holds login sessions and cookies. It is never committed. Profile dir = `data/profiles/<profile["dir"]>`,
@@ -42,6 +150,10 @@ python -m rewards_bot --run-all --headless # what Task Scheduler runs
   One such folder can hold several Edge profiles (for example `Default` = a work account and `Profile 1` = the
   personal MSA). `edge_launcher.pinned_profile()` pins one into `rewards_bot_profile.txt` on first open and the bot
   always passes `--profile-directory`. Never drop that, or Edge silently opens whichever profile was used last.
+- Per-account proxy (`profile["proxy"]`, managed mode only): `security.validate_proxy` normalizes it to
+  `scheme://host:port` (http/https/socks4/socks5) and rejects `user:pass@` (Chromium can't take it on the command
+  line, and it would show in the process list). `browser_args` then passes `--proxy-server` instead of
+  `--no-proxy-server`, plus `--force-webrtc-ip-handling-policy=disable_non_proxied_udp` so WebRTC doesn't leak the real IP.
 - `core/credentials.py`: optional auto re-login. Email + DPAPI-encrypted password in `data/credentials.json`, Windows
   only, never sent to the UI or written to logs. `RewardsBot.auto_login()` runs from `_session()` on `NotLoggedIn` and
   stops (does not try to pass) at any verification step: code, Authenticator, CAPTCHA.
@@ -73,8 +185,10 @@ python -m rewards_bot --run-all --headless # what Task Scheduler runs
   `edge_launcher` passes `--user-agent` with the normal UA (version read from the folder next to msedge.exe) and
   `--screen-info` 1920x1080. Verified: headless Visual Search works after this.
 - 2026-10-21 the Edge Browsing Streak did count for one test account (streak day 2), but on 2026-10-22 about 5 h of headless
-  Browse in the same `Profile 1` left Edge – Minutes at 0/30. The cause is unknown. `do_browse` now reads Edge – Minutes
-  every 10 min, logs `first → now (chạy ẩn/hiện cửa sổ)`, and stops when full or after 20 min without gain. Read those
+  Browse in the same `Profile 1` left Edge – Minutes at 0/30. The cause is unknown. The user later reported (2026-10-23)
+  that it does fill when Run is repeated 3–4 times in a day; the guide says so, and suggests turning auto-stop off. `do_browse` now reads Edge – Minutes
+  every 10 min, logs `first → now (chạy ẩn/hiện cửa sổ)`, and stops when full or after 20 min without gain
+  (the 20-min stop can be turned off with the `browse_auto_stop` setting). Read those
   log lines before claiming anything about what earns it.
 - Older note: "Edge – Minutes" (Edge Browsing Streak, 30 min/day) was NOT earned by the bot's Browse in early tests. The following were all
   tested on one account and all gave 0/30: headless, headed, Playwright's background-blocking flags removed, and the Edge
@@ -83,7 +197,7 @@ python -m rewards_bot --run-all --headless # what Task Scheduler runs
   earns it.
 - Other bots (TheNetsky/Microsoft-Rewards-Script, GPL-3.0) "earn" Edge minutes by POSTing fake usage reports to
   `prod.rewardsplatform.microsoft.com/dapi/me/activities`, as EdgeDesktop, with an OAuth token minted under the
-  Bing app's client id. Codex's safety classifier blocked this as a third-party attack, and it is not done
+  Bing app's client id. Claude Code's safety classifier blocked this as a third-party attack, and it is not done
   here. Do not reimplement it. Visual Search credit shows up as the results page calling
   `/rewardsapp/reportactivity?...bcid=`; the bot watches for that request.
 - Bing seems to throttle Visual Search after many attempts in one day on the same account ("Unable to process this

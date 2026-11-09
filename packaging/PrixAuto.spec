@@ -1,4 +1,4 @@
-# PyInstaller: đóng gói thành thư mục RewardsBot/ (RewardsBot.exe + _internal/). Chạy qua: python packaging/build_exe.py
+# PyInstaller: đóng gói thành thư mục PrixAuto/ (PrixAuto.exe + _internal/). Chạy qua: python packaging/build_exe.py
 # Bản thư mục (onedir) mở nhanh hơn bản 1 file và ít bị phần mềm diệt virus báo nhầm.
 import os
 from pathlib import Path
@@ -14,6 +14,6 @@ a = Analysis(
     noarchive=False,
 )
 pyz = PYZ(a.pure)
-exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="RewardsBot", console=bool(os.environ.get("RB_CONSOLE")),
+exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="PrixAuto", console=bool(os.environ.get("RB_CONSOLE")),
           icon=str(ROOT / "rewards_bot" / "ui" / "web" / "assets" / "app-icon.ico"))
-coll = COLLECT(exe, a.binaries, a.datas, name="RewardsBot")
+coll = COLLECT(exe, a.binaries, a.datas, name="PrixAuto")

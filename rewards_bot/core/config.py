@@ -4,9 +4,9 @@ import os
 import sys
 from pathlib import Path
 
-# FROZEN: đang chạy từ bản đóng gói RewardsBot.exe (PyInstaller)
+# FROZEN: đang chạy từ bản đóng gói PrixAuto.exe (PyInstaller)
 FROZEN = bool(getattr(sys, "frozen", False))
-# thư mục gốc: bản mã nguồn = thư mục dự án (chứa rewards_bot/ và data/); bản .exe = thư mục chứa RewardsBot.exe
+# thư mục gốc: bản mã nguồn = thư mục dự án (chứa rewards_bot/ và data/); bản .exe = thư mục chứa PrixAuto.exe
 # (không dùng thư mục tạm của PyInstaller, nếu không cập nhật/giải nén lại là mất data/)
 BASE_DIR = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parents[2]
 DATA_DIR = BASE_DIR / "data"
@@ -20,7 +20,6 @@ LOCK_FILE = DATA_DIR / "app.lock"  # chỉ cho 1 cửa sổ app chạy cùng lú
 VISUAL_TRIES_FILE = DATA_DIR / "visual_tries.json"  # số lần thử Visual Search mỗi tài khoản trong ngày
 CREDENTIALS_FILE = DATA_DIR / "credentials.json"  # email + mật khẩu đã mã hóa (DPAPI) để tự đăng nhập lại
 SECRETS_FILE = DATA_DIR / "secrets.json"  # bí mật khác (đã mã hóa DPAPI); hiện chưa dùng
-UPDATE_DIR = DATA_DIR / "update"  # file cập nhật tải về + script cài
 AVATAR_DIR = DATA_DIR / "avatars"  # ảnh đại diện tài khoản: <thư mục profile>.webp|png|jpg
 
 DEFAULT_SETTINGS = {
@@ -51,7 +50,6 @@ DEFAULT_SETTINGS = {
     "bypass_proxy": True,  # trình duyệt của bot không đi qua proxy hệ thống
     "browse_minutes": 30,
     "browse_auto_stop": True,  # Browse tự dừng khi Edge – Minutes không tăng sau 20 phút
-    "check_updates": True,  # mở app thì kiểm tra bản mới trên GitHub
     "onboarded": False,  # đã xem màn hình chào lần đầu (chọn ngôn ngữ, đồng ý rủi ro, thêm tài khoản)
     # phiên bản app lúc người dùng đồng ý phần rủi ro; rỗng = chưa đồng ý, nút Chạy trong giao diện mở lại bước đồng ý.
     # Chỉ chặn giao diện: lệnh --run-all của Task Scheduler không bị ảnh hưởng.

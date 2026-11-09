@@ -6,7 +6,7 @@
 <!-- Chỉ chạy script của chính app; ảnh chỉ từ bing.com; font/thư viện nằm sẵn trong vendor/; không tải/gửi dữ liệu đi đâu khác.
      Dữ liệu (tiêu đề task...) lấy từ trang web bên ngoài nên dù lọt mã HTML cũng không chạy được. -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https://bing.com https://*.bing.com; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'">
-<title>Microsoft Rewards Bot</title>
+<title>PrixAuto</title>
 <script src="theme.js"></script>
 <link rel="stylesheet" href="vendor/tabler/tabler.min.css">
 <link rel="stylesheet" href="vendor/icons/tabler-icons.min.css">
@@ -21,7 +21,7 @@
     <div class="container-fluid">
       <div class="brand">
         <img class="brand-logo" src="assets/app-icon.png" alt="">
-        <div><strong>Rewards Bot</strong><span id="brand-sub">0 tài khoản</span></div>
+        <div><strong data-no-i18n>PrixAuto</strong><span id="brand-sub">0 tài khoản</span></div>
       </div>
       <ul class="navbar-nav pt-lg-3" id="nav">
         <li class="nav-item"><a class="nav-link active" href="#" data-page="dashboard">
@@ -56,11 +56,6 @@
   </aside>
 
   <div class="page-wrapper">
-    <div class="update-bar" id="update-bar" role="status" hidden>
-      <i class="ti ti-download"></i><span id="update-text"></span>
-      <span class="update-actions" id="update-actions"></span>
-      <button type="button" class="btn-close btn-close-white ms-1" id="update-dismiss" aria-label="Ẩn thông báo cập nhật"></button>
-    </div>
     <div class="alert alert-danger alert-dismissible error-banner" id="error-banner" role="alert" hidden>
       <i class="ti ti-alert-circle"></i><span id="error-text"></span>
       <button type="button" class="btn-close" id="error-dismiss" aria-label="Đóng"></button>
@@ -290,6 +285,7 @@
           <div class="input-icon log-search"><span class="input-icon-addon"><i class="ti ti-search"></i></span>
             <input type="search" class="form-control" id="log-search" placeholder="Tìm trong nhật ký" aria-label="Tìm trong nhật ký"></div>
           <select class="form-select w-auto" id="log-filter" aria-label="Tài khoản"></select>
+          <button class="btn" id="btn-open-logs" title="Mở thư mục data/logs"><i class="ti ti-folder-open"></i>Mở thư mục</button>
           <button class="btn" id="btn-copy-log"><i class="ti ti-copy"></i>Sao chép</button>
           <button class="btn" id="btn-clear-log"><i class="ti ti-trash"></i>Xóa nhật ký</button>
         </div>
@@ -342,16 +338,23 @@
                 <button type="button" class="btn btn-link px-0 mt-2" id="btn-welcome-again"><i class="ti ti-hand-stop"></i>Xem lại màn hình chào</button>
               </div>
             </div>
-            <div class="card">
-              <div class="card-header"><h3 class="card-title">Cập nhật</h3><div class="card-actions text-secondary" id="app-version"></div></div>
+            <div class="card" id="about-card">
+              <div class="card-header"><h3 class="card-title">Giới thiệu</h3><div class="card-actions text-secondary" id="app-version"></div></div>
               <div class="card-body d-flex flex-column gap-3">
-                <label class="form-check form-switch m-0">
-                  <input class="form-check-input" type="checkbox" id="set-check-updates">
-                  <span class="form-check-label">Mở app thì kiểm tra bản mới</span></label>
-                <div class="d-flex flex-wrap align-items-center gap-2">
-                  <button class="btn" type="button" id="btn-check-update"><i class="ti ti-refresh"></i>Kiểm tra ngay</button>
-                  <span class="text-secondary small min-w-0" id="update-result"></span>
-                </div>
+                <div class="about-app"><img src="assets/app-icon.png" alt="">
+                  <div><strong data-no-i18n>PrixAuto</strong><span>Tự làm các việc Microsoft Rewards hằng ngày cho nhiều tài khoản.</span></div></div>
+                <div><div class="form-label mb-1">Thư mục dữ liệu</div><code class="about-path" id="about-data" data-no-i18n></code></div>
+                <div><button class="btn" type="button" id="btn-open-logs-about"><i class="ti ti-folder-open"></i>Mở thư mục nhật ký</button></div>
+                <p class="text-secondary small m-0">Điều khoản của Microsoft Rewards không cho phép dùng bot. Bạn tự chịu rủi ro khi dùng app.</p>
+                <details class="about-lic">
+                  <summary>Thư viện và giấy phép</summary>
+                  <ul data-no-i18n>
+                    <li>Tabler · MIT</li><li>Tabler Icons · MIT</li><li>ApexCharts · MIT</li>
+                    <li>Fluent Emoji (Microsoft) · MIT</li><li>Chakra Petch · SIL OFL 1.1</li>
+                    <li>Playwright · Apache-2.0</li><li>pywebview · BSD-3-Clause</li>
+                  </ul>
+                  <p class="text-secondary small m-0">Bản đầy đủ của từng giấy phép nằm trong thư mục <code>ui/web/vendor</code> của app.</p>
+                </details>
               </div>
             </div>
             <div class="card settings-help">
@@ -483,8 +486,8 @@
                     <i class="ti ti-calendar-time me-2"></i>Chạy tự động hằng ngày</button></h2>
                   <div id="g-auto" class="accordion-collapse collapse" data-bs-parent="#guide"><div class="accordion-body">
                     <p>Tạo một task trong <b>Windows Task Scheduler</b> chạy mỗi ngày một lần với lệnh:</p>
-                    <pre>RewardsBot.exe --run-all --headless</pre>
-                    <p>Đặt <em>Start in</em> là thư mục chứa <code>RewardsBot.exe</code>.<span class="src-only"> Nếu chạy từ mã nguồn, dùng
+                    <pre>PrixAuto.exe --run-all --headless</pre>
+                    <p>Đặt <em>Start in</em> là thư mục chứa <code>PrixAuto.exe</code>.<span class="src-only"> Nếu chạy từ mã nguồn, dùng
                       <code>python -m rewards_bot --run-all --headless</code> với thư mục dự án.</span></p>
                     <p class="text-secondary m-0">Task chỉ chạy được khi cửa sổ app đang đóng. Kết quả xem ở trang <em>Lịch sử</em> và <em>Nhật ký</em>.</p>
                   </div></div>
@@ -657,8 +660,8 @@
                     <i class="ti ti-calendar-time me-2"></i>Run automatically every day</button></h2>
                   <div id="ge-auto" class="accordion-collapse collapse" data-bs-parent="#guide-en"><div class="accordion-body">
                     <p>Create a task in <b>Windows Task Scheduler</b> that runs once a day with this command:</p>
-                    <pre>RewardsBot.exe --run-all --headless</pre>
-                    <p>Set <em>Start in</em> to the folder that holds <code>RewardsBot.exe</code>.<span class="src-only"> When running from source, use
+                    <pre>PrixAuto.exe --run-all --headless</pre>
+                    <p>Set <em>Start in</em> to the folder that holds <code>PrixAuto.exe</code>.<span class="src-only"> When running from source, use
                       <code>python -m rewards_bot --run-all --headless</code> in the project folder.</span></p>
                     <p class="text-secondary m-0">The task only runs while the app window is closed. See the results on the <em>History</em> and <em>Log</em> pages.</p>
                   </div></div>

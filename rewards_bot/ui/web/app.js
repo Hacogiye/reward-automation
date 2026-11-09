@@ -1,5 +1,5 @@
 "use strict";
-// Giao diện Rewards Bot (Tabler + ApexCharts). Mọi dữ liệu đến từ Python (window.pywebview.api) và sự kiện window.onEvents.
+// Giao diện PrixAuto (Tabler + ApexCharts). Mọi dữ liệu đến từ Python (window.pywebview.api) và sự kiện window.onEvents.
 
 const S = { settings: {}, profiles: [], pstate: {}, history: {}, running: new Set(),
             logs: [], unreadErr: 0, selected: null, page: "dashboard" };
@@ -91,7 +91,6 @@ window.addEventListener("pywebviewready", async () => {
   applyLanguage();
   renderAll();
   if (!S.settings.onboarded) Welcome.open(1);
-  if (S.settings.check_updates !== false) checkUpdate(false);
 });
 
 // ===================================================================== màn hình chào + đồng ý rủi ro
@@ -163,47 +162,10 @@ function bindLoginHelp() {
   };
 }
 
-// ===================================================================== cập nhật
-function showUpdateBar(text, actions = "") {
-  $("#update-text").innerHTML = text;
-  $("#update-actions").innerHTML = actions;
-  $("#update-bar").hidden = false;
-  $("#btn-upd-notes")?.addEventListener("click", () => api().open_releases());
-  $("#btn-upd-get")?.addEventListener("click", downloadUpdate);
-  $("#btn-upd-apply")?.addEventListener("click", applyUpdate);
-}
-// manual = bấm "Kiểm tra ngay": báo cả khi không có bản mới / lỗi; tự kiểm tra lúc mở app thì im lặng
-async function checkUpdate(manual) {
-  const res = $("#update-result");
-  if (manual && res) res.textContent = "Đang kiểm tra...";
-  const r = await api().check_update();
-  const msg = !r.ok ? r.error : r.newer ? `Có bản mới ${r.latest}` : `Đang dùng bản mới nhất (${r.current || S.app?.version || "?"})`;
-  if (res) res.textContent = msg;
-  if (!r.ok || !r.newer) { if (manual) toast(msg); return; }
-  const notes = `<button type="button" class="btn btn-sm" id="btn-upd-notes">Xem thay đổi</button>`;
-  showUpdateBar(`Có bản mới <b>${esc(r.latest)}</b> (đang dùng ${esc(r.current)})`,
-    r.can_install ? notes + `<button type="button" class="btn btn-sm btn-primary" id="btn-upd-get">Tải và cập nhật</button>`
-      : notes + (S.app?.frozen ? "" : `<span class="small">Bản mã nguồn: cập nhật bằng <code>git pull</code></span>`));
-}
-async function downloadUpdate() {
-  const r = await api().download_update();
-  if (!r.ok) { showError(r.error); return; }
-  showUpdateBar("Đang tải bản cập nhật...");
-}
-async function applyUpdate() {
-  const r = await api().apply_update();
-  if (!r.ok) { showError(r.error); return; }
-  showUpdateBar("Đang cập nhật, app sẽ tự mở lại sau vài giây...");
-}
-function onUpdateEvent(e) {
-  if (e.state === "downloading") {
-    showUpdateBar(`Đang tải bản cập nhật... ${e.total ? Math.round((e.done / e.total) * 100) + "%" : fmt(Math.round(e.done / 1048576)) + " MB"}`);
-  } else if (e.state === "ready") {
-    showUpdateBar(`Đã tải xong bản <b>${esc(e.version)}</b>. Dữ liệu và phiên đăng nhập được giữ nguyên.`,
-      `<button type="button" class="btn btn-sm btn-primary" id="btn-upd-apply">Khởi động lại để cập nhật</button>`);
-  } else if (e.state === "error") {
-    showUpdateBar(`Cập nhật lỗi: ${esc(e.error)}`, `<button type="button" class="btn btn-sm" id="btn-upd-notes">Mở trang tải về</button>`);
-  }
+// thư mục nhật ký: Python mở data/logs bằng trình quản lý file (đường dẫn cố định, không gửi gì từ giao diện)
+async function openLogFolder() {
+  const r = await api().open_log_folder();
+  if (r && r.ok === false) showError(r.error);
 }
 
 window.onEvents = (batch) => {
@@ -222,8 +184,6 @@ window.onEvents = (batch) => {
       dirty = true;
     } else if (e.type === "done") {
       S.running.delete(e.name); dirty = true;
-    } else if (e.type === "update") {
-      onUpdateEvent(e);
     }
   }
   if (S.logs.length > 4000) S.logs = S.logs.slice(-3000);
@@ -335,8 +295,7 @@ function bindStatic() {
   $$(".lang-switch button").forEach((b) => (b.onclick = () => setLanguage(sideCycle(b, "setLang"))));
   $$("#lang-choice input").forEach((i) => (i.onchange = () => setLanguage(i.value)));
   $("#tasks-hide-done").onchange = (e) => { pref.set("hideDoneTasks", e.target.checked); renderTasks(st(S.selected)); };
-  $("#update-dismiss").onclick = () => ($("#update-bar").hidden = true);
-  $("#btn-check-update").onclick = () => checkUpdate(true);
+  $("#btn-open-logs").onclick = $("#btn-open-logs-about").onclick = openLogFolder;
   $$("#nav [data-page]").forEach((b) => b.addEventListener("click", (e) => { e.preventDefault(); go(b.dataset.page); }));
   $("#side-toggle").onclick = () => setSideCollapsed(!document.documentElement.classList.contains("side-collapsed"));
   syncSide();
@@ -1326,7 +1285,7 @@ function renderSettings() {
   $$("#lang-choice input").forEach((i) => (i.checked = i.value === (S.settings.language === "en" ? "en" : "vi")));
   const app = S.app || {};
   $("#app-version").textContent = `Phiên bản ${app.version || "?"}${app.frozen ? "" : " (mã nguồn)"}`;
-  $("#set-check-updates").checked = S.settings.check_updates !== false;
+  $("#about-data").textContent = app.data_dir || "data";
 }
 async function saveSettingsForm() {
   const partial = { browser_channel: $("#set-browser").value };
@@ -1339,7 +1298,6 @@ async function saveSettingsForm() {
     partial[i.dataset.key] = v;
   }
   for (const c of $$("#settings-form input[data-sw]")) partial[c.dataset.sw] = c.checked;
-  partial.check_updates = $("#set-check-updates").checked;
   const ok = await saveSettings(partial);
   renderSettings();
   if (ok) toast("Đã lưu cài đặt");

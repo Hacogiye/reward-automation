@@ -319,17 +319,6 @@ def test_pages_render_without_errors(server):
         assert pg.locator("#guide").is_visible() and not pg.locator("#guide-en").is_visible()
         assert pg.locator("#nav [data-page=dashboard]").inner_text().strip() == "Tổng quan"
         pg.evaluate("go('dashboard')")
-        # bản mới: thanh báo hiện nút tải; sự kiện tải xong đổi sang nút khởi động lại
-        pg.evaluate("""(() => { const real = window.pywebview.api;
-            window.pywebview.api = new Proxy({}, {get: (_, k) => k === "check_update"
-              ? async () => ({ok: true, current: "1.2.0", latest: "1.3.0", newer: true, can_install: true}) : real[k]});
-            return checkUpdate(false); })()""")
-        pg.wait_for_selector("#update-bar:not([hidden]) #btn-upd-get", timeout=3000)
-        assert "1.3.0" in pg.locator("#update-text").inner_text()
-        pg.evaluate("window.onEvents([{type: 'update', state: 'ready', version: '1.3.0'}])")
-        assert pg.locator("#btn-upd-apply").is_visible()
-        pg.click("#update-dismiss")
-        assert not pg.locator("#update-bar").is_visible()
         # lịch sử: mỗi ngày 1 dòng, cột "Còn thiếu" lấy từ missing (bỏ PC/Mobile vì đã có cột riêng)
         pg.evaluate("""(() => { const today = new Date().toISOString().slice(0, 10);
             const h = window.__B.history[Object.keys(window.__B.history)[0]];
@@ -986,6 +975,11 @@ def test_english_has_no_vietnamese_left(server):
     """TC-6.1: ở chế độ English, mọi trang và hộp thoại không còn chữ tiếng Việt (trừ nhật ký bot, tên riêng có data-no-i18n)."""
     boot = boot_data()
     boot["settings"]["language"] = "en"
+    import datetime as dt
+    first = boot["profiles"][0]["name"]
+    for k in range(1, 8):  # 7 ngày gần đây: trang Lịch sử hiện đủ thứ trong tuần (T2..T7, CN)
+        boot["history"][first][(dt.date.today() - dt.timedelta(days=k)).isoformat()] = {
+            "available": 4000 + k, "pc": 90, "mobile": 60, "offers": 30, "today": 180, "pc_max": 90, "mobile_max": 60}
     with app_page(server, boot, viewport={"width": 1400, "height": 1000}) as (pg, errors):
         assert poll(pg, "document.querySelectorAll('.chip').length === 1")
         names = {p["name"] for p in boot["profiles"]}
@@ -1066,4 +1060,27 @@ def test_welcome_risk_gate_and_login_helper(server):
         pg.evaluate("go('settings')")
         pg.click("#btn-welcome-again")
         assert pg.evaluate("document.querySelector('#welcome-dialog').open") and pg.locator("#wd-step").inner_text() == "Bước 1/3"
+        assert errors == []
+
+
+def test_branding_about_card_and_log_folder(server):
+    """TC-8.1..8.3 (giao diện): tên PrixAuto ở tiêu đề, thanh bên và thẻ Giới thiệu; danh sách giấy phép; nút mở thư mục
+    nhật ký gọi open_log_folder không kèm tham số; không còn thanh / cài đặt cập nhật."""
+    boot = boot_data()
+    boot["app"]["data_dir"] = r"C:\PrixAuto\data"
+    with app_page(server, boot) as (pg, errors):
+        assert poll(pg, "document.querySelectorAll('.chip').length === 1")
+        assert pg.title() == "PrixAuto" and pg.locator(".brand strong").inner_text() == "PrixAuto"
+        assert pg.locator("#update-bar, #set-check-updates, #btn-check-update").count() == 0
+        pg.evaluate("go('settings')")
+        card = pg.locator("#about-card")
+        assert "PrixAuto" in card.inner_text() and pg.locator("#about-data").inner_text() == r"C:\PrixAuto\data"
+        pg.click("#about-card summary")
+        lic = pg.locator("#about-card .about-lic ul").inner_text()
+        for n in ("Tabler", "Tabler Icons", "ApexCharts", "Fluent Emoji", "Chakra Petch", "Playwright", "pywebview"):
+            assert n in lic, n
+        pg.click("#btn-open-logs-about")
+        pg.evaluate("go('log')")
+        pg.click("#btn-open-logs")
+        assert pg.evaluate("window.__calls.filter((c) => c[0] === 'open_log_folder')") == [["open_log_folder"], ["open_log_folder"]]
         assert errors == []

@@ -48,7 +48,7 @@ const I18N = (() => {
     "Đăng nhập": "Log in", "Làm mới": "Refresh", "Sao chép": "Copy", "Tất cả": "All", "Lỗi": "Error",
     "Cảnh báo": "Warning", "Xong": "Done", "điểm": "points", "# điểm": "# points", "# ngày": "# days", "# tuần": "# weeks",
     "# ngày gần nhất": "last # days", "lượt": "times", "bước": "steps", "Ít": "Less", "Nhiều": "More",
-    "T2": "Mon", "T4": "Wed", "T6": "Fri", "CN": "Sun", "Ẩn thông báo cập nhật": "Hide update notice",
+    "T2": "Mon", "T3": "Tue", "T4": "Wed", "T5": "Thu", "T6": "Fri", "T7": "Sat", "CN": "Sun",
     // ---- trạng thái (từ bot)
     "Sẵn sàng": "Ready", "Đang chạy": "Running", "Đang chờ": "Waiting", "Đang làm mới": "Refreshing",
     "Đang đăng nhập": "Logging in", "Đang kiểm tra": "Checking", "Hoàn thành": "Done", "Chưa đăng nhập": "Not logged in",
@@ -172,18 +172,16 @@ const I18N = (() => {
     "Dữ liệu": "Data", "Giữ file nhật ký": "Keep log files",
     "File cũ hơn trong data/logs tự xóa khi bot chạy.": "Older files in data/logs are deleted when the bot runs.",
     "giây": "sec", "phút": "min", "lần": "tries", "ngày": "days",
-    "Chạy nhiều cửa sổ cùng lúc": "Running several windows at once", "Cập nhật": "Updates",
+    "Chạy nhiều cửa sổ cùng lúc": "Running several windows at once",
     "Phiên bản #": "Version #", "Phiên bản # (mã nguồn)": "Version # (source)",
-    "Mở app thì kiểm tra bản mới": "Check for a new version when the app opens", "Kiểm tra ngay": "Check now",
-    "Token GitHub (repo riêng tư)": "GitHub token (private repo)", "Đã lưu token (nhập token mới để thay)": "Token saved (enter a new one to replace it)",
-    "Đang kiểm tra...": "Checking...", "Có bản mới #": "New version #", "Đang dùng bản mới nhất (#)": "You have the latest version (#)",
-    // thanh cập nhật
-    "Có bản mới": "New version", "(đang dùng #)": "(you have #)", "Xem thay đổi": "What's new", "Tải và cập nhật": "Download and update",
-    "Bản mã nguồn: cập nhật bằng": "Source version: update with", "Đang tải bản cập nhật...": "Downloading update...",
-    "Đang tải bản cập nhật... #%": "Downloading update... #%", "Đang tải bản cập nhật... # MB": "Downloading update... # MB",
-    "Đã tải xong bản": "Downloaded version", ". Dữ liệu và phiên đăng nhập được giữ nguyên.": ". Your data and logins are kept.",
-    "Khởi động lại để cập nhật": "Restart to update", "Mở trang tải về": "Open the download page",
-    "Đang cập nhật, app sẽ tự mở lại sau vài giây...": "Updating, the app will reopen in a few seconds...",
+    // ---- thẻ Giới thiệu, thư mục nhật ký
+    "Giới thiệu": "About", "Thư mục dữ liệu": "Data folder", "Mở thư mục nhật ký": "Open log folder",
+    "Mở thư mục": "Open folder", "Mở thư mục data/logs": "Open the data/logs folder",
+    "Tự làm các việc Microsoft Rewards hằng ngày cho nhiều tài khoản.": "Does your daily Microsoft Rewards tasks for several accounts.",
+    "Điều khoản của Microsoft Rewards không cho phép dùng bot. Bạn tự chịu rủi ro khi dùng app.":
+      "The Microsoft Rewards terms do not allow bots. You use this app at your own risk.",
+    "Thư viện và giấy phép": "Libraries and licences",
+    "Bản đầy đủ của từng giấy phép nằm trong thư mục": "The full text of each licence is in the", "của app.": "folder of the app.",
     // ---- hướng dẫn (phần tiêu đề; nội dung có bản EN viết sẵn)
     "Hướng dẫn sử dụng": "User guide", "Cách dùng app từ lúc thêm tài khoản đến khi chạy tự động mỗi ngày.":
       "How to use the app, from adding an account to running it automatically every day.",
@@ -209,8 +207,8 @@ const I18N = (() => {
     "Đã mở cửa sổ đăng nhập": "Login window opened", "Đang kiểm tra (không search)": "Checking (no searches)",
     "Đã gửi lệnh dừng": "Stop sent", "Đã lưu cài đặt": "Settings saved", "Đã lưu tài khoản": "Account saved",
     "Đã thêm tài khoản. Bấm Đăng nhập để đăng nhập lần đầu.": "Account added. Click Log in to log in the first time.",
-    "Đã lưu mục tiêu": "Goal saved", "Đã xóa mục tiêu": "Goal deleted", "Đã lưu token GitHub": "GitHub token saved",
-    "Đã xóa token GitHub": "GitHub token deleted", "Nhật ký hoạt động": "Activity log", "Nhật ký đang trống": "The log is empty", "Đã sao chép nhật ký": "Log copied",
+    "Đã lưu mục tiêu": "Goal saved", "Đã xóa mục tiêu": "Goal deleted",
+    "Nhật ký hoạt động": "Activity log", "Nhật ký đang trống": "The log is empty", "Đã sao chép nhật ký": "Log copied",
     "Đã chọn toàn bộ nhật ký, bấm Ctrl+C để sao chép": "Selected the whole log, press Ctrl+C to copy",
   };
   // chuỗi có dữ liệu của người dùng (tên tài khoản, email...) ở giữa: dịch theo mẫu, phần ở giữa giữ nguyên hoặc dịch tiếp
@@ -222,7 +220,6 @@ const I18N = (() => {
     [/^“(.+)” cần là số từ (\d+) đến (\d+)$/, (m) => `“${tr(m[1]) ?? m[1]}” must be a number from ${m[2]} to ${m[3]}`],
     [/^Đang dừng (.+)$/, (m) => `Stopping ${m[1]}`],
     [/^Đăng nhập cho tài khoản (.+)$/, (m) => `Signing in account ${m[1]}`],
-    [/^Cập nhật lỗi: (.+)$/, (m) => `Update failed: ${m[1]}`],
   ];
   const NUM = /[+\-]?\d[\d,.:/-]*/g;  // vd "3,083", "+10", "60/90", "14:16", "09-11"
 

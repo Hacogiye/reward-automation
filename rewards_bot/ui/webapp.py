@@ -6,8 +6,10 @@ sang JS theo lô mỗi 250ms qua window.onEvents([...]).
 
 import base64
 import json
+import os
 import queue
 import re
+import subprocess
 import sys
 import threading
 import time
@@ -15,8 +17,8 @@ from pathlib import Path
 
 import webview
 
-from .. import __version__
-from ..core import credentials, security, updater
+from .. import APP_NAME, __version__
+from ..core import credentials, security
 from ..core import config
 from ..core.config import (DATA_DIR, DASHBOARD_FILE, HISTORY_FILE, POINTS_HISTORY_FILE, load_settings, new_profile_dir,
                            read_json, save_settings, write_json)
@@ -32,7 +34,7 @@ SETTING_SCHEMA = {
     "search_browse": (bool,), "search_click_pct": (int, 0, 100),
     "stall_after": (int, 3, 30), "visual_max_tries": (int, 1, 10), "log_keep_days": (int, 1, 90),
     "headless": (bool,), "do_quests": (bool,), "do_pc": (bool,), "do_mobile": (bool,), "do_visual": (bool,),
-    "do_browse": (bool,), "bypass_proxy": (bool,), "check_updates": (bool,), "fun_mode": (bool,),
+    "do_browse": (bool,), "bypass_proxy": (bool,), "fun_mode": (bool,),
     "browse_auto_stop": (bool,), "do_quest_tasks": (bool,), "custom_searches": (bool,),
     "pc_searches": (int, 0, 50), "mobile_searches": (int, 0, 50),
     "browser_channel": (str, ("msedge", "chrome", "")),
@@ -212,69 +214,21 @@ class Api:
             (config.AVATAR_DIR / f"{p['dir']}.{ext}").write_bytes(raw)
         return {"ok": True, "avatars": self._avatars()}
 
-    # ------------------------------------------------------------ cập nhật
+    # ------------------------------------------------------------ thông tin app, thư mục nhật ký
     def _app_info(self) -> dict:
-        return {"version": __version__, "frozen": config.FROZEN, "releases": updater.RELEASES_URL}
+        return {"name": APP_NAME, "version": __version__, "frozen": config.FROZEN, "data_dir": str(DATA_DIR)}
 
-    def check_update(self) -> dict:
-        """Hỏi GitHub bản mới nhất. Không có bản mới / lỗi mạng thì không làm phiền người dùng."""
+    def open_log_folder(self) -> dict:
+        """Mở thư mục nhật ký (data/logs) bằng trình quản lý file. Đường dẫn cố định, không nhận tham số từ giao diện."""
+        folder = config.LOG_DIR
         try:
-            rel = updater.latest_release()
-        except updater.UpdateError as e:
-            return {"ok": False, "error": str(e), "current": __version__}
-        self._release = rel
-        newer = updater.is_newer(rel["tag"])
-        return {"ok": True, "current": __version__, "latest": rel["version"], "newer": newer, "notes": rel["notes"],
-                "name": rel["name"], "can_install": newer and config.FROZEN and bool(rel["asset"])}
-
-    def open_releases(self) -> dict:
-        """Mở trang bản phát hành trên GitHub bằng trình duyệt mặc định (chỉ đúng địa chỉ của repo này)."""
-        import webbrowser
-        webbrowser.open(updater.RELEASES_URL)
-        return {"ok": True}
-
-    def download_update(self) -> dict:
-        rel = getattr(self, "_release", None)
-        if not config.FROZEN:
-            return {"ok": False, "error": "Đang chạy từ mã nguồn: cập nhật bằng git pull."}
-        if not rel or not rel.get("asset") or not updater.is_newer(rel["tag"]):
-            return {"ok": False, "error": "Không có bản mới để tải."}
-        if getattr(self, "_downloading", False):
-            return {"ok": True}
-        self._downloading = True
-
-        def work():
-            dest = config.UPDATE_DIR / rel["asset"]["name"]
-            last = [0.0]
-
-            def progress(done, total):
-                if time.time() - last[0] > 0.5:
-                    last[0] = time.time()
-                    self._events.put({"type": "update", "state": "downloading", "done": done, "total": total})
-            try:
-                updater.download(rel["asset"], dest, progress)
-                self._update_zip = dest
-                self._events.put({"type": "update", "state": "ready", "version": rel["version"]})
-            except (updater.UpdateError, OSError) as e:
-                self._events.put({"type": "update", "state": "error", "error": str(e)})
-            finally:
-                self._downloading = False
-
-        threading.Thread(target=work, daemon=True).start()
-        return {"ok": True}
-
-    def apply_update(self) -> dict:
-        """Chạy script cài (đợi app đóng rồi chép đè, giữ data/) và đóng app."""
-        z = getattr(self, "_update_zip", None)
-        if not z:
-            return {"ok": False, "error": "Chưa tải bản cập nhật."}
-        if self._runner.running:
-            return {"ok": False, "error": "Dừng các tài khoản đang chạy trước khi cập nhật."}
-        try:
-            updater.start_apply(z, config.BASE_DIR, config.UPDATE_DIR)
-        except (updater.UpdateError, OSError) as e:
-            return {"ok": False, "error": str(e)}
-        threading.Timer(0.8, lambda: [w.destroy() for w in list(webview.windows)]).start()
+            folder.mkdir(parents=True, exist_ok=True)
+            if sys.platform == "win32":
+                os.startfile(folder)  # noqa: S606 (đường dẫn cố định của app)
+            else:
+                subprocess.Popen(["xdg-open", str(folder)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError as e:
+            return {"ok": False, "error": f"Không mở được thư mục nhật ký: {e}"}
         return {"ok": True}
 
     def set_goal(self, name, title, points) -> dict:
@@ -426,7 +380,7 @@ def _window_background(theme: str, fun_mode: bool = True) -> str:
 def main() -> None:
     security.harden_data_dir(DATA_DIR)
     api = Api()
-    window = webview.create_window("Microsoft Rewards Bot", url=str(WEB_DIR / "index.html"), js_api=api,
+    window = webview.create_window(APP_NAME, url=str(WEB_DIR / "index.html"), js_api=api,
                                    width=1320, height=880, min_size=(1020, 680),
                                    background_color=_window_background(api._settings.get("theme", "system"),
                                                                      bool(api._settings.get("fun_mode"))),

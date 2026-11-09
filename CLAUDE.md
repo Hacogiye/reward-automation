@@ -35,15 +35,19 @@ python -m rewards_bot --run-all --headless # what Task Scheduler runs
   Task icons are Fluent Emoji 3D PNGs (MIT, `vendor/fluent-emoji/`, 96px), picked in `app.js` by `ICON_RULES`
   (title first, then Bing image name, then group). The Cyberpunk skin (`cyberpunk.css`, `data-skin="cyberpunk"`) uses
   Chakra Petch (OFL, `vendor/fonts/`) and the app's own `assets/skyline.svg`.
-- Packaging: `packaging/build_exe.py` builds a PyInstaller onedir `dist/RewardsBot/` plus
-  `RewardsBot-<ver>-win64.zip`. When frozen (`config.FROZEN`), `BASE_DIR` is the folder of `RewardsBot.exe`, so `data/`
+- App name: `APP_NAME = "PrixAuto"` in `rewards_bot/__init__.py` (window title, message boxes, `_app_info()["name"]`).
+  The Python class is still `RewardsBot` and the package is still `rewards_bot`; only the product name changed.
+- Packaging: `packaging/build_exe.py` builds a PyInstaller onedir `dist/PrixAuto/` (spec `packaging/PrixAuto.spec`) plus
+  `PrixAuto-<ver>-win64.zip`. When frozen (`config.FROZEN`), `BASE_DIR` is the folder of `PrixAuto.exe`, so `data/`
   sits next to it. `packaging/launcher.py` writes uncaught errors to `data/crash.log`. The windowed exe has no usable
   stdout, and printing Vietnamese crashed it until `__main__._safe_console()` was added. Keep that.
-- `core/updater.py`: checks GitHub Releases (`REPO`, private, so it needs a read-only token stored with
-  `credentials.save_secret`), downloads the zip (the token is not sent to the redirect host), and `verify_zip` rejects
-  traversal or any `RewardsBot/data/` entry. A detached PowerShell script then waits for the app to exit, robocopies
-  over the install excluding `data/`, and restarts it. Version = `rewards_bot.__version__`. Pushing tag `v<ver>` runs
-  `.github/workflows/release.yml`, and the tag must match `__version__`.
+- No auto-update (removed 2026-11-09 with `core/updater.py`, the `check_updates` setting and the update bar). Users
+  download a new zip. Pushing tag `v<ver>` still runs `.github/workflows/release.yml` (test, build, GitHub Release with
+  the zip and its `.sha256`); the tag must match `__version__`. `Api.__init__` still deletes an old `github_token` secret.
+- Settings > About (`#about-card`): name, version, data folder (`_app_info()["data_dir"]`), risk line and the licence
+  list (full texts are in `ui/web/vendor/*/LICENSE`, `OFL-ChakraPetch.txt`). `Api.open_log_folder()` opens the fixed
+  `config.LOG_DIR` (`os.startfile` on Windows, `xdg-open` elsewhere) and takes no argument; buttons on the Log page and
+  the About card call it.
 - Quests (2026-10-23): `rewards_page` parses `/earn/quest/...` cards into `state["quests"]`. A quest page lists steps under
   `H2: Activities` as `H3` rows; a step that can be done in a browser is a link there (`SCRAPE_JS` section "Activities").
   Steps locked behind the Microsoft Rewards desktop app have no link ("Install the Desktop Rewards App"), so

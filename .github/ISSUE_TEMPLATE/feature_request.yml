@@ -1,0 +1,15 @@
+name: Feature request / Đề xuất tính năng
+description: An idea to make PrixAuto better. / Ý tưởng làm PrixAuto tốt hơn.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like? / Bạn muốn gì?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why? / Vì sao?
+      description: The problem it solves for you. / Nó giải quyết vấn đề gì cho bạn.

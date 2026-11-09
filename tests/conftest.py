@@ -20,7 +20,6 @@ def data_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "LOCK_FILE", d / "app.lock")
     monkeypatch.setattr(config, "CREDENTIALS_FILE", d / "credentials.json")
     monkeypatch.setattr(config, "SECRETS_FILE", d / "secrets.json")
-    monkeypatch.setattr(config, "UPDATE_DIR", d / "update")
     monkeypatch.setattr(config, "AVATAR_DIR", d / "avatars")
     config.LOAD_WARNINGS.clear()
     return d

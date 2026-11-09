@@ -14,3 +14,4 @@ dist/
 # cấu hình trợ lý AI (agent, skill, hook, quyền) của riêng máy này, không đưa lên git
 .claude/
 .agents/
+.codex/

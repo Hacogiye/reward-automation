@@ -1,4 +1,4 @@
-/* Giao diện Rewards Bot: dựng trên Tabler (Bootstrap 5). Chỉ chứa phần riêng của app; màu lấy từ biến --tblr-*
+/* Giao diện PrixAuto: dựng trên Tabler (Bootstrap 5). Chỉ chứa phần riêng của app; màu lấy từ biến --tblr-*
    nên tự đổi theo sáng/tối (data-bs-theme trên <html>). */
 
 :root {
@@ -71,15 +71,6 @@ html[lang="en"] [data-lang="vi"], html:not([lang="en"]) [data-lang="en"] { displ
   .side { position: fixed; top: 0; bottom: 0; left: 0; transition: width .18s ease; overflow-x: hidden; }
   .page-wrapper { margin-left: 15rem; transition: margin-left .18s ease; }
 }
-
-/* ---------------------------------------------------------------- thanh báo bản mới */
-.update-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 24px; font-size: 14px;
-  background: var(--tblr-primary); color: #fff; }
-.update-bar > .ti { font-size: 18px; }
-.update-bar code { background: rgba(255, 255, 255, .15); color: inherit; }
-.update-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
-.update-bar .btn:not(.btn-primary) { background: rgba(255, 255, 255, .12); color: #fff; border-color: rgba(255, 255, 255, .3); }
-.update-bar .btn-primary { background: #fff; color: var(--tblr-primary); border-color: #fff; }
 
 /* ---------------------------------------------------------------- chung */
 .btn i.ti { font-size: 18px; margin-right: 6px; }
@@ -422,6 +413,15 @@ img.broken { visibility: hidden; }
   outline: 2px solid var(--tblr-primary) !important; outline-offset: 2px; }
 .side :where(a, button):focus-visible { outline-color: #60a5fa !important; }  /* nền thanh bên tối: xanh sáng hơn */
 .form-selectgroup-input:focus-visible + .form-selectgroup-label { outline: 2px solid var(--tblr-primary); outline-offset: 2px; }
+
+/* ---------------------------------------------------------------- thẻ Giới thiệu (Cài đặt) */
+.about-app { display: flex; gap: 12px; align-items: center; }
+.about-app img { width: 40px; height: 40px; flex: none; }
+.about-app strong { display: block; font-size: 16px; }
+.about-app span { display: block; font-size: 13px; color: var(--tblr-secondary); }
+.about-path { display: block; white-space: normal; word-break: break-all; }
+.about-lic summary { cursor: pointer; color: var(--tblr-primary); }
+.about-lic ul { margin: 8px 0; padding-left: 1.1rem; font-size: 13px; }
 
 /* ---------------------------------------------------------------- màn hình chào */
 .wd-langs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

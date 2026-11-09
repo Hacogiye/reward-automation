@@ -1,5 +1,5 @@
 """
-Microsoft Rewards Bot
+PrixAuto
 
     python -m rewards_bot                        # mở giao diện
     python -m rewards_bot --run-all [--headless] # chạy tất cả tài khoản không cần giao diện
@@ -10,6 +10,7 @@ import argparse
 import os
 import sys
 
+from . import APP_NAME
 from .core.instance import AlreadyRunning, single_instance
 
 
@@ -44,12 +45,12 @@ def main() -> None:
                 sys.exit(1)
             web_main()
     except AlreadyRunning:
-        msg = "Rewards Bot đang chạy ở cửa sổ khác. Đóng cửa sổ đó trước khi mở lại."
+        msg = f"{APP_NAME} đang chạy ở cửa sổ khác. Đóng cửa sổ đó trước khi mở lại."
         print(msg)
         if not (args.run_all or args.check):  # chỉ hiện hộp thoại khi mở giao diện, không chặn lệnh chạy tự động
             try:
                 import ctypes
-                ctypes.windll.user32.MessageBoxW(None, msg, "Rewards Bot", 0x40)
+                ctypes.windll.user32.MessageBoxW(None, msg, APP_NAME, 0x40)
             except Exception:
                 pass
         sys.exit(1)

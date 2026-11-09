@@ -567,18 +567,6 @@ html[lang="en"][data-skin="cyberpunk"] .hero .card-body::before { content: "EDDI
 [data-skin="cyberpunk"] .goal-bar::after { content: ""; position: absolute; inset: 0;
   background: repeating-linear-gradient(90deg, transparent 0 9px, var(--cp-night) 9px 11px); }
 
-/* ---------------------------------------------------------------- thanh báo bản mới: dải cảnh báo vàng đen */
-[data-skin="cyberpunk"] .update-bar {
-  background: linear-gradient(90deg, rgba(252, 238, 10, .16), rgba(7, 10, 23, .9) 60%), #070a17;
-  border-bottom: 1px solid var(--cp-yellow);
-  color: var(--cp-text);
-  font-family: var(--cp-display);
-  letter-spacing: .03em;
-}
-[data-skin="cyberpunk"] .update-bar > .ti { color: var(--cp-yellow); }
-[data-skin="cyberpunk"] .update-bar b { color: var(--cp-yellow); }
-[data-skin="cyberpunk"] .update-bar .btn-primary { background: var(--cp-yellow); color: var(--cp-night); border-color: var(--cp-yellow); }
-
 /* ---------------------------------------------------------------- ô KPI + lịch nhiệt: ô vát, số HUD, ô sáng neon */
 [data-skin="cyberpunk"] .kpi { border-radius: 0; background: var(--cp-panel); border-color: var(--cp-line);
   clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%); position: relative; }

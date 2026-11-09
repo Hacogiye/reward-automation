@@ -1,0 +1,46 @@
+name: Bug report / Báo lỗi
+description: Something does not work as expected. / Có gì đó không chạy đúng.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please remove emails, account names and anything private from logs before posting.
+        Hãy xóa email, tên tài khoản và thông tin riêng trong nhật ký trước khi gửi.
+  - type: input
+    id: version
+    attributes:
+      label: Version / Phiên bản
+      description: Settings → About, or the bottom of the sidebar. / Cài đặt → Giới thiệu, hoặc cuối thanh bên.
+      placeholder: v1.3.0
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How do you run it? / Bạn chạy bằng gì?
+      options:
+        - PrixAuto.exe (Windows)
+        - Source on Windows / Mã nguồn trên Windows
+        - Source on Linux / Mã nguồn trên Linux
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened? / Chuyện gì xảy ra?
+      description: What you did, what you expected, what you got. / Bạn làm gì, mong đợi gì, thực tế ra sao.
+    validations:
+      required: true
+  - type: textarea
+    id: check
+    attributes:
+      label: Check result / Kết quả Kiểm tra
+      description: Accounts → ⋮ → Check, then copy the [Kiểm tra] lines from the Log page. / Tài khoản → ⋮ → Kiểm tra, rồi chép các dòng [Kiểm tra] ở trang Nhật ký.
+      render: text
+  - type: textarea
+    id: log
+    attributes:
+      label: Log / Nhật ký
+      description: The relevant part of data/logs/<date>.log (or data/crash.log if the app does not open). / Đoạn liên quan trong data/logs/<ngày>.log (hoặc data/crash.log nếu app không mở được).
+      render: text

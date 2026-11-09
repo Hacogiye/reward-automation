@@ -1,6 +1,6 @@
-"""Điểm vào của bản đóng gói RewardsBot.exe (PyInstaller cần một file script, không chạy được `-m rewards_bot`).
+"""Điểm vào của bản đóng gói PrixAuto.exe (PyInstaller cần một file script, không chạy được `-m rewards_bot`).
 
-Bản .exe không có console: lỗi không bắt được thì ghi traceback ra data/crash.log cạnh RewardsBot.exe và báo đường dẫn.
+Bản .exe không có console: lỗi không bắt được thì ghi traceback ra data/crash.log cạnh PrixAuto.exe và báo đường dẫn.
 """
 import sys
 import time
@@ -19,7 +19,7 @@ def _crash(exc: BaseException) -> None:
         pass
     try:
         import ctypes
-        ctypes.windll.user32.MessageBoxW(None, f"Rewards Bot gặp lỗi và phải đóng.\nChi tiết: {log}", "Rewards Bot", 0x10)
+        ctypes.windll.user32.MessageBoxW(None, f"PrixAuto gặp lỗi và phải đóng.\nChi tiết: {log}", "PrixAuto", 0x10)
     except Exception:
         pass
 
