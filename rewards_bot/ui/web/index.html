@@ -26,32 +26,29 @@
       <ul class="navbar-nav pt-lg-3" id="nav">
         <li class="nav-item"><a class="nav-link active" href="#" data-page="dashboard">
           <span class="nav-link-icon"><i class="ti ti-layout-dashboard"></i></span><span class="nav-link-title">Tổng quan</span></a></li>
-        <li class="nav-item" data-fun-only hidden><a class="nav-link" href="#" data-page="office">
-          <span class="nav-link-icon"><i class="ti ti-building-skyscraper"></i></span><span class="nav-link-title">Văn phòng</span></a></li>
         <li class="nav-item"><a class="nav-link" href="#" data-page="profiles">
           <span class="nav-link-icon"><i class="ti ti-users"></i></span><span class="nav-link-title">Tài khoản</span></a></li>
+        <li class="nav-item"><a class="nav-link" href="#" data-page="history">
+          <span class="nav-link-icon"><i class="ti ti-calendar-stats"></i></span><span class="nav-link-title">Lịch sử</span></a></li>
         <li class="nav-item"><a class="nav-link" href="#" data-page="log">
           <span class="nav-link-icon"><i class="ti ti-list-details"></i></span><span class="nav-link-title">Nhật ký</span>
           <span class="badge bg-red text-red-fg ms-auto" id="log-badge" hidden></span></a></li>
-        <li class="nav-item"><a class="nav-link" href="#" data-page="history">
-          <span class="nav-link-icon"><i class="ti ti-calendar-stats"></i></span><span class="nav-link-title">Lịch sử</span></a></li>
         <li class="nav-item"><a class="nav-link" href="#" data-page="settings">
           <span class="nav-link-icon"><i class="ti ti-settings"></i></span><span class="nav-link-title">Cài đặt</span></a></li>
         <li class="nav-item"><a class="nav-link" href="#" data-page="guide">
           <span class="nav-link-icon"><i class="ti ti-help-circle"></i></span><span class="nav-link-title">Hướng dẫn</span></a></li>
+        <!-- trang Văn phòng chỉ có ở chế độ vui, nằm cuối menu -->
+        <li class="nav-item nav-fun" data-fun-only hidden><a class="nav-link" href="#" data-page="office">
+          <span class="nav-link-icon"><i class="ti ti-building-skyscraper"></i></span><span class="nav-link-title">Văn phòng</span></a></li>
       </ul>
+      <!-- sáng / tối nằm ở trang Cài đặt; thanh bên chỉ còn đổi ngôn ngữ, trạng thái chạy, phiên bản và nút thu gọn -->
       <div class="side-foot">
-        <div class="theme-switch" role="radiogroup" aria-label="Giao diện">
-          <button type="button" data-theme="light" title="Sáng"><i class="ti ti-sun"></i></button>
-          <button type="button" data-theme="system" title="Theo hệ thống"><i class="ti ti-device-desktop"></i></button>
-          <button type="button" data-theme="dark" title="Tối"><i class="ti ti-moon"></i></button>
-          <button type="button" data-theme="cyberpunk" title="Cyberpunk" data-fun-only hidden><i class="ti ti-bolt"></i></button>
-        </div>
         <div class="lang-switch" role="radiogroup" aria-label="Ngôn ngữ">
-          <button type="button" data-set-lang="vi" title="Tiếng Việt">VI</button>
-          <button type="button" data-set-lang="en" title="English">EN</button>
+          <button type="button" role="radio" data-set-lang="vi" title="Tiếng Việt" data-no-i18n>VI</button>
+          <button type="button" role="radio" data-set-lang="en" title="English">EN</button>
         </div>
-        <div class="run-state" id="run-state"><span class="status-dot"></span><span>Đang nghỉ</span></div>
+        <div class="run-state" id="run-state" role="status"><span class="status-dot"></span><span>Đang nghỉ</span></div>
+        <div class="side-version" id="side-version" data-no-i18n></div>
         <button type="button" class="side-toggle" id="side-toggle" aria-label="Thu gọn thanh bên" aria-expanded="true">
           <i class="ti ti-layout-sidebar-left-collapse"></i><span>Thu gọn</span></button>
       </div>
@@ -342,6 +339,7 @@
                 <label class="form-check form-switch mt-3 mb-0">
                   <input class="form-check-input" type="checkbox" id="set-fun-mode">
                   <span class="form-check-label">Chế độ vui (Văn phòng robot, skin Cyberpunk, icon 3D)</span></label>
+                <button type="button" class="btn btn-link px-0 mt-2" id="btn-welcome-again"><i class="ti ti-hand-stop"></i>Xem lại màn hình chào</button>
               </div>
             </div>
             <div class="card">
@@ -486,8 +484,8 @@
                   <div id="g-auto" class="accordion-collapse collapse" data-bs-parent="#guide"><div class="accordion-body">
                     <p>Tạo một task trong <b>Windows Task Scheduler</b> chạy mỗi ngày một lần với lệnh:</p>
                     <pre>RewardsBot.exe --run-all --headless</pre>
-                    <p>Đặt <em>Start in</em> là thư mục chứa <code>RewardsBot.exe</code>. Nếu chạy từ mã nguồn, dùng
-                      <code>python -m rewards_bot --run-all --headless</code> với thư mục dự án.</p>
+                    <p>Đặt <em>Start in</em> là thư mục chứa <code>RewardsBot.exe</code>.<span class="src-only"> Nếu chạy từ mã nguồn, dùng
+                      <code>python -m rewards_bot --run-all --headless</code> với thư mục dự án.</span></p>
                     <p class="text-secondary m-0">Task chỉ chạy được khi cửa sổ app đang đóng. Kết quả xem ở trang <em>Lịch sử</em> và <em>Nhật ký</em>.</p>
                   </div></div>
                 </div>
@@ -660,8 +658,8 @@
                   <div id="ge-auto" class="accordion-collapse collapse" data-bs-parent="#guide-en"><div class="accordion-body">
                     <p>Create a task in <b>Windows Task Scheduler</b> that runs once a day with this command:</p>
                     <pre>RewardsBot.exe --run-all --headless</pre>
-                    <p>Set <em>Start in</em> to the folder that holds <code>RewardsBot.exe</code>. When running from source, use
-                      <code>python -m rewards_bot --run-all --headless</code> in the project folder.</p>
+                    <p>Set <em>Start in</em> to the folder that holds <code>RewardsBot.exe</code>.<span class="src-only"> When running from source, use
+                      <code>python -m rewards_bot --run-all --headless</code> in the project folder.</span></p>
                     <p class="text-secondary m-0">The task only runs while the app window is closed. See the results on the <em>History</em> and <em>Log</em> pages.</p>
                   </div></div>
                 </div>
@@ -740,7 +738,7 @@
   </div>
 </dialog>
 
-<dialog id="profile-dialog" class="dlg">
+<dialog id="profile-dialog" class="dlg" aria-labelledby="pd-title">
   <form method="dialog" id="profile-form">
     <div class="dlg-head"><h3 class="m-0" id="pd-title">Thêm tài khoản</h3>
       <button class="btn-close" value="cancel" formnovalidate aria-label="Đóng"></button></div>
@@ -811,9 +809,9 @@
   </form>
 </dialog>
 
-<dialog id="goal-dialog" class="dlg">
+<dialog id="goal-dialog" class="dlg" aria-labelledby="gd-head">
   <form method="dialog" id="goal-form">
-    <div class="dlg-head"><h3 class="m-0">Mục tiêu đổi quà</h3>
+    <div class="dlg-head"><h3 class="m-0" id="gd-head">Mục tiêu đổi quà</h3>
       <button class="btn-close" value="cancel" formnovalidate aria-label="Đóng"></button></div>
     <div class="dlg-body">
       <p class="text-secondary mt-0" id="gd-who"></p>
@@ -842,6 +840,71 @@
     <div class="dlg-foot">
       <button class="btn" value="cancel" id="cd-cancel" formnovalidate>Hủy</button>
       <button class="btn btn-danger" value="ok" id="cd-ok">Xóa</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- màn hình chào lần đầu (settings.onboarded = false): ngôn ngữ -> đồng ý rủi ro -> thêm tài khoản đầu tiên.
+     Nút Chạy khi chưa đồng ý (risk_ack rỗng) cũng mở hộp này ở bước 2. -->
+<dialog id="welcome-dialog" class="dlg" aria-labelledby="wd-title">
+  <div class="dlg-head"><h3 class="m-0" id="wd-title">Chào mừng</h3><span class="text-secondary small" id="wd-step"></span></div>
+  <div class="dlg-body">
+    <section class="wd-pane" data-step="1">
+      <p class="mt-0">Bot tự làm các việc Microsoft Rewards hằng ngày cho nhiều tài khoản: search PC và Mobile, Daily Set, Quests,
+        Visual Search. Thiết lập mất khoảng 2 phút.</p>
+      <div class="form-label">Ngôn ngữ</div>
+      <div class="wd-langs" role="radiogroup" aria-label="Ngôn ngữ">
+        <button type="button" class="btn" role="radio" data-wd-lang="vi" data-no-i18n>Tiếng Việt</button>
+        <button type="button" class="btn" role="radio" data-wd-lang="en" data-no-i18n>English</button>
+      </div>
+    </section>
+    <section class="wd-pane" data-step="2" hidden>
+      <div class="alert alert-warning mb-3" data-lang="vi"><b>Đọc trước khi dùng.</b>
+        Điều khoản của Microsoft Rewards không cho phép dùng bot hay chương trình tự động để kiếm điểm. Microsoft có thể
+        khóa tài khoản hoặc hủy điểm, kể cả điểm đã có. Bạn tự chịu trách nhiệm khi dùng app này.</div>
+      <div class="alert alert-warning mb-3" data-lang="en"><b>Read this first.</b>
+        The Microsoft Rewards terms do not allow bots or automated programs to earn points. Microsoft can suspend the account
+        or cancel points, including points you already have. You use this app at your own risk.</div>
+      <ul class="wd-facts" data-lang="vi">
+        <li>Phiên đăng nhập và cookie nằm trong thư mục <code>data</code> cạnh app, trên máy này.</li>
+        <li>Mật khẩu chỉ được lưu khi bạn bật tự đăng nhập, và được Windows mã hóa. App không gửi nó đi đâu.</li>
+      </ul>
+      <ul class="wd-facts" data-lang="en">
+        <li>Sign-in sessions and cookies stay in the <code>data</code> folder next to the app, on this computer.</li>
+        <li>A password is saved only if you turn on auto sign-in, and Windows encrypts it. The app never sends it anywhere.</li>
+      </ul>
+      <label class="form-check mb-0">
+        <input class="form-check-input" type="checkbox" id="wd-ack">
+        <span class="form-check-label">Tôi đã hiểu và tự chịu rủi ro khi dùng app</span></label>
+    </section>
+    <section class="wd-pane" data-step="3" hidden>
+      <p class="mt-0">Thêm tài khoản Microsoft đầu tiên. Sau đó bấm <em>Đăng nhập</em> một lần cho tài khoản đó, rồi <em>Chạy</em>.</p>
+      <button type="button" class="btn btn-primary" id="wd-add"><i class="ti ti-user-plus"></i>Thêm tài khoản</button>
+      <p class="text-secondary small mt-3 mb-0">Có thể làm sau ở trang <em>Tài khoản</em>. Mở lại màn hình này ở <em>Cài đặt</em>.</p>
+    </section>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn me-auto" id="wd-back">Quay lại</button>
+    <button type="button" class="btn btn-primary" id="wd-next">Tiếp tục</button>
+  </div>
+</dialog>
+
+<!-- sau khi bấm Đăng nhập: 3 bước + nút kiểm tra (action "check", không search) -->
+<dialog id="login-dialog" class="dlg" aria-labelledby="ld-title">
+  <form method="dialog">
+    <div class="dlg-head"><h3 class="m-0" id="ld-title">Đăng nhập</h3>
+      <button class="btn-close" value="cancel" formnovalidate aria-label="Đóng"></button></div>
+    <div class="dlg-body">
+      <p class="mt-0 text-secondary" id="ld-who"></p>
+      <ol class="steps-list mb-0">
+        <li>Trong cửa sổ trình duyệt vừa mở, đăng nhập ở tab <b>Rewards</b>.</li>
+        <li>Xem tab <b>bing.com</b>: góc phải phải là <b>cùng tài khoản</b>.</li>
+        <li>Đóng cửa sổ trình duyệt, rồi bấm <em>Kiểm tra</em> bên dưới.</li>
+      </ol>
+    </div>
+    <div class="dlg-foot">
+      <button class="btn" value="cancel" formnovalidate>Để sau</button>
+      <button type="button" class="btn btn-primary" id="ld-check"><i class="ti ti-stethoscope"></i>Kiểm tra</button>
     </div>
   </form>
 </dialog>

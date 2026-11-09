@@ -52,6 +52,10 @@ DEFAULT_SETTINGS = {
     "browse_minutes": 30,
     "browse_auto_stop": True,  # Browse tự dừng khi Edge – Minutes không tăng sau 20 phút
     "check_updates": True,  # mở app thì kiểm tra bản mới trên GitHub
+    "onboarded": False,  # đã xem màn hình chào lần đầu (chọn ngôn ngữ, đồng ý rủi ro, thêm tài khoản)
+    # phiên bản app lúc người dùng đồng ý phần rủi ro; rỗng = chưa đồng ý, nút Chạy trong giao diện mở lại bước đồng ý.
+    # Chỉ chặn giao diện: lệnh --run-all của Task Scheduler không bị ảnh hưởng.
+    "risk_ack": "",
     # mục tiêu đổi quà của từng tài khoản: {"tên tài khoản": {"title": "Thẻ quà 5$", "points": 6500}}
     "goals": {},
     # mode: "managed" = cửa sổ riêng do app mở (data/profiles/<dir>)

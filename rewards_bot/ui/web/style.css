@@ -47,11 +47,6 @@ body { overflow-y: scroll; }
 .brand div > span { display: block; font-size: 12px; color: rgba(255, 255, 255, .72); }
 .brand-logo { width: 38px; height: 38px; flex: none; object-fit: contain; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .35)); }
 .side-foot { margin-top: auto; padding: 14px 16px 18px; display: flex; flex-direction: column; gap: 12px; }
-.theme-switch { display: flex; background: rgba(255, 255, 255, .06); border-radius: 10px; padding: 3px; }
-.theme-switch button { flex: 1; border: 0; background: none; color: rgba(255, 255, 255, .6); border-radius: 8px;
-  padding: 6px 0; font-size: 17px; line-height: 1; }
-.theme-switch button:hover { color: #fff; }
-.theme-switch button.active { background: rgba(255, 255, 255, .14); color: #fff; }
 /* ngôn ngữ: khối có bản viết sẵn cho từng ngôn ngữ (data-lang) chỉ hiện đúng ngôn ngữ đang chọn */
 html[lang="en"] [data-lang="vi"], html:not([lang="en"]) [data-lang="en"] { display: none !important; }
 .lang-switch { display: flex; background: rgba(255, 255, 255, .06); border-radius: 10px; padding: 3px; }
@@ -64,6 +59,9 @@ html[lang="en"] [data-lang="vi"], html:not([lang="en"]) [data-lang="en"] { displ
 .run-state { display: flex; align-items: center; gap: 8px; font-size: 13px; color: rgba(255, 255, 255, .6); }
 .run-state .status-dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, .35); }
 .run-state.on { color: #fff; }
+.side-version { font-size: 12px; color: rgba(255, 255, 255, .6); font-variant-numeric: tabular-nums; }
+.side-version:empty { display: none; }
+.side .nav-fun { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255, 255, 255, .06); }
 .run-state.on .status-dot { position: relative; background: #2fb344; }
 /* vòng tỏa ra: animate transform + opacity (chạy trên compositor), không animate box-shadow vì nó bắt vẽ lại mỗi khung hình */
 .run-state.on .status-dot::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: rgba(47, 179, 68, .6);
@@ -408,14 +406,28 @@ img.broken { visibility: hidden; }
     padding: 2px 4px; font-size: 9px; line-height: 1; }
   html.side-collapsed .side-foot { padding: 12px 12px 14px; align-items: stretch; gap: 8px; }
   /* chỉ còn nút đang chọn của mỗi nhóm; bấm vào để chuyển (sideCycle trong app.js) */
-  html.side-collapsed .theme-switch button:not(.active), html.side-collapsed .lang-switch button:not(.active) { display: none; }
-  html.side-collapsed .theme-switch button, html.side-collapsed .lang-switch button { padding: 8px 0; }
+  html.side-collapsed .lang-switch button:not(.active) { display: none; }
+  html.side-collapsed .lang-switch button { padding: 8px 0; }
+  html.side-collapsed .side-version { text-align: center; font-size: 10px; }
   html.side-collapsed .run-state { justify-content: center; padding: 4px 0; }
   html.side-collapsed .run-state span:last-child { display: none; }
   html.side-collapsed .side-toggle { justify-content: center; padding: 10px 0 4px; }
   html.side-collapsed .side-toggle span { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .side, .page-wrapper { transition: none !important; } }
+
+/* ---------------------------------------------------------------- vòng focus khi dùng bàn phím
+   Một kiểu cho mọi phần tử bấm được (Tabler để một số nút không có viền focus). Chỉ hiện khi dùng phím (:focus-visible). */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--tblr-primary) !important; outline-offset: 2px; }
+.side :where(a, button):focus-visible { outline-color: #60a5fa !important; }  /* nền thanh bên tối: xanh sáng hơn */
+.form-selectgroup-input:focus-visible + .form-selectgroup-label { outline: 2px solid var(--tblr-primary); outline-offset: 2px; }
+
+/* ---------------------------------------------------------------- màn hình chào */
+.wd-langs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.wd-langs .btn.active { border-color: var(--tblr-primary); color: var(--tblr-primary); box-shadow: inset 0 0 0 1px var(--tblr-primary); }
+.wd-facts { padding-left: 1.1rem; margin-bottom: 14px; color: var(--tblr-secondary); }
+.wd-facts li { margin-bottom: 4px; }
 
 /* ---------------------------------------------------------------- khối trạng thái rỗng (stateBlock) */
 .state-block { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center;

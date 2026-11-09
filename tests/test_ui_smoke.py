@@ -3,6 +3,7 @@ import contextlib
 import functools
 import http.server
 import json
+import re
 import shutil
 import subprocess
 import threading
@@ -47,7 +48,8 @@ def boot_data():
                      "search_browse": True, "search_click_pct": 40, "stall_after": 6, "visual_max_tries": 4, "log_keep_days": 14,
                      "headless": True, "max_parallel": 3, "history_days": 30, "do_quests": True, "do_pc": True,
                      "do_mobile": True, "do_visual": True, "do_browse": False,
-                     "browse_minutes": 30, "bypass_proxy": True, "theme": "light", "fun_mode": False},
+                     "browse_minutes": 30, "bypass_proxy": True, "theme": "light", "fun_mode": False,
+                     "onboarded": True, "risk_ack": "1.2.0"},
         "profiles": [{"name": "acc <img src=x onerror=alert(1)>", "mode": "managed", "cdp_port": 9222, "dir": "a"}],
         "pstate": {"acc <img src=x onerror=alert(1)>": {
             "state": "Sẵn sàng", "points": 3417, "today": 98, "tasks": rp.build_task_rows(st), "stats": rp.stats(st),
@@ -167,7 +169,7 @@ def test_pages_render_without_errors(server):
         pg.wait_for_function("document.querySelectorAll('#chart-daily .apexcharts-canvas, #chart-balance .apexcharts-canvas').length === 2",
                              timeout=10000)
         assert pg.evaluate("document.documentElement.dataset.bsTheme") == "light"
-        pg.click(".theme-switch button[data-theme=dark]")
+        pg.evaluate("setTheme('dark')")
         assert pg.evaluate("document.documentElement.dataset.bsTheme") == "dark"
         # icon task là PNG trong vendor/fluent-emoji hoặc SVG riêng trong assets/icons (không lấy ảnh Bing), tải được
         icons = pg.evaluate("Array.from(document.querySelectorAll('#task-groups .trow .tico img, #meters .tico img'),"
@@ -185,14 +187,14 @@ def test_pages_render_without_errors(server):
         assert pg.locator("#task-groups .trow.done").count() == 0
         pg.click("#tasks-hide-done")
         assert pg.locator("#task-groups .trow.done").count() > 0
-        pg.click(".theme-switch button[data-theme=cyberpunk]")  # giao diện Cyberpunk: nền tối + lớp riêng
+        pg.evaluate("setTheme('cyberpunk')")  # giao diện Cyberpunk: nền tối + lớp riêng
         # Cyberpunk: icon task là icon nét neon (ẩn ảnh 3D); Sáng / Tối thì ngược lại
         assert pg.evaluate("getComputedStyle(document.querySelector('#meters .tico img')).display") == "none"
         assert pg.evaluate("getComputedStyle(document.querySelector('#meters .tico i')).display") == "block"
         assert pg.evaluate("document.querySelector('#meters .tico i').className") == "ti ti-device-desktop"
         assert pg.evaluate("[document.documentElement.dataset.bsTheme, document.documentElement.dataset.skin]") == ["dark", "cyberpunk"]
         assert pg.evaluate("getComputedStyle(document.body).fontFamily").lstrip('"').startswith("Bahnschrift")
-        pg.click(".theme-switch button[data-theme=light]")
+        pg.evaluate("setTheme('light')")
         assert pg.evaluate("document.documentElement.dataset.skin") is None
         if SHOT:
             pg.set_viewport_size({"width": 1320, "height": 1100})
@@ -289,10 +291,10 @@ def test_pages_render_without_errors(server):
         assert pg.evaluate("Office._card()") is None
         # Cyberpunk và giao diện tối: dựng lại sprite + nền, không lỗi JS
         for theme in ("cyberpunk", "dark"):
-            pg.click(f".theme-switch button[data-theme={theme}]")
+            pg.evaluate(f"setTheme('{theme}')")
             pg.wait_for_timeout(600)
             assert pg.evaluate("document.querySelector('#office-canvas').width") > 0
-        pg.click(".theme-switch button[data-theme=light]")
+        pg.evaluate("setTheme('light')")
         pg.click("#office-music")
         assert "Tắt nhạc lofi" in pg.locator("#office-music").inner_text()
         pg.click("#office-music")
@@ -568,7 +570,7 @@ def test_neutral_palette_phase1(server, fun):
         pg.goto(server + "/index.html")
         pg.wait_for_function("document.querySelectorAll('.chip').length === 1", timeout=10000)
         for theme in ("light", "dark"):
-            pg.click(f".theme-switch button[data-theme={theme}]")
+            pg.evaluate(f"setTheme('{theme}')")
             assert pg.evaluate("document.documentElement.dataset.bsTheme") == theme
             for page in ("dashboard", "profiles", "log", "history", "settings", "guide", "office"):  # TC-1.1 (office: chỉ khi bật chế độ vui)
                 pg.evaluate(f"go('{page}')")
@@ -619,10 +621,9 @@ def test_fun_off_default_look(server):
         # TC-2.2: hiện như Tối, không skin, và giá trị đã lưu không bị ghi đè
         assert pg.evaluate("[document.documentElement.dataset.bsTheme, document.documentElement.dataset.skin ?? null]") == ["dark", None]
         assert pg.evaluate("S.settings.theme") == "cyberpunk"
-        assert pg.evaluate("document.querySelector('.theme-switch button.active').dataset.theme") == "dark"
+        assert pg.evaluate("document.querySelector('#theme-choice input:checked').value") == "dark"
         # TC-2.1: không có mục Văn phòng, không có nút Cyberpunk (thanh bên và Cài đặt); go('office') về tổng quan
         assert pg.locator("#nav [data-page=office]").is_hidden()
-        assert pg.locator(".theme-switch button[data-theme=cyberpunk]").is_hidden()
         pg.evaluate("go('office')")
         assert pg.evaluate("S.page") == "dashboard"
         assert pg.locator("#page-dashboard").is_visible() and pg.locator("#page-office").is_hidden()
@@ -685,13 +686,12 @@ def test_fun_mode_toggle_without_reload(server):
         assert poll(pg, "document.querySelector('#nav [data-page=office]').offsetWidth > 0")
         assert pg.evaluate("window.__marker") == 42  # không tải lại
         assert pg.evaluate("window.__calls.filter((c) => c[0] === 'save_settings').map((c) => c[1])")[-1] == {"fun_mode": True}
-        assert pg.locator(".theme-switch button[data-theme=cyberpunk]").is_visible()
         assert pg.locator("#theme-choice label:has(input[value=cyberpunk])").is_visible()
         # theme đã lưu là cyberpunk nên skin trở lại
         assert pg.evaluate("[document.documentElement.dataset.bsTheme, document.documentElement.dataset.skin]") == ["dark", "cyberpunk"]
         assert pg.evaluate("document.querySelector('#theme-choice input:checked').value") == "cyberpunk"
         # TC-3.2: icon 3D, đồng xu, ngọn lửa và đĩa dấu quay lại như cũ
-        pg.click(".theme-switch button[data-theme=light]")
+        pg.evaluate("setTheme('light')")
         pg.evaluate("go('dashboard')")
         assert poll(pg, "[...document.querySelectorAll('#task-groups .trow .tico img, #meters .tico img')].every((i) => i.complete && i.naturalWidth > 0)")  # ảnh mới thêm cần một nhịp để tải
         icons = pg.evaluate("Array.from(document.querySelectorAll('#task-groups .trow .tico img, #meters .tico img'),"
@@ -854,19 +854,30 @@ def test_lofi_follows_fun_mode(server):
         assert errors == []
 
 
-def test_collapsed_theme_cycle_skips_hidden_cyberpunk(server):
-    """R2: thanh bên thu gọn + tắt chế độ vui: bấm nút theme đi vòng Sáng, Theo Windows, Tối và không bao giờ lưu cyberpunk."""
+def test_sidebar_order_version_and_theme_in_settings(server):
+    """TC-4.1..4.3: menu theo thứ tự mới (Văn phòng cuối, chỉ khi bật chế độ vui), chân thanh bên có số phiên bản và không còn
+    nút sáng / tối (đổi ở Cài đặt); thu gọn thì nút ngôn ngữ còn một, bấm là đổi VI <-> EN."""
     boot = boot_n(1)
-    boot["settings"]["theme"] = "dark"
+    boot["settings"]["theme"] = "light"
     with app_page(server, boot, init="localStorage.setItem('sideCollapsed', 'true');") as (pg, errors):
-        assert pg.evaluate("document.documentElement.classList.contains('side-collapsed')")
+        order = pg.evaluate("[...document.querySelectorAll('#nav [data-page]')].map((a) => a.dataset.page)")
+        assert order == ["dashboard", "profiles", "history", "log", "settings", "guide", "office"], order
+        assert pg.locator(".side .theme-switch").count() == 0
+        assert pg.locator("#side-version").inner_text().strip() == "v" + boot["app"]["version"]
+        assert pg.locator("#nav [data-page=history]").get_attribute("title") == "Lịch sử"
         seq = []
-        for _ in range(4):
-            pg.locator(".theme-switch button.active").click()
-            seq.append(pg.evaluate("S.settings.theme"))
-        assert seq == ["light", "system", "dark", "light"], seq
-        saved = pg.evaluate("window.__calls.filter((c) => c[0] === 'save_settings').map((c) => c[1].theme)")
-        assert saved == seq and "cyberpunk" not in saved
+        for _ in range(3):
+            pg.locator(".lang-switch button.active").click()
+            seq.append(pg.evaluate("S.settings.language"))
+        assert seq == ["en", "vi", "en"], seq
+        assert pg.get_attribute(".lang-switch button[data-set-lang=en]", "aria-checked") == "true"
+        pg.locator(".lang-switch button.active").click()
+        pg.evaluate("go('settings')")
+        pg.click("#theme-choice label:has(input[value=dark])")
+        assert pg.evaluate("document.documentElement.dataset.bsTheme") == "dark"
+        assert pg.evaluate("window.__calls.filter((c) => c[0] === 'save_settings').map((c) => c[1])")[-1] == {"theme": "dark"}
+        pg.click("#theme-choice label:has(input[value=light])")
+        assert pg.evaluate("document.documentElement.dataset.bsTheme") == "light"
         assert errors == []
 
 
@@ -912,3 +923,147 @@ def test_settings_groups_validation_history_and_log_search(server):
         xs = pg.evaluate("Array.from(document.querySelectorAll('#streak-list .srow .segbar'), (e) => Math.round(e.getBoundingClientRect().left))")
         assert len(xs) >= 2 and len(set(xs)) == 1, xs
         assert not errors, errors
+
+
+def test_accessibility_focus_ring_chart_labels_and_esc(server):
+    """TC-9.1..9.3: dùng phím Tab thì phần tử đang focus có viền; mọi [role=img] có aria-label (biểu đồ có câu tóm tắt);
+    Esc đóng mọi hộp thoại."""
+    boot = boot_data()
+    with app_page(server, boot, viewport={"width": 1320, "height": 900}) as (pg, errors):
+        assert poll(pg, "document.querySelectorAll('#chart-daily .apexcharts-canvas, #chart-balance .apexcharts-canvas').length === 2", 10000)
+        # TC-9.2
+        unlabeled = pg.evaluate("[...document.querySelectorAll('[role=img]')]"
+                                ".filter((e) => !(e.getAttribute('aria-label') || '').trim()).map((e) => e.id || e.className)")
+        assert unlabeled == [], unlabeled
+        assert pg.get_attribute("#chart-daily", "role") == "img"
+        assert "ngày gần nhất" in pg.get_attribute("#chart-daily", "aria-label")
+        assert pg.get_attribute("#chart-balance", "aria-label").startswith("Số điểm trong")
+        assert pg.get_attribute(".chip.active", "aria-pressed") == "true"
+        # TC-9.1: 12 lần Tab, phần tử nào nhận focus cũng có viền
+        pg.locator("body").click(position={"x": 5, "y": 5})
+        seen = []
+        for _ in range(12):
+            pg.keyboard.press("Tab")
+            seen.append(pg.evaluate("(() => { const e = document.activeElement; const cs = getComputedStyle(e);"
+                                    " return [e.tagName + '.' + e.className, cs.outlineStyle, cs.outlineWidth]; })()"))
+        bad = [s for s in seen if s[0].startswith("BODY") or s[1] == "none" or s[2] == "0px"]
+        assert not bad, seen
+        # TC-9.3
+        name = pg.evaluate("S.profiles[0].name")
+        for open_js, dlg in ((f"openProfileDialog(S.profiles[0])", "#profile-dialog"),
+                             (f"openGoalDialog({json.dumps(name)})", "#goal-dialog"),
+                             ("openSettingsDialog()", "#settings-dialog"),
+                             ("confirmDialog({title: 'x', text: 'y'})", "#confirm-dialog"),
+                             ("Welcome.open(1)", "#welcome-dialog"), ("openLoginHelp(S.profiles[0].name)", "#login-dialog")):
+            pg.evaluate(f"void {open_js}")
+            assert pg.evaluate(f"document.querySelector('{dlg}').open"), dlg
+            pg.keyboard.press("Escape")
+            assert poll(pg, f"!document.querySelector('{dlg}').open", 2000), dlg
+        assert pg.locator("#settings-home #settings-cards").count() == 1  # Esc cũng trả khối cài đặt về trang
+        pg.evaluate("setLanguage('en')")
+        assert pg.get_attribute("#chart-daily", "aria-label").startswith("Points per day over the last")
+        assert errors == []
+
+
+VI_CHARS = re.compile("[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]", re.I)
+LEFTOVER_VI_JS = """(() => {
+  const out = [], vis = (e) => !!(e.offsetWidth || e.offsetHeight || e.getClientRects().length);
+  const skip = (e) => e.closest('#logbox, [data-no-i18n], script, style, code, pre');
+  const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n; (n = w.nextNode());) {
+    const t = n.nodeValue.trim(), e = n.parentElement;
+    if (t && e && !skip(e) && vis(e)) out.push(t);
+  }
+  for (const e of document.querySelectorAll('[title], [placeholder], [aria-label]')) {
+    if (skip(e) || !vis(e)) continue;
+    for (const a of ['title', 'placeholder', 'aria-label']) { const v = e.getAttribute(a); if (v) out.push(v); }
+  }
+  return out;
+})()"""
+
+
+def test_english_has_no_vietnamese_left(server):
+    """TC-6.1: ở chế độ English, mọi trang và hộp thoại không còn chữ tiếng Việt (trừ nhật ký bot, tên riêng có data-no-i18n)."""
+    boot = boot_data()
+    boot["settings"]["language"] = "en"
+    with app_page(server, boot, viewport={"width": 1400, "height": 1000}) as (pg, errors):
+        assert poll(pg, "document.querySelectorAll('.chip').length === 1")
+        names = {p["name"] for p in boot["profiles"]}
+        left = {}
+        def collect(where):
+            found = [t for t in pg.evaluate(LEFTOVER_VI_JS) if VI_CHARS.search(t) and t not in names]
+            if found:
+                left[where] = sorted(set(found))
+        for page in ("dashboard", "profiles", "history", "log", "settings", "guide"):
+            pg.evaluate(f"go('{page}')")
+            pg.wait_for_timeout(250)
+            collect(page)
+        pg.evaluate("go('dashboard')")
+        pg.click("#more-charts .more-toggle")
+        pg.wait_for_timeout(400)
+        collect("more-charts")
+        name = json.dumps(sorted(names)[0])
+        for open_js, dlg in (("openProfileDialog(null)", "#profile-dialog"), ("openProfileDialog(S.profiles[0])", "#profile-dialog"),
+                             (f"openGoalDialog({name})", "#goal-dialog"), ("openSettingsDialog()", "#settings-dialog"),
+                             ("Welcome.open(1)", "#welcome-dialog"), ("Welcome.open(2)", "#welcome-dialog"),
+                             ("Welcome.open(3)", "#welcome-dialog"), ("openLoginHelp(S.profiles[0].name)", "#login-dialog")):
+            pg.evaluate(f"void {open_js}")
+            pg.wait_for_timeout(200)
+            collect(open_js)
+            pg.evaluate(f"document.querySelector('{dlg}').close()")
+        pg.evaluate("go('profiles')")
+        pg.locator("#profile-table .btn-more").first.click()
+        collect("row-menu")
+        assert left == {}, json.dumps(left, ensure_ascii=False, indent=1)
+        assert errors == []
+
+
+def test_welcome_risk_gate_and_login_helper(server):
+    """TC-7.1: onboarded=false thì màn hình chào tự mở; "Tiếp tục" ở bước rủi ro bị khóa đến khi tích ô đồng ý; xong thì lưu
+    risk_ack + onboarded. TC-7.2: chưa đồng ý thì Chạy mở lại bước rủi ro, không gọi start. TC-7.4: Đăng nhập mở hộp 3 bước,
+    nút Kiểm tra gọi start([tên], "check")."""
+    boot = boot_n(1)
+    boot["settings"].update(onboarded=False, risk_ack="")
+    with app_page(server, boot) as (pg, errors):
+        assert poll(pg, "document.querySelector('#welcome-dialog').open")
+        assert pg.locator("#wd-step").inner_text() == "Bước 1/3"
+        pg.click("[data-wd-lang=en]")
+        assert pg.evaluate("S.settings.language") == "en" and pg.locator("#wd-next").inner_text().strip() == "Continue"
+        pg.click("[data-wd-lang=vi]")
+        pg.click("#wd-next")
+        assert pg.locator("#wd-step").inner_text() == "Bước 2/3" and pg.locator("#wd-next").is_disabled()
+        pg.keyboard.press("Escape")  # đóng giữa chừng: chưa lưu gì
+        assert not pg.evaluate("document.querySelector('#welcome-dialog').open")
+        assert pg.evaluate("S.settings.risk_ack") == ""
+        # TC-7.2
+        pg.evaluate("go('profiles')")
+        pg.click("#profile-table button[data-act=run]")
+        assert pg.evaluate("document.querySelector('#welcome-dialog').open")
+        assert pg.locator("#wd-step").inner_text() == "Bước 2/3"
+        assert pg.evaluate("window.__calls.filter((c) => c[0] === 'start').length") == 0
+        pg.check("#wd-ack")
+        pg.click("#wd-next")
+        assert pg.evaluate("S.settings.risk_ack") == boot["app"]["version"]
+        assert pg.locator("#wd-step").inner_text() == "Bước 3/3"  # chưa xong màn hình chào: còn bước thêm tài khoản
+        pg.click("#wd-next")
+        assert not pg.evaluate("document.querySelector('#welcome-dialog').open")
+        assert pg.evaluate("S.settings.onboarded") is True
+        saved = pg.evaluate("window.__calls.filter((c) => c[0] === 'save_settings').map((c) => c[1])")
+        assert {"risk_ack": boot["app"]["version"]} in saved and saved[-1] == {"onboarded": True}
+        pg.click("#profile-table button[data-act=run]")
+        assert pg.evaluate("window.__calls.filter((c) => c[0] === 'start').map((c) => c[2])") == ["run"]
+        # TC-7.4
+        name = pg.evaluate("S.profiles[0].name")
+        pg.locator("#profile-table .btn-more").first.click()
+        pg.click("#profile-table .dropdown-item[data-act=login]")
+        assert poll(pg, "document.querySelector('#login-dialog').open")
+        assert name in pg.locator("#ld-who").inner_text()
+        pg.click("#ld-check")
+        assert not pg.evaluate("document.querySelector('#login-dialog').open") and pg.evaluate("S.page") == "log"
+        assert pg.evaluate("window.__calls.filter((c) => c[0] === 'start').map((c) => [c[1], c[2]])")[-2:] == \
+            [[[name], "login"], [[name], "check"]]
+        # Cài đặt: mở lại màn hình chào
+        pg.evaluate("go('settings')")
+        pg.click("#btn-welcome-again")
+        assert pg.evaluate("document.querySelector('#welcome-dialog').open") and pg.locator("#wd-step").inner_text() == "Bước 1/3"
+        assert errors == []

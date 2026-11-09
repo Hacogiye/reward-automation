@@ -83,14 +83,85 @@ document.addEventListener("error", (e) => { if (e.target.tagName === "IMG") e.ta
 window.addEventListener("pywebviewready", async () => {
   const b = await api().bootstrap();
   Object.assign(S, b, { running: new Set(b.running) });
+  $$(".src-only").forEach((e) => (e.hidden = !!S.app?.frozen));  // bản exe: ẩn hướng dẫn dành cho người chạy từ mã nguồn
   S.selected = S.profiles[0]?.name ?? null;
   bindStatic();
   window.Office?.init();
   applyFun(false);  // đặt chế độ vui + giao diện trước khi vẽ lần đầu
   applyLanguage();
   renderAll();
+  if (!S.settings.onboarded) Welcome.open(1);
   if (S.settings.check_updates !== false) checkUpdate(false);
 });
+
+// ===================================================================== màn hình chào + đồng ý rủi ro
+// Lần đầu mở app: chọn ngôn ngữ -> đọc và đồng ý phần rủi ro -> thêm tài khoản đầu tiên. Chưa đồng ý (risk_ack rỗng) thì
+// bấm Chạy sẽ mở lại bước 2 thay vì chạy. Chỉ chặn giao diện: lệnh --run-all (Task Scheduler) vẫn chạy như cũ.
+const riskOk = () => !!S.settings.risk_ack;
+const Welcome = {
+  step: 1,
+  open(step = 1) {
+    this.step = step;
+    $("#wd-ack").checked = riskOk();
+    this.show();
+    const dlg = $("#welcome-dialog");
+    if (!dlg.open) dlg.showModal();
+    $("#wd-next").focus();
+  },
+  show() {
+    $$("#welcome-dialog .wd-pane").forEach((p) => (p.hidden = +p.dataset.step !== this.step));
+    $("#wd-step").textContent = `Bước ${this.step}/3`;
+    $("#wd-back").hidden = this.step === 1;
+    $("#wd-next").textContent = this.step === 3 ? "Xong" : "Tiếp tục";
+    $("#wd-next").disabled = this.step === 2 && !$("#wd-ack").checked;
+    const lang = S.settings.language === "en" ? "en" : "vi";
+    $$("[data-wd-lang]").forEach((b) => {
+      const on = b.dataset.wdLang === lang;
+      b.classList.toggle("active", on); b.setAttribute("aria-checked", String(on));
+    });
+  },
+  async next() {
+    if (this.step === 2) {
+      if (!$("#wd-ack").checked) return;
+      if (!riskOk() && !(await saveSettings({ risk_ack: S.app?.version || "0.0.0" }))) return;
+      if (S.settings.onboarded && S.profiles.length) { $("#welcome-dialog").close(); return; }  // mở từ nút Chạy: xong là đóng
+    }
+    if (this.step < 3) { this.step++; this.show(); $("#wd-next").focus(); return; }
+    if (await saveSettings({ onboarded: true })) $("#welcome-dialog").close();
+  },
+  bind() {
+    $("#wd-next").onclick = () => this.next();
+    $("#wd-back").onclick = () => { this.step = Math.max(1, this.step - 1); this.show(); };
+    $("#wd-ack").onchange = () => this.show();
+    $$("[data-wd-lang]").forEach((b) => (b.onclick = async () => { await setLanguage(b.dataset.wdLang); this.show(); }));
+    $("#wd-add").onclick = async () => {
+      if (!(await saveSettings({ onboarded: true }))) return;
+      $("#welcome-dialog").close();
+      addFirstProfile();
+    };
+    $("#btn-welcome-again").onclick = () => {
+      if ($("#settings-dialog").open) $("#settings-dialog").close();
+      this.open(1);
+    };
+  },
+};
+
+// sau khi mở cửa sổ đăng nhập: nhắc 3 bước, rồi Kiểm tra (không search) và mở trang Nhật ký để xem kết quả
+function openLoginHelp(name) {
+  const dlg = $("#login-dialog");
+  dlg.dataset.name = name;
+  $("#ld-who").textContent = `Đăng nhập cho tài khoản ${name}`;
+  dlg.showModal();
+}
+function bindLoginHelp() {
+  const dlg = $("#login-dialog");
+  $("#ld-check").onclick = () => {
+    const name = dlg.dataset.name;
+    dlg.close();
+    S.selected = name; $("#log-filter").value = ""; go("log");
+    start([name], "check");
+  };
+}
 
 // ===================================================================== cập nhật
 function showUpdateBar(text, actions = "") {
@@ -106,7 +177,7 @@ async function checkUpdate(manual) {
   const res = $("#update-result");
   if (manual && res) res.textContent = "Đang kiểm tra...";
   const r = await api().check_update();
-  const msg = !r.ok ? r.error : r.newer ? `Có bản mới ${r.latest}` : `Đang dùng bản mới nhất (${r.current})`;
+  const msg = !r.ok ? r.error : r.newer ? `Có bản mới ${r.latest}` : `Đang dùng bản mới nhất (${r.current || S.app?.version || "?"})`;
   if (res) res.textContent = msg;
   if (!r.ok || !r.newer) { if (manual) toast(msg); return; }
   const notes = `<button type="button" class="btn btn-sm" id="btn-upd-notes">Xem thay đổi</button>`;
@@ -205,7 +276,6 @@ function applyTheme() {
   document.documentElement.setAttribute("data-bs-theme", dark ? "dark" : "light");
   if (cyber) document.documentElement.setAttribute("data-skin", "cyberpunk");
   else document.documentElement.removeAttribute("data-skin");
-  $$(".theme-switch button").forEach((b) => b.classList.toggle("active", b.dataset.theme === shown));
   $$("#theme-choice input").forEach((i) => (i.checked = i.value === shown));
   if (changed && S.page === "dashboard") { Charts.reset(); renderDashboard(); }
 }
@@ -247,7 +317,10 @@ function applyFun(rerender = true) {
 function applyLanguage() {
   const lang = S.settings.language === "en" ? "en" : "vi";
   I18N.apply(lang);
-  $$(".lang-switch button").forEach((b) => b.classList.toggle("active", b.dataset.setLang === lang));
+  $$(".lang-switch button").forEach((b) => {
+    b.classList.toggle("active", b.dataset.setLang === lang);
+    b.setAttribute("aria-checked", String(b.dataset.setLang === lang));
+  });
   $$("#lang-choice input").forEach((i) => (i.checked = i.value === lang));
 }
 async function setLanguage(lang) {
@@ -271,7 +344,6 @@ function bindStatic() {
   $(".page-wrapper").addEventListener("transitionend", (e) => {
     if (e.target === e.currentTarget && e.propertyName === "margin-left") window.dispatchEvent(new Event("resize"));
   });
-  $$(".theme-switch button").forEach((b) => (b.onclick = () => setTheme(sideCycle(b, "theme"))));
   $$("#theme-choice input").forEach((i) => (i.onchange = () => setTheme(i.value)));
   $("#set-fun-mode").onchange = (e) => setFunMode(e.target.checked);
   $("#error-dismiss").onclick = () => ($("#error-banner").hidden = true);
@@ -291,6 +363,8 @@ function bindStatic() {
   $("#max-parallel").onchange = (e) => saveSettings({ max_parallel: Math.max(1, +e.target.value || 1) });
   bindProfileDialog();
   bindGoalDialog();
+  Welcome.bind();
+  bindLoginHelp();
 }
 
 // thanh bên thu gọn: chỉ còn icon; tên trang hiện khi di chuột (title). Nhớ lựa chọn trong localStorage
@@ -309,7 +383,7 @@ function syncSide() {
   const on = document.documentElement.classList.contains("side-collapsed"), t = $("#side-toggle");
   const label = on ? "Mở rộng thanh bên" : "Thu gọn thanh bên";
   t.title = on ? label : ""; t.setAttribute("aria-label", label); t.setAttribute("aria-expanded", String(!on));
-  $$(".theme-switch button, .lang-switch button").forEach((b) => {  // gợi ý "bấm để đổi" khi chỉ còn 1 nút
+  $$(".lang-switch button").forEach((b) => {  // gợi ý "bấm để đổi" khi chỉ còn 1 nút
     if (!b.dataset.tip) b.dataset.tip = b.title || b.textContent.trim();
     b.title = on ? `${b.dataset.tip} (bấm để đổi)` : b.dataset.tip;
   });
@@ -330,8 +404,10 @@ function go(page) {
 }
 
 async function start(names, action) {
+  if ((action === "run" || action === "everything") && !riskOk()) { Welcome.open(2); return; }
   const r = await api().start(names, action);
   if (r.ok === false) { showError(r.error); return; }
+  if (action === "login" && names?.length === 1) openLoginHelp(names[0]);
   r.running.forEach((n) => S.running.add(n));
   renderSide(); renderDashboard(); renderProfiles();
   toast({ run: "Bắt đầu chạy", everything: "Bắt đầu làm tất cả các việc", refresh: "Đang làm mới điểm", login: "Đã mở cửa sổ đăng nhập",
@@ -351,6 +427,7 @@ function renderAll() {
 
 function renderSide() {
   $("#brand-sub").textContent = `${S.profiles.length} tài khoản`;
+  $("#side-version").textContent = S.app?.version ? "v" + S.app.version : "";
   const on = S.running.size > 0;
   $("#run-state").classList.toggle("on", on);
   $("#run-state span:last-child").textContent = on ? `Đang chạy ${S.running.size} tài khoản` : "Đang nghỉ";
@@ -398,7 +475,7 @@ function renderDashboard() {
     return;
   }
   chips.innerHTML = S.profiles.map((p) => `
-      <button class="chip ${p.name === S.selected ? "active" : ""}" data-name="${esc(p.name)}">
+      <button type="button" class="chip ${p.name === S.selected ? "active" : ""}" data-name="${esc(p.name)}" aria-pressed="${p.name === S.selected}">
         ${avatarHtml(p.name, `avatar-sm rounded-circle ${S.running.has(p.name) ? "run" : ""}`)}
         <span>${esc(p.name)}</span><span class="pts">${POINT_IMG()}${fmt(st(p.name).points)}</span>
       </button>`).join("");
@@ -669,7 +746,15 @@ const barWidth = (id, n) => `${Math.max(12, Math.min(60, Math.round((28 * n * 10
 function emptyChart(id, msg) {
   if (Charts.inst[id]) { Charts.inst[id].destroy(); delete Charts.inst[id]; }
   Charts.keys[id] = "empty";
-  $("#" + id).innerHTML = `<div class="empty">${msg}</div>`;
+  const el = $("#" + id);
+  el.innerHTML = `<div class="empty">${msg}</div>`;
+  el.removeAttribute("role"); el.removeAttribute("aria-label");
+}
+// biểu đồ là hình: trình đọc màn hình đọc câu tóm tắt này thay cho các cột / đường bên trong
+function chartLabel(id, text) {
+  const el = $("#" + id);
+  el.setAttribute("role", "img");
+  el.setAttribute("aria-label", text);
 }
 function renderCharts(name) {
   const hist = S.history[name] || {};
@@ -699,7 +784,12 @@ function renderCharts(name) {
       }),
     };
   });
+  if (d14.length) {
+    const total = d14.reduce((a, d) => a + SERIES.reduce((b, [k]) => b + (hist[d][k] || 0), 0), 0);
+    chartLabel("chart-daily", `Điểm mỗi ngày trong ${d14.length} ngày gần nhất, tổng ${fmt(total)} điểm`);
+  }
   const d30 = days.slice(-30).filter((d) => hist[d].available != null);
+  if (d30.length) chartLabel("chart-balance", `Số điểm trong ${d30.length} ngày: từ ${fmt(hist[d30[0]].available)} đến ${fmt(hist[d30[d30.length - 1]].available)}`);
   if (!d30.length) emptyChart("chart-balance", "Chưa có lịch sử điểm.");
   else Charts.draw("chart-balance", theme + JSON.stringify(d30.map((d) => [d, hist[d].available])), () => {
     const color = seriesColor("balance"), last = d30.length - 1;
@@ -798,6 +888,7 @@ function renderStats(name, s) {
   const d30 = Object.keys(hist).filter((d) => d > addDays(today, -30)).sort();
   const sums = SERIES.map(([key]) => d30.reduce((a, d) => a + (hist[d]?.[key] || 0), 0));
   const theme = isCyber() ? "c" : isDark() ? "d" : "l";
+  if (sums.some(Boolean)) chartLabel("chart-sources", `Nguồn điểm 30 ngày, tổng ${fmt(sums.reduce((a, b) => a + b, 0))} điểm`);
   if (!$("#chart-sources").clientWidth) { /* khối đang gập: vẽ khi mở ra (shown.bs.collapse) */ }
   else if (!sums.some(Boolean)) emptyChart("chart-sources", "Chưa có số liệu điểm search / thẻ.");
   else Charts.draw("chart-sources", theme + JSON.stringify(sums), () => ({
@@ -820,6 +911,7 @@ function renderStats(name, s) {
     const d14 = Array.from({ length: 14 }, (_, i) => addDays(today, i - 13));
     const series = names.map((n) => ({ name: n, data: d14.map((d) => S.history[n]?.[d]?.today ?? null) }));
     const palette = isCyber() ? ["#05d9e8", "#fcee0a", "#ff2a6d", "#b892ff", "#3dff9a"] : [1, 2, 3, 4, 5].map((i) => cssVar("--rb-series-" + i, "#2563eb"));
+    chartLabel("chart-compare", `So sánh điểm mỗi ngày của ${names.length} tài khoản trong 14 ngày`);
     Charts.draw("chart-compare", theme + JSON.stringify(series), () => ({
       ...chartBase(),
       chart: { ...chartBase().chart, type: "line", height: 240 },

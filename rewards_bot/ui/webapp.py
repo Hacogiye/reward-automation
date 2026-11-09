@@ -7,6 +7,7 @@ sang JS theo lô mỗi 250ms qua window.onEvents([...]).
 import base64
 import json
 import queue
+import re
 import sys
 import threading
 import time
@@ -37,6 +38,8 @@ SETTING_SCHEMA = {
     "browser_channel": (str, ("msedge", "chrome", "")),
     "theme": (str, ("system", "light", "dark", "cyberpunk")),
     "language": (str, ("vi", "en")),
+    "onboarded": (bool,),
+    "risk_ack": (str, re.compile(r"(\d{1,4}\.\d{1,4}\.\d{1,4})?")),  # số phiên bản lúc đồng ý, hoặc rỗng
 }
 SETTING_KEYS = tuple(SETTING_SCHEMA)
 ACTIONS = {"run", "refresh", "login", "check", "everything"}
@@ -67,6 +70,10 @@ def _clean_setting(key, value):
         if not lo <= value <= hi:
             raise ValueError(f"{key} phải trong khoảng {lo}-{hi}")
         return int(value)
+    if isinstance(rule[0], re.Pattern):
+        if not isinstance(value, str) or not rule[0].fullmatch(value):
+            raise ValueError(f"{key} không hợp lệ")
+        return value
     if value not in rule[0]:
         raise ValueError(f"{key} không hợp lệ")
     return value

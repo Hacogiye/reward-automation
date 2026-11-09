@@ -59,6 +59,18 @@ python -m rewards_bot --run-all --headless # what Task Scheduler runs
   the dashboard), renders a saved `theme="cyberpunk"` as dark without rewriting it, and calls `Office.setFun(false)`
   to stop the lofi music. Shared UI pieces: `stateBlock()` empty states, a persistent `.alert-danger` banner for
   action errors, a styled delete `<dialog>` and a kebab dropdown on each account row.
+- Sidebar (2026-11-09): nav order Overview, Accounts, History, Log, Settings, Guide, then Office (fun mode only). Light/dark
+  is chosen only in Settings (`#theme-choice`); the sidebar keeps VI/EN, run state, `#side-version` and the collapse button.
+  Tests switch theme with `setTheme(...)`.
+- Onboarding (2026-11-09): settings `onboarded` (bool) and `risk_ack` (app version when the user accepted the risk text, ""
+  = not yet; validated by a regex in `SETTING_SCHEMA`). `Welcome` in app.js opens `#welcome-dialog` on boot when
+  `onboarded` is false (language -> risk checkbox -> add first account). `start()` opens step 2 instead of running
+  `run`/`everything` while `risk_ack` is empty. UI only: `--run-all` from Task Scheduler is not gated. After `login`,
+  `#login-dialog` shows the 3 sign-in steps and a Check button (`start([name], "check")`).
+- Accessibility: one `:focus-visible` outline for every focusable element; charts get `role=img` + a summary `aria-label`
+  through `chartLabel()`; every `[role=img]` must have an `aria-label` (smoke test). `test_english_has_no_vietnamese_left`
+  fails if any visible text, title, placeholder or aria-label is still Vietnamese in English mode, so new UI text needs an
+  `I18N` entry (remember `NUM` turns `1/3` or `1.2.3.4:1080` into a single `#`).
 - UI language (`language` setting, "vi"/"en"): the UI is written in Vietnamese. `ui/web/i18n.js` (`I18N.apply`) walks
   text nodes and title/placeholder/aria-label, and a MutationObserver translates anything rendered later. Dictionary
   keys are the Vietnamese text with whitespace collapsed and every number replaced by `#`; strings that embed user data

@@ -148,8 +148,6 @@
   color: var(--cp-yellow);
 }
 [data-skin="cyberpunk"] .side .nav-link.active .nav-link-icon { color: var(--cp-yellow); }
-[data-skin="cyberpunk"] .theme-switch, [data-skin="cyberpunk"] .theme-switch button { border-radius: 0; }
-[data-skin="cyberpunk"] .theme-switch button.active { background: var(--cp-yellow); color: var(--cp-night); }
 [data-skin="cyberpunk"] .lang-switch, [data-skin="cyberpunk"] .lang-switch button { border-radius: 0; font-family: var(--cp-display); }
 [data-skin="cyberpunk"] .lang-switch button.active { background: var(--cp-cyan); color: var(--cp-night); }
 html[lang="en"][data-skin="cyberpunk"] .hero .card-body::before { content: "EDDIES // BALANCE"; }

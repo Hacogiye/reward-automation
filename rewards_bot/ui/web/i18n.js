@@ -8,6 +8,23 @@
 const I18N = (() => {
   const EN = {
     // ---- khung, menu, chung
+    "Điểm mỗi ngày trong # ngày gần nhất, tổng # điểm": "Points per day over the last # days, # points in total",
+    "Số điểm trong # ngày: từ # đến #": "Points over # days: from # to #",
+    "Nguồn điểm # ngày, tổng # điểm": "Points by source over # days, # in total",
+    "So sánh điểm mỗi ngày của # tài khoản trong # ngày": "Daily points of # accounts over # days",
+    // ---- màn hình chào, đồng ý rủi ro, đăng nhập
+    "Chào mừng": "Welcome", "Bước #": "Step #", "Tiếp tục": "Continue", "Quay lại": "Back",
+    "Bot tự làm các việc Microsoft Rewards hằng ngày cho nhiều tài khoản: search PC và Mobile, Daily Set, Quests, Visual Search. Thiết lập mất khoảng # phút.":
+      "The bot does your daily Microsoft Rewards tasks for several accounts: PC and Mobile searches, Daily Set, Quests, Visual Search. Setup takes about # minutes.",
+    "Tôi đã hiểu và tự chịu rủi ro khi dùng app": "I understand and accept the risk of using this app",
+    "Thêm tài khoản Microsoft đầu tiên. Sau đó bấm": "Add your first Microsoft account. Then click",
+    "một lần cho tài khoản đó, rồi": "once for that account, then",
+    "Có thể làm sau ở trang": "You can do this later on the", ". Mở lại màn hình này ở": "page. Reopen this screen from",
+    "Xem lại màn hình chào": "Show the welcome screen again",
+    "Trong cửa sổ trình duyệt vừa mở, đăng nhập ở tab": "In the browser window that just opened, sign in on the",
+    "Xem tab": "Check the", ": góc phải phải là": "tab: the top right must show the",
+    "cùng tài khoản": "same account", "Đóng cửa sổ trình duyệt, rồi bấm": "Close the browser window, then click",
+    "bên dưới.": "below.", "Để sau": "Later",
     "Thu gọn thanh bên": "Collapse sidebar", "Mở rộng thanh bên": "Expand sidebar", "Thu gọn": "Collapse",
     // ---- văn phòng
     "Văn phòng": "Office", "Văn phòng bot": "Bot office", "Bật nhạc lofi": "Play lofi", "Tắt nhạc lofi": "Stop lofi",
@@ -101,7 +118,7 @@ const I18N = (() => {
     "Nên dùng. Mỗi tài khoản một thư mục đăng nhập riêng.": "Recommended. Each account gets its own login folder.",
     "Gắn vào Edge đang mở": "Attach to an open Edge", "Edge bạn tự mở với cổng debug.": "An Edge you open yourself with a debug port.",
     "Cổng debug": "Debug port", "Proxy riêng": "Own proxy",
-    "socks5://#.#.#.#:# hoặc http://host:#": "socks5://#.#.#.#:# or http://host:#","(không bắt buộc)": "(optional)", "Email tài khoản Microsoft": "Microsoft account email",
+    "socks5://1.2.3.4:1080 hoặc http://host:8080": "socks5://1.2.3.4:1080 or http://host:8080","(không bắt buộc)": "(optional)", "Email tài khoản Microsoft": "Microsoft account email",
     "Mật khẩu": "Password", "Đã lưu (để trống = giữ nguyên)": "Saved (leave empty to keep)", "Xóa mật khẩu đã lưu": "Delete saved password",
     "Nhập mật khẩu cho email này (hoặc xóa email để không tự đăng nhập).": "Enter the password for this email (or clear the email to turn off auto login).",
     'Muốn bỏ tự đăng nhập thì tick "Xóa mật khẩu đã lưu".': 'To turn off auto login, tick "Delete saved password".',
@@ -204,6 +221,7 @@ const I18N = (() => {
       (m) => `Password saved (encrypted) for ${m[1]}: when the session expires the bot logs in again`],
     [/^“(.+)” cần là số từ (\d+) đến (\d+)$/, (m) => `“${tr(m[1]) ?? m[1]}” must be a number from ${m[2]} to ${m[3]}`],
     [/^Đang dừng (.+)$/, (m) => `Stopping ${m[1]}`],
+    [/^Đăng nhập cho tài khoản (.+)$/, (m) => `Signing in account ${m[1]}`],
     [/^Cập nhật lỗi: (.+)$/, (m) => `Update failed: ${m[1]}`],
   ];
   const NUM = /[+\-]?\d[\d,.:/-]*/g;  // vd "3,083", "+10", "60/90", "14:16", "09-11"

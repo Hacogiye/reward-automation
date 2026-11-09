@@ -38,6 +38,9 @@ def api(data_dir, monkeypatch):
     ("visual_max_tries", 1, True), ("visual_max_tries", 0, False), ("visual_max_tries", 11, False),
     ("log_keep_days", 90, True), ("log_keep_days", 0, False), ("log_keep_days", "14", False),
     ("fun_mode", None, False),
+    ("onboarded", True, True), ("onboarded", "1", False),
+    ("risk_ack", "1.3.0", True), ("risk_ack", "", True), ("risk_ack", "yes", False), ("risk_ack", 1, False),
+    ("risk_ack", "1.3.0<script>", False), ("risk_ack", "1" * 20, False),
 ])
 def test_setting_validation(key, value, ok):
     if ok:
