@@ -514,3 +514,96 @@ def test_quest_without_pc_step_is_skipped():
     bot._open_card = lambda page, card: pytest.fail("không được bấm")
     bot.do_quest_tasks(AppOnly())
     assert "không làm được trên máy tính" in logs[-1]
+
+
+# ---------------------------------------------------------------- lướt kết quả trong lúc chờ lượt search kế
+class SerpPage:
+    """Trang kết quả Bing giả: có 3 kết quả (1 quảng cáo, 1 file PDF), bấm thì chuyển trang hoặc mở tab mới."""
+
+    def __init__(self, new_tab=False):
+        self.wheels, self.clicked, self.closed, self.url = [], [], False, "https://www.bing.com/search?q=x"
+        self.new_tab = new_tab
+        self.context = type("Ctx", (), {})()
+        self.context.pages = [self]
+        self.mouse = type("M", (), {"wheel": lambda _, x, y: self.wheels.append(y)})()
+
+    def evaluate(self, js, sel):
+        return [{"i": 0, "cite": "https://example.com/report.pdf", "href": "https://www.bing.com/ck/a?1"},
+                {"i": 1, "cite": "https://www.example.org › guide", "href": "https://www.bing.com/ck/a?2"}]
+
+    def locator(self, sel):
+        page = self
+
+        class Link:
+            def nth(self, i):
+                self.i = i
+                return self
+
+            def scroll_into_view_if_needed(self, **k):
+                pass
+
+            def click(self, **k):
+                page.clicked.append(self.i)
+                if page.new_tab:
+                    tab = SerpPage()
+                    tab.url = "https://www.example.org/guide"
+                    tab.close = lambda: setattr(tab, "closed", True)
+                    page.context.pages.append(tab)
+                else:
+                    page.url = "https://www.example.org/guide"
+        return Link()
+
+    def wait_for_load_state(self, *a, **k):
+        pass
+
+    def bring_to_front(self):
+        pass
+
+
+def clock_bot(**settings):
+    bot, logs = make_bot(search_delay_min=20, search_delay_max=20, **settings)
+    t = [0.0]
+    bot.now = lambda: t[0]
+
+    def sleep(a, b=None):
+        t[0] += a
+    bot.sleep = sleep
+    return bot, logs, t
+
+
+def test_idle_browse_clicks_a_result_and_keeps_total_wait():
+    bot, logs, t = clock_bot(search_click_pct=100)
+    page = SerpPage()
+    bot._idle_browse(page, 20)
+    assert page.clicked == [1]  # bỏ qua kết quả là file PDF
+    assert page.wheels  # có cuộn
+    assert t[0] == pytest.approx(20)  # tổng thời gian chờ không đổi
+    assert any("lướt: www.example.org" in m for m in logs)
+
+
+def test_idle_browse_closes_new_tab():
+    bot, _, t = clock_bot(search_click_pct=100)
+    page = SerpPage(new_tab=True)
+    bot._idle_browse(page, 20)
+    tab = page.context.pages[-1]
+    assert tab is not page and tab.closed and tab.wheels  # lướt trên tab mới rồi đóng
+    assert t[0] == pytest.approx(20)
+
+
+def test_idle_browse_scroll_only_or_off():
+    bot, _, t = clock_bot(search_click_pct=0)
+    page = SerpPage()
+    bot._idle_browse(page, 15)
+    assert page.wheels and not page.clicked and t[0] == pytest.approx(15)
+
+    bot, _, t = clock_bot(search_browse=False, search_click_pct=100)
+    page = SerpPage()
+    bot._idle_browse(page, 15)
+    assert not page.wheels and not page.clicked and t[0] == pytest.approx(15)
+
+
+def test_idle_browse_short_wait_just_sleeps():
+    bot, _, t = clock_bot(search_click_pct=100)
+    page = SerpPage()
+    bot._idle_browse(page, 3)
+    assert not page.wheels and t[0] == pytest.approx(3)

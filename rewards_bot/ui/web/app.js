@@ -1021,6 +1021,7 @@ const SETTING_FIELDS = [
   ["search_delay_min", "Nghỉ ít nhất giữa 2 lượt search (giây)"],
   ["search_delay_max", "Nghỉ nhiều nhất giữa 2 lượt search (giây)"],
   ["extra_searches", "Số lượt search thêm cho chắc đủ điểm"],
+  ["search_click_pct", "Tỉ lệ lượt search có bấm vào một kết quả (%)"],
   ["browse_minutes", "Thời gian browse (phút)"],
   ["history_days", "Không lặp lại câu search đã dùng trong (ngày)"],
 ];
@@ -1033,7 +1034,10 @@ function renderSettings() {
        </div>
        <label class="form-check form-switch mt-4 mb-0">
          <input class="form-check-input" type="checkbox" id="set-bypass-proxy" ${S.settings.bypass_proxy !== false ? "checked" : ""}>
-         <span class="form-check-label">Không đi qua proxy hệ thống (chặn proxy chen giữa)</span></label>`;
+         <span class="form-check-label">Không đi qua proxy hệ thống (chặn proxy chen giữa)</span></label>
+       <label class="form-check form-switch mt-2 mb-0">
+         <input class="form-check-input" type="checkbox" id="set-search-browse" ${S.settings.search_browse !== false ? "checked" : ""}>
+         <span class="form-check-label">Lướt trang kết quả và bấm vào link trong lúc chờ lượt search kế tiếp (giống người dùng thật)</span></label>`;
   $$("#theme-choice input").forEach((i) => (i.checked = i.value === (S.settings.theme || "system")));
   $$("#lang-choice input").forEach((i) => (i.checked = i.value === (S.settings.language === "en" ? "en" : "vi")));
   const app = S.app || {};
@@ -1048,6 +1052,7 @@ async function saveSettingsForm() {
     partial[i.dataset.key] = v;
   }
   partial.bypass_proxy = $("#set-bypass-proxy").checked;
+  partial.search_browse = $("#set-search-browse").checked;
   partial.check_updates = $("#set-check-updates").checked;
   const ok = await saveSettings(partial);
   renderSettings();

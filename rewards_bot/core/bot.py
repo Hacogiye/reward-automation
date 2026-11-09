@@ -562,7 +562,7 @@ class RewardsBot:
                         return
             self.status(progress=f"{label} {i + 1}/{count}")
             self._search_once(page, f"{label} {i + 1}/{count}")
-            self.sleep(self.s["search_delay_min"], self.s["search_delay_max"])
+            self._idle_browse(page, random.uniform(self.s["search_delay_min"], self.s["search_delay_max"]))
 
     def _search_once(self, page: Page, tag: str) -> None:
         q = self.bank.take(self.name)
@@ -573,6 +573,84 @@ class RewardsBot:
         except Exception as e:
             self.log(f"  lỗi khi tìm '{q}': {e}")
         self.log(f"  [{tag}] {q}")
+
+    # Kết quả tìm kiếm thật (bỏ quảng cáo) trên trang Bing: [{i, cite}] theo thứ tự trên trang
+    SERP_RESULT = "#b_results > li.b_algo h2 a[href]"
+    _SERP_RESULTS_JS = r"""(sel) => Array.from(document.querySelectorAll(sel)).map((a, i) => {
+      const li = a.closest('li');
+      const ad = !!(li && (li.closest('.b_ad') || li.querySelector('.b_adSlug, .b_adProvider')));
+      const cite = ((li && li.querySelector('cite')) || {}).textContent || '';
+      return {i, ad, cite, href: a.href};
+    }).filter(r => !r.ad && /^https:\/\//.test(r.href)).slice(0, 6)"""
+    # link tải file: không bấm (Edge thật sẽ lưu file vào thư mục Downloads)
+    _FILE_LINK = re.compile(r"\.(pdf|zip|rar|7z|exe|msi|dmg|apk|docx?|xlsx?|pptx?)(\b|$)", re.I)
+    IDLE_BROWSE_MIN = 6  # giây: thời gian chờ ngắn hơn thì chỉ nghỉ, không lướt
+
+    def _idle_browse(self, page: Page, seconds: float) -> None:
+        """Dùng thời gian chờ giữa 2 lượt search để thao tác như người thật: cuộn đọc trang kết quả, đôi khi bấm vào
+        một kết quả rồi lướt trang đó. Không đổi tổng thời gian chờ, không liên quan tới điểm."""
+        end = self.now() + seconds
+        if not self.s.get("search_browse", True) or seconds < self.IDLE_BROWSE_MIN:
+            self.sleep(seconds)
+            return
+        try:
+            click = random.random() * 100 < int(self.s.get("search_click_pct", 40))
+            # đọc trang kết quả trước; có bấm kết quả thì chỉ đọc khoảng 1/3 thời gian
+            self._scroll_for(page, self.now() + seconds * (random.uniform(0.25, 0.4) if click else 1))
+            if click and end - self.now() >= self.IDLE_BROWSE_MIN:
+                self._open_result(page, end)
+        except StopRequested:
+            raise
+        except Exception as e:
+            if "has been closed" in str(e):
+                raise
+            self.log(f"  lỗi khi lướt kết quả: {e}")
+        rest = end - self.now()
+        if rest > 0:
+            self.sleep(rest)
+
+    def _scroll_for(self, page: Page, until: float) -> None:
+        """Cuộn từng nhịp nhỏ, có lúc dừng đọc lâu hơn hoặc cuộn ngược lên, tới thời điểm `until`."""
+        while (left := until - self.now()) > 0.5:
+            r = random.random()
+            dy = -random.randint(150, 400) if r < 0.15 else random.randint(120, 600)
+            page.mouse.wheel(0, dy)
+            self.sleep(min(left, random.uniform(2.5, 6) if r > 0.85 else random.uniform(0.7, 2.2)))
+
+    def _open_result(self, page: Page, end: float) -> None:
+        """Bấm 1 kết quả ở đầu trang (nghiêng về kết quả trên cùng), lướt trang đó tới `end` (trừ ~1 giây)."""
+        results = [r for r in page.evaluate(self._SERP_RESULTS_JS, self.SERP_RESULT)
+                   if not self._FILE_LINK.search(r.get("cite", "")) and not self._FILE_LINK.search(r.get("href", ""))]
+        if not results:
+            return
+        pick = random.choices(results, weights=[6, 4, 3, 2, 1, 1][:len(results)])[0]
+        ctx = page.context
+        before = list(ctx.pages)
+        link = page.locator(self.SERP_RESULT).nth(pick["i"])
+        link.scroll_into_view_if_needed(timeout=5000)
+        self.sleep(min(max(0.0, end - self.now()), random.uniform(0.5, 1.5)))
+        link.click(timeout=5000, no_wait_after=True)
+        self.sleep(min(max(0.0, end - self.now()), 1.5))
+        new = [p for p in ctx.pages if p not in before]  # kết quả mở tab mới (target=_blank)
+        target = new[-1] if new else page
+        try:
+            try:
+                target.wait_for_load_state("domcontentloaded", timeout=int(max(1.0, min(15.0, end - self.now())) * 1000))
+            except PWTimeout:
+                pass  # trang chậm: vẫn lướt phần đã tải
+            self.log(f"    lướt: {urlparse(target.url).netloc or pick['cite'][:60]}")
+            self._scroll_for(target, end - 1)
+        finally:
+            for p in new:  # đóng tab mở thêm, quay lại tab search
+                try:
+                    p.close()
+                except Exception:
+                    pass
+            if new:
+                try:
+                    page.bring_to_front()
+                except Exception:
+                    pass
 
     def _stall(self, kind: str, label: str, why: str, c: dict) -> None:
         self.log(f"Lỗi: {label} không được cộng điểm {why} (đứng ở {c['progress']}/{c['max']}), dừng {label}. "

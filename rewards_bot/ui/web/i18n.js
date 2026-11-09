@@ -128,6 +128,9 @@ const I18N = (() => {
     "Nghỉ ít nhất giữa # lượt search (giây)": "Shortest pause between # searches (seconds)",
     "Nghỉ nhiều nhất giữa # lượt search (giây)": "Longest pause between # searches (seconds)",
     "Số lượt search thêm cho chắc đủ điểm": "Extra searches to make sure points are full",
+    "Tỉ lệ lượt search có bấm vào một kết quả (%)": "Share of searches that open a result (%)",
+    "Lướt trang kết quả và bấm vào link trong lúc chờ lượt search kế tiếp (giống người dùng thật)":
+      "Scroll the results and open a link while waiting for the next search (like a real user)",
     "Thời gian browse (phút)": "Browse time (minutes)",
     "Không lặp lại câu search đã dùng trong (ngày)": "Don't repeat a search query used within (days)",
     "Trình duyệt cho cửa sổ riêng": "Browser for own windows",

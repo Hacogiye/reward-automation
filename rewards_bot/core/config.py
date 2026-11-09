@@ -27,6 +27,8 @@ DEFAULT_SETTINGS = {
     "search_delay_min": 8,
     "search_delay_max": 20,
     "extra_searches": 2,
+    "search_browse": True,  # trong lúc chờ lượt search kế: cuộn trang kết quả, đôi khi bấm vào một kết quả
+    "search_click_pct": 40,  # % số lượt search có bấm vào một kết quả (khi bật search_browse)
     "browser_channel": "msedge",
     "headless": False,
     "max_parallel": 3,

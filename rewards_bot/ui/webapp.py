@@ -28,6 +28,7 @@ SETTING_SCHEMA = {
     "search_delay_min": (int, 1, 600), "search_delay_max": (int, 1, 600), "extra_searches": (int, 0, 20),
     "max_parallel": (int, 1, 10), "history_days": (int, 0, 365),
     "browse_minutes": (int, 1, 240),
+    "search_browse": (bool,), "search_click_pct": (int, 0, 100),
     "headless": (bool,), "do_quests": (bool,), "do_pc": (bool,), "do_mobile": (bool,), "do_visual": (bool,),
     "do_browse": (bool,), "bypass_proxy": (bool,), "check_updates": (bool,),
     "browse_auto_stop": (bool,), "do_quest_tasks": (bool,), "custom_searches": (bool,),

@@ -112,6 +112,10 @@ python -m rewards_bot --run-all --headless # what Task Scheduler runs
   old and new back to back): old top-down 34-52 ms/s, isometric 50-64 ms/s (about 1.25-1.5x, noisy); canvas
   0.49 -> 0.63 MB (492 x 338). After the box robots and chairs in front of the desks: 43-74 ms/s over 3 runs (noisy).
 - Reward goal per account: `settings["goals"]`, set through `Api.set_goal`. It follows profile renames and deletes.
+- Between searches `do_searches` calls `_idle_browse(page, delay)`: it scrolls the results page and, for
+  `search_click_pct` % of searches, clicks one organic result (`SERP_RESULT`, ads and file links skipped), scrolls
+  that page (closing it if it opened a new tab), then sleeps the rest. The total wait is unchanged. Setting
+  `search_browse` turns it off. It is for user-like behaviour only, not points.
 - `search/catalog.py`: the query catalog. `search/bank.py` hands out queries without repeats across accounts or
   across `history_days`.
 - `data/` holds login sessions and cookies. It is never committed. Profile dir = `data/profiles/<profile["dir"]>`,
