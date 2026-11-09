@@ -33,6 +33,11 @@ def api(data_dir, monkeypatch):
 @pytest.mark.parametrize("key,value,ok", [
     ("max_parallel", 3, True), ("max_parallel", 99, False), ("headless", "yes", False),
     ("browser_channel", "evil", False), ("search_delay_min", True, False), ("bypass_proxy", False, True),
+    ("fun_mode", True, True), ("fun_mode", False, True), ("fun_mode", "yes", False), ("fun_mode", 1, False),
+    ("stall_after", 6, True), ("stall_after", 2, False), ("stall_after", 31, False),
+    ("visual_max_tries", 1, True), ("visual_max_tries", 0, False), ("visual_max_tries", 11, False),
+    ("log_keep_days", 90, True), ("log_keep_days", 0, False), ("log_keep_days", "14", False),
+    ("fun_mode", None, False),
 ])
 def test_setting_validation(key, value, ok):
     if ok:
@@ -171,3 +176,21 @@ def test_save_profile_proxy(api):
     assert api._find("a")["proxy"] == ""
     assert api.save_profile("a", {"name": "a", "mode": "cdp", "proxy": "1.2.3.4:80"})["ok"]
     assert api._find("a")["proxy"] == ""  # gắn vào Edge đang mở: proxy do Edge đó tự đặt
+
+
+def test_fun_mode_default_off_and_saved(api):
+    """TC-2.4: fun_mode mặc định tắt, có trong SETTING_SCHEMA; save_settings kiểm tra kiểu bool như các công tắc khác."""
+    assert config.DEFAULT_SETTINGS["fun_mode"] is False
+    assert "fun_mode" in W.SETTING_SCHEMA and W.SETTING_SCHEMA["fun_mode"] == (bool,)
+    api._settings.update(config.DEFAULT_SETTINGS)
+    api._bank = type("B", (), {"history_days": 0})()
+    assert api.save_settings({"fun_mode": "yes"})["ok"] is False
+    assert api._settings["fun_mode"] is False
+    r = api.save_settings({"fun_mode": True})
+    assert r["ok"] and r["settings"]["fun_mode"] is True and api._settings["fun_mode"] is True
+
+
+def test_window_background_follows_fun_mode():
+    """Cyberpunk đã lưu mà tắt chế độ vui: nền cửa sổ là nền tối thường, không phải nền neon."""
+    assert W._window_background("cyberpunk", True) == "#0b1022"
+    assert W._window_background("cyberpunk", False) == "#151f2c"

@@ -8,21 +8,26 @@ from .bot import RewardsBot
 from .config import LOG_DIR
 from ..search.bank import QueryBank
 
-LOG_KEEP_DAYS = 14
+LOG_KEEP_DAYS = 14  # mặc định; chỉnh bằng cài đặt "log_keep_days"
 
 
 class FileLog:
-    """Ghi nhật ký ra data/logs/YYYY-MM-DD.log (giữ 14 ngày) để xem lại sau khi tắt app."""
+    """Ghi nhật ký ra data/logs/YYYY-MM-DD.log (giữ log_keep_days ngày) để xem lại sau khi tắt app."""
 
-    def __init__(self):
+    def __init__(self, keep_days: int = LOG_KEEP_DAYS):
         self.lock = threading.Lock()
+        self.prune(keep_days)
+
+    @staticmethod
+    def prune(keep_days: int) -> None:
+        """Xóa file nhật ký cũ hơn keep_days ngày."""
         try:
             LOG_DIR.mkdir(parents=True, exist_ok=True)
-            cutoff = (date.today() - timedelta(days=LOG_KEEP_DAYS)).isoformat()
+            cutoff = (date.today() - timedelta(days=max(1, int(keep_days)))).isoformat()
             for f in LOG_DIR.glob("*.log"):
                 if f.stem < cutoff:
                     f.unlink()
-        except OSError:
+        except (OSError, TypeError, ValueError):
             pass
 
     def write(self, name: str, msg: str) -> None:
@@ -58,6 +63,7 @@ class Runner:
     def start(self, profiles: list, settings: dict, action: str = "run") -> None:
         """action: "run" (làm task), "login" (mở cửa sổ đăng nhập), "refresh" (chỉ đọc điểm),
         "check" (tự chẩn đoán, không search)."""
+        FileLog.prune(settings.get("log_keep_days", LOG_KEEP_DAYS))
         with self.lock:
             if not self.running or self.sem is None:
                 self.sem = threading.Semaphore(max(1, int(settings.get("max_parallel", 3))))

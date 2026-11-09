@@ -26,7 +26,7 @@ const I18N = (() => {
     "Văn phòng: mỗi robot là một tài khoản đang được bot chạy": "Office: each robot is one account the bot runs",
     "Tổng quan": "Overview", "Tài khoản": "Accounts", "Nhật ký": "Log", "Lịch sử": "History", "Cài đặt": "Settings",
     "Hướng dẫn": "Guide", "# tài khoản": "# accounts", "Đang nghỉ": "Idle", "Sáng": "Light", "Tối": "Dark",
-    "Theo Windows": "Follow Windows", "Giao diện": "Appearance", "Ngôn ngữ": "Language", "Lưu": "Save", "Hủy": "Cancel",
+    "Theo hệ thống": "System", "Giao diện": "Appearance", "Ngôn ngữ": "Language", "Lưu": "Save", "Hủy": "Cancel",
     "Đóng": "Close", "Sửa": "Edit", "Xóa": "Delete", "Chạy": "Run", "Dừng": "Stop", "Kiểm tra": "Check",
     "Đăng nhập": "Log in", "Làm mới": "Refresh", "Sao chép": "Copy", "Tất cả": "All", "Lỗi": "Error",
     "Cảnh báo": "Warning", "Xong": "Done", "điểm": "points", "# điểm": "# points", "# ngày": "# days", "# tuần": "# weeks",
@@ -71,13 +71,12 @@ const I18N = (() => {
     "Chưa có lịch sử. Mỗi lần chạy hoặc làm mới sẽ ghi lại điểm của ngày đó.": "No history yet. Every run or refresh records that day's points.",
     "Chưa có lịch sử điểm.": "No points history yet.", "Chưa có số liệu điểm search / thẻ.": "No search / card points yet.",
     // ---- tài khoản
-    "Thêm tài khoản": "Add account", "Dừng tất cả": "Stop all", "Làm tất cả": "Do everything", "Chạy tất cả": "Run all",
+    "Thêm tài khoản": "Add account", "Dừng tất cả": "Stop all", "Chạy tất cả": "Run all",
     "Chạy mọi tài khoản và làm mọi việc (Daily Set, Quests, Visual Search, PC, Mobile, Browse), bỏ qua các công tắc đang tắt":
       "Run every account and do every task (Daily Set, Quests, Visual Search, PC, Mobile, Browse), ignoring switches that are off",
     "Chạy mọi tài khoản theo các công tắc bên dưới": "Run every account using the switches below",
     "Chế độ": "Mode", "Trạng thái": "Status", "Tiến độ": "Progress", "Cửa sổ riêng": "Own window", "Edge đang mở": "Open Edge",
-    "cổng #": "port #", "tự đăng nhập": "auto login", "Chưa có tài khoản. Bấm": "No accounts yet. Click", ", rồi": ", then",
-    "một lần.": "once.", "Việc bot sẽ làm khi chạy": "What the bot does on a run",
+    "cổng #": "port #", "tự đăng nhập": "auto login", "Việc bot sẽ làm khi chạy": "What the bot does on a run",
     "Bấm từng thẻ task, làm quiz và poll": "Opens each task card, answers quizzes and polls",
     "Làm từng bước của các quest nhiều bước ở trang Earn (bước cần app điện thoại / app máy tính thì bỏ qua)":
       "Works through multi-step quests on the Earn page (steps that need the phone or desktop app are skipped)",
@@ -113,28 +112,49 @@ const I18N = (() => {
     "Nhập số điểm cần (số nguyên lớn hơn #).": "Enter the points needed (a whole number above #).",
     // ---- nhật ký
     "Tất cả tài khoản": "All accounts", "Xóa nhật ký": "Clear log", "Lọc theo mức": "Filter by level",
-    "Chưa có nhật ký": "No log yet", "Bấm": "Click", "hoặc": "or",
-    "một tài khoản, từng bước bot làm sẽ hiện ở đây.": "an account, and every step the bot takes shows up here.",
+    "Chưa có nhật ký": "No log yet", "Bấm": "Click",
     "lượt chạy #": "run #", "kiểm tra #": "check #",
     // ---- lịch sử
     "Mỗi ngày làm được gì, còn thiếu gì": "What got done each day, and what was missed", "Ngày": "Date",
     "Điểm trong ngày": "Points that day", "Thẻ & hoạt động": "Cards & activities", "Còn thiếu": "Still missing",
     "Đủ hết": "All done",
     "Chưa có lịch sử. Mỗi lần chạy hoặc làm mới sẽ ghi lại số liệu của ngày đó.": "No history yet. Every run or refresh records that day's numbers.",
-    'Số liệu ghi lại mỗi lần bot chạy hoặc làm mới. Ngày không mở app thì không có dòng. Mục "Còn thiếu" ghi từ phiên bản này trở đi.':
-      'Numbers are recorded each time the bot runs or refreshes. Days when the app wasn\'t opened have no row. "Still missing" is recorded from this version on.',
+    "Số liệu được ghi mỗi lần bot chạy hoặc làm mới. Ngày không chạy thì không có dòng.":
+      "Numbers are recorded each time the bot runs or refreshes. Days without a run have no row.",
+    "Theo ngày": "By day", "Khoảng thời gian": "Period", "Ngày có số liệu": "Days with data",
+    "Tổng điểm kiếm được": "Points earned", "Trung bình mỗi tài khoản/ngày": "Average per account per day",
+    "Ngày đủ điểm search": "Days with full search points", "PC và Mobile": "PC and Mobile",
+    "Tìm trong nhật ký": "Search the log", "Không có dòng nào khớp": "No matching lines",
+    "Thử từ khóa khác hoặc chọn lại mức lọc.": "Try another keyword or change the level filter.",
     // ---- cài đặt
     "Lưu cài đặt": "Save settings", "Search & trình duyệt": "Search & browser",
-    "Nghỉ ít nhất giữa # lượt search (giây)": "Shortest pause between # searches (seconds)",
-    "Nghỉ nhiều nhất giữa # lượt search (giây)": "Longest pause between # searches (seconds)",
-    "Số lượt search thêm cho chắc đủ điểm": "Extra searches to make sure points are full",
-    "Tỉ lệ lượt search có bấm vào một kết quả (%)": "Share of searches that open a result (%)",
-    "Lướt trang kết quả và bấm vào link trong lúc chờ lượt search kế tiếp (giống người dùng thật)":
-      "Scroll the results and open a link while waiting for the next search (like a real user)",
-    "Thời gian browse (phút)": "Browse time (minutes)",
-    "Không lặp lại câu search đã dùng trong (ngày)": "Don't repeat a search query used within (days)",
-    "Trình duyệt cho cửa sổ riêng": "Browser for own windows",
-    "Không đi qua proxy hệ thống (chặn proxy chen giữa)": "Bypass the system proxy (blocks man-in-the-middle proxies)",
+    "Nghỉ ít nhất giữa # lượt search": "Shortest pause between # searches",
+    "Nghỉ nhiều nhất giữa # lượt search": "Longest pause between # searches",
+    "Bot chờ một khoảng ngẫu nhiên giữa mức ít nhất và nhiều nhất.": "The bot waits a random time between the shortest and longest pause.",
+    "Số lượt search thêm": "Extra searches",
+    "Search thêm vài lượt sau khi đủ điểm, phòng khi Rewards cập nhật chậm.": "A few more searches after the points are full, in case Rewards updates late.",
+    "Dừng khi không được cộng điểm sau": "Stop when not credited after",
+    "Số lượt liên tiếp không lên điểm thì dừng loại search đó và ghi lý do vào nhật ký.":
+      "After this many searches in a row without points, that search type stops and the reason is logged.",
+    "Không lặp lại câu search trong": "Don't repeat a search query within",
+    "Câu đã dùng không được dùng lại trong khoảng này, ở mọi tài khoản.": "A used query isn't used again within this period, on any account.",
+    "Hành vi giống người dùng": "User-like behaviour",
+    "Lướt trang kết quả trong lúc chờ": "Browse the results while waiting",
+    "Cuộn đọc trang kết quả và thỉnh thoảng mở một kết quả, trong đúng thời gian nghỉ giữa # lượt search.":
+      "Scrolls the results page and sometimes opens a result, within the normal pause between # searches.",
+    "Tỉ lệ lượt search có mở một kết quả": "Share of searches that open a result",
+    "Bỏ qua quảng cáo và link tải file.": "Ads and file downloads are skipped.",
+    "Task": "Tasks", "Thời gian Browse tối đa": "Maximum Browse time",
+    "Thời gian lướt web cho Edge – Minutes trong một lượt chạy.": "Time spent browsing for Edge – Minutes in one run.",
+    "Số lần thử Visual Search mỗi ngày": "Visual Search tries per day",
+    "Bing chặn khi một tài khoản thử quá nhiều lần trong ngày.": "Bing blocks an account that tries too often in one day.",
+    "Trình duyệt": "Browser", "Trình duyệt cho cửa sổ riêng": "Browser for own windows",
+    "Trình duyệt bot mở cho mỗi tài khoản. Nên dùng Edge.": "The browser the bot opens for each account. Edge is recommended.",
+    "Không đi qua proxy hệ thống": "Bypass the system proxy",
+    "Chặn proxy chen giữa. Tắt nếu mạng của bạn bắt buộc đi qua proxy.": "Blocks man-in-the-middle proxies. Turn off if your network requires a proxy.",
+    "Dữ liệu": "Data", "Giữ file nhật ký": "Keep log files",
+    "File cũ hơn trong data/logs tự xóa khi bot chạy.": "Older files in data/logs are deleted when the bot runs.",
+    "giây": "sec", "phút": "min", "lần": "tries", "ngày": "days",
     "Chạy nhiều cửa sổ cùng lúc": "Running several windows at once", "Cập nhật": "Updates",
     "Phiên bản #": "Version #", "Phiên bản # (mã nguồn)": "Version # (source)",
     "Mở app thì kiểm tra bản mới": "Check for a new version when the app opens", "Kiểm tra ngay": "Check now",
@@ -148,14 +168,32 @@ const I18N = (() => {
     "Khởi động lại để cập nhật": "Restart to update", "Mở trang tải về": "Open the download page",
     "Đang cập nhật, app sẽ tự mở lại sau vài giây...": "Updating, the app will reopen in a few seconds...",
     // ---- hướng dẫn (phần tiêu đề; nội dung có bản EN viết sẵn)
-    "Hướng dẫn sử dụng": "User guide", "Đọc một lần là dùng được. Bấm từng mục để mở.": "Read once and you're set. Click a section to open it.",
+    "Hướng dẫn sử dụng": "User guide", "Cách dùng app từ lúc thêm tài khoản đến khi chạy tự động mỗi ngày.":
+      "How to use the app, from adding an account to running it automatically every day.",
+    // ---- chế độ vui, trạng thái rỗng, lỗi, xác nhận
+    "Chế độ vui (Văn phòng robot, skin Cyberpunk, icon 3D)": "Fun mode (robot office, Cyberpunk skin, 3D icons)",
+    "Tiến độ hôm nay": "Today's progress", "# xong": "# done", "Thêm biểu đồ": "More charts", "Thêm thao tác": "More actions",
+    "# trên # ngày": "# of # days",
+    "Chạy mọi task một lần": "Run every task once",
+    "Chạy mọi task một lần: làm mọi việc kể cả công tắc đang tắt, chỉ lần này và không đổi cài đặt đã lưu.":
+      "Run every task once: does every task, even switches that are off, for this run only and without changing saved settings.",
+    "Thêm một tài khoản Microsoft, đăng nhập một lần rồi bot sẽ làm việc thay bạn.":
+      "Add a Microsoft account, log in once, and the bot does the work for you.",
+    "Thêm tài khoản, bấm Đăng nhập một lần rồi chạy.": "Add an account, click Log in once, then run.",
+    "Chưa có lịch sử": "No history yet", "Mỗi lần chạy hoặc làm mới sẽ ghi lại số liệu của ngày đó.": "Every run or refresh records that day's numbers.",
+    "Đến trang Tài khoản": "Go to Accounts",
+    "Chạy hoặc kiểm tra một tài khoản, từng bước bot làm sẽ hiện ở đây.": "Run or check an account, and every step the bot takes shows up here.",
+    "Xóa tài khoản?": "Delete account?",
+    "Tài khoản sẽ bị xóa khỏi app. Phiên đăng nhập trong data/profiles vẫn được giữ.":
+      "The account will be removed from the app. The login session in data/profiles is kept.",
+    "Có lỗi xảy ra": "Something went wrong",
     // ---- thông báo (toast)
     "Bắt đầu chạy": "Started", "Bắt đầu làm tất cả các việc": "Started doing every task", "Đang làm mới điểm": "Refreshing points",
     "Đã mở cửa sổ đăng nhập": "Login window opened", "Đang kiểm tra (không search)": "Checking (no searches)",
     "Đã gửi lệnh dừng": "Stop sent", "Đã lưu cài đặt": "Settings saved", "Đã lưu tài khoản": "Account saved",
     "Đã thêm tài khoản. Bấm Đăng nhập để đăng nhập lần đầu.": "Account added. Click Log in to log in the first time.",
     "Đã lưu mục tiêu": "Goal saved", "Đã xóa mục tiêu": "Goal deleted", "Đã lưu token GitHub": "GitHub token saved",
-    "Đã xóa token GitHub": "GitHub token deleted", "Nhật ký đang trống": "The log is empty", "Đã sao chép nhật ký": "Log copied",
+    "Đã xóa token GitHub": "GitHub token deleted", "Nhật ký hoạt động": "Activity log", "Nhật ký đang trống": "The log is empty", "Đã sao chép nhật ký": "Log copied",
     "Đã chọn toàn bộ nhật ký, bấm Ctrl+C để sao chép": "Selected the whole log, press Ctrl+C to copy",
   };
   // chuỗi có dữ liệu của người dùng (tên tài khoản, email...) ở giữa: dịch theo mẫu, phần ở giữa giữ nguyên hoặc dịch tiếp
@@ -164,7 +202,7 @@ const I18N = (() => {
     [/^Tài khoản (.+): hiện có (.+) điểm\.$/, (m) => `Account ${m[1]}: ${m[2]} points now.`],
     [/^Đã lưu mật khẩu \(mã hóa\) cho (.+): phiên hết hạn thì bot tự đăng nhập lại$/,
       (m) => `Password saved (encrypted) for ${m[1]}: when the session expires the bot logs in again`],
-    [/^Ô “(.+)” cần là số không âm$/, (m) => `“${tr(m[1]) ?? m[1]}” must be a non-negative number`],
+    [/^“(.+)” cần là số từ (\d+) đến (\d+)$/, (m) => `“${tr(m[1]) ?? m[1]}” must be a number from ${m[2]} to ${m[3]}`],
     [/^Đang dừng (.+)$/, (m) => `Stopping ${m[1]}`],
     [/^Cập nhật lỗi: (.+)$/, (m) => `Update failed: ${m[1]}`],
   ];

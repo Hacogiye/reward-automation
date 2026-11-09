@@ -48,6 +48,17 @@ python -m rewards_bot --run-all --headless # what Task Scheduler runs
   `H2: Activities` as `H3` rows; a step that can be done in a browser is a link there (`SCRAPE_JS` section "Activities").
   Steps locked behind the Microsoft Rewards desktop app have no link ("Install the Desktop Rewards App"), so
   `do_quest_tasks` skips them. No unfinished browser-doable quest was available on 2026-10-23 to verify a real click.
+- Settings page: `SETTING_GROUPS` in app.js renders grouped cards, one row per setting (label + hint left, control
+  right; `[key, label, unit, hint, min, max]` for numbers, `{sw}` for switches). Number rows are validated against
+  min/max before saving. Bot limits that are settings: `stall_after` (instance `STALL_AFTER`), `visual_max_tries`
+  (instance `VISUAL_MAX_TRIES`), `log_keep_days` (`FileLog.prune`, run on every `Runner.start`).
+- Fun mode (`fun_mode` setting, default off, 2026-11-09): the default look is a neutral professional dashboard
+  (one blue accent, Tabler line icons, "Tiến độ hôm nay" list, compact streak rows, heatmap and sources under
+  "Thêm biểu đồ"). Fun mode on brings back the Office page, the Cyberpunk skin, Fluent Emoji / coin / flame and the
+  stamp discs. `applyFun()` in app.js applies it without a reload. Off hides the Office nav (`go('office')` goes to
+  the dashboard), renders a saved `theme="cyberpunk"` as dark without rewriting it, and calls `Office.setFun(false)`
+  to stop the lofi music. Shared UI pieces: `stateBlock()` empty states, a persistent `.alert-danger` banner for
+  action errors, a styled delete `<dialog>` and a kebab dropdown on each account row.
 - UI language (`language` setting, "vi"/"en"): the UI is written in Vietnamese. `ui/web/i18n.js` (`I18N.apply`) walks
   text nodes and title/placeholder/aria-label, and a MutationObserver translates anything rendered later. Dictionary
   keys are the Vietnamese text with whitespace collapsed and every number replaced by `#`; strings that embed user data

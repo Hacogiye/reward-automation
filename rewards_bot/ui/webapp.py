@@ -29,8 +29,9 @@ SETTING_SCHEMA = {
     "max_parallel": (int, 1, 10), "history_days": (int, 0, 365),
     "browse_minutes": (int, 1, 240),
     "search_browse": (bool,), "search_click_pct": (int, 0, 100),
+    "stall_after": (int, 3, 30), "visual_max_tries": (int, 1, 10), "log_keep_days": (int, 1, 90),
     "headless": (bool,), "do_quests": (bool,), "do_pc": (bool,), "do_mobile": (bool,), "do_visual": (bool,),
-    "do_browse": (bool,), "bypass_proxy": (bool,), "check_updates": (bool,),
+    "do_browse": (bool,), "bypass_proxy": (bool,), "check_updates": (bool,), "fun_mode": (bool,),
     "browse_auto_stop": (bool,), "do_quest_tasks": (bool,), "custom_searches": (bool,),
     "pc_searches": (int, 0, 50), "mobile_searches": (int, 0, 50),
     "browser_channel": (str, ("msedge", "chrome", "")),
@@ -405,8 +406,10 @@ def app_icon() -> Path:
     return WEB_DIR / "assets" / ("app-icon.ico" if sys.platform == "win32" else "app-icon-256.png")
 
 
-def _window_background(theme: str) -> str:
+def _window_background(theme: str, fun_mode: bool = True) -> str:
     """Màu nền cửa sổ khi trang chưa vẽ xong, khớp sáng/tối để không bị nháy."""
+    if theme == "cyberpunk" and not fun_mode:  # chế độ vui tắt: Cyberpunk hiển thị như giao diện tối
+        theme = "dark"
     if theme == "cyberpunk":
         return "#0b1022"
     dark = theme == "dark" or (theme == "system" and _windows_dark())
@@ -418,7 +421,8 @@ def main() -> None:
     api = Api()
     window = webview.create_window("Microsoft Rewards Bot", url=str(WEB_DIR / "index.html"), js_api=api,
                                    width=1320, height=880, min_size=(1020, 680),
-                                   background_color=_window_background(api._settings.get("theme", "system")),
+                                   background_color=_window_background(api._settings.get("theme", "system"),
+                                                                     bool(api._settings.get("fun_mode"))),
                                    text_select=True)  # cho bôi đen / copy nhật ký
     api._window = window
 

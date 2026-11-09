@@ -8,11 +8,13 @@ const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => Array.from(el.querySelectorAll(s));
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmt = (n) => (n === null || n === undefined || n === "" ? "—" : Number(n).toLocaleString("en-US"));
-const SERIES = [["pc", "Search PC", "#2a78d6"], ["mobile", "Search Mobile", "#eb6834"], ["offers", "Offers", "#1baf7a"]];
+// màu dãy biểu đồ lấy từ biến CSS --rb-series-N (đổi theo sáng/tối); đọc lại mỗi lần vẽ nên đổi theme là có màu mới
+const SERIES = [["pc", "Search PC", "--rb-series-1"], ["mobile", "Search Mobile", "--rb-series-2"], ["offers", "Offers", "--rb-series-3"]];
+const cssVar = (n, fb) => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || fb;
 // bảng màu biểu đồ của giao diện Cyberpunk (cyan / hồng / vàng neon)
 const CYBER_COLORS = { pc: "#05d9e8", mobile: "#ff2a6d", offers: "#fcee0a", balance: "#fcee0a" };
 const isCyber = () => document.documentElement.getAttribute("data-skin") === "cyberpunk";
-const seriesColor = (k) => (isCyber() ? CYBER_COLORS[k] : (SERIES.find((x) => x[0] === k) || [, , "#2a78d6"])[2]);
+const seriesColor = (k) => (isCyber() ? CYBER_COLORS[k] : cssVar((SERIES.find((x) => x[0] === k) || [, , "--rb-series-1"])[2], "#2563eb"));
 const RUN_STATES = ["Đang chạy", "Đang chờ", "Đang làm mới", "Đang đăng nhập", "Đang kiểm tra"];
 const GROUP_ORDER = ["Tìm kiếm", "Daily Set", "Keep earning", "Quests", "Hoạt động", "Task thêm"];
 // Icon task: bộ PNG 3D Fluent Emoji (MIT, vendor/fluent-emoji) thay cho ảnh thumbnail lộn xộn của Rewards.
@@ -63,12 +65,16 @@ const LINE_ICONS = {
 // icon SVG riêng của app (assets/icons) thay cho ảnh Fluent Emoji ở theme Sáng / Tối; Cyberpunk vẫn dùng icon nét
 const ASSET_ICONS = { search: "bing.svg", camera: "visual.svg", mobile: "mobile.svg", calendar: "daily-set.svg" };
 const iconSrc = (name) => (ASSET_ICONS[name] ? `assets/icons/${ASSET_ICONS[name]}` : `vendor/fluent-emoji/${name}.png`);
-const icon = (name, cls = "") => `<span class="tico ${cls}" data-icon="${name}">`
-  + `<img src="${iconSrc(name)}" alt="" draggable="false"><i class="ti ${LINE_ICONS[name] || "ti-point"}"></i></span>`;
+// chế độ vui tắt (mặc định): chỉ icon nét Tabler. Bật: thêm ảnh 3D / SVG (CSS chọn 1 bản theo giao diện)
+const isFun = () => !!S.settings.fun_mode;
+const icon = (name, cls = "") => (isFun()
+  ? `<span class="tico ${cls}" data-icon="${name}"><img src="${iconSrc(name)}" alt="" draggable="false"><i class="ti ${LINE_ICONS[name] || "ti-point"}"></i></span>`
+  : `<span class="tico tico-line ${cls}" data-icon="${name}"><i class="ti ${LINE_ICONS[name] || "ti-point"}"></i></span>`);
 const taskIcon = (t, cls = "") => icon(iconName(t), cls);
-// icon riêng của app cho streak (ngọn lửa) và điểm (chồng xu), dùng ở mọi theme
-const STREAK_IMG = (cls = "") => `<img class="ico-streak ${cls}" src="assets/flame.png" alt="" draggable="false">`;
-const POINT_IMG = (cls = "") => `<img class="ico-point ${cls}" src="assets/point.svg" alt="" draggable="false">`;
+// icon riêng của app cho streak (ngọn lửa) và điểm (chồng xu): chỉ ở chế độ vui; còn lại là icon nét / không có gì
+const STREAK_IMG = (cls = "") => (isFun() ? `<img class="ico-streak ${cls}" src="assets/flame.png" alt="" draggable="false">`
+  : `<i class="ti ti-flame ico-streak ${cls}"></i>`);
+const POINT_IMG = (cls = "") => (isFun() ? `<img class="ico-point ${cls}" src="assets/point.svg" alt="" draggable="false">` : "");
 
 // ảnh lỗi -> ẩn đi (CSP không cho onerror nội tuyến nên bắt chung ở document)
 document.addEventListener("error", (e) => { if (e.target.tagName === "IMG") e.target.classList.add("broken"); }, true);
@@ -80,7 +86,7 @@ window.addEventListener("pywebviewready", async () => {
   S.selected = S.profiles[0]?.name ?? null;
   bindStatic();
   window.Office?.init();
-  applyTheme();
+  applyFun(false);  // đặt chế độ vui + giao diện trước khi vẽ lần đầu
   applyLanguage();
   renderAll();
   if (S.settings.check_updates !== false) checkUpdate(false);
@@ -110,12 +116,12 @@ async function checkUpdate(manual) {
 }
 async function downloadUpdate() {
   const r = await api().download_update();
-  if (!r.ok) { toast(r.error); return; }
+  if (!r.ok) { showError(r.error); return; }
   showUpdateBar("Đang tải bản cập nhật...");
 }
 async function applyUpdate() {
   const r = await api().apply_update();
-  if (!r.ok) { toast(r.error); return; }
+  if (!r.ok) { showError(r.error); return; }
   showUpdateBar("Đang cập nhật, app sẽ tự mở lại sau vài giây...");
 }
 function onUpdateEvent(e) {
@@ -158,27 +164,83 @@ function toast(msg) {
   const t = $("#toast"); t.textContent = msg; t.hidden = false;
   clearTimeout(toast._t); toast._t = setTimeout(() => (t.hidden = true), 2600);
 }
+// lỗi của một thao tác: thanh đỏ ở đầu vùng nội dung, nằm đó đến khi người dùng đóng (toast chỉ dành cho báo thành công)
+function showError(msg) {
+  $("#error-text").textContent = String(msg || "Có lỗi xảy ra");
+  $("#error-banner").hidden = false;
+}
+// khối trạng thái rỗng dùng chung: icon, một câu, một nút chính. action = {label, icon, id}; người gọi gắn onclick vào #id
+const stateBlock = ({ icon: ic = "ti-inbox", title = "", text = "", action = null, cls = "" }) => `
+  <div class="state-block ${cls}"><span class="state-ic"><i class="ti ${ic}"></i></span>
+    <b class="state-title">${esc(title)}</b>${text ? `<span class="state-text">${esc(text)}</span>` : ""}
+    ${action ? `<button type="button" class="btn btn-primary" id="${action.id}">${action.icon ? `<i class="ti ${action.icon}"></i>` : ""}${esc(action.label)}</button>` : ""}
+  </div>`;
+const addFirstProfile = () => { go("profiles"); openProfileDialog(null); };
+// hộp xác nhận có style (thay hộp xác nhận mặc định của trình duyệt): trả về Promise<boolean>; Esc / Hủy = false
+function confirmDialog({ title, text, names = [], okLabel = "Xóa" }) {
+  const dlg = $("#confirm-dialog");
+  $("#cd-title").textContent = title;
+  $("#cd-text").textContent = text || "";
+  $("#cd-names").innerHTML = names.map((n) => `<li>${esc(n)}</li>`).join("");
+  $("#cd-ok").textContent = okLabel;
+  dlg.returnValue = "";
+  return new Promise((resolve) => {
+    dlg.addEventListener("close", () => resolve(dlg.returnValue === "ok"), { once: true });
+    dlg.showModal();
+    $("#cd-cancel").focus();  // mặc định rơi vào Hủy: Enter nhầm không xóa gì
+  });
+}
 
 // ===================================================================== sáng / tối
 const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
 const isDark = () => document.documentElement.getAttribute("data-bs-theme") === "dark";
 function applyTheme() {
   const mode = S.settings.theme || "system";
-  const cyber = mode === "cyberpunk";  // Cyberpunk luôn là nền tối + lớp giao diện riêng (cyberpunk.css)
-  const dark = cyber || mode === "dark" || (mode === "system" && darkQuery.matches);
+  // Cyberpunk chỉ có ở chế độ vui (nền tối + lớp giao diện riêng cyberpunk.css); tắt chế độ vui thì hiện như "Tối"
+  // mà không ghi đè giá trị đã lưu, bật lại là có skin trở lại
+  const cyber = mode === "cyberpunk" && isFun();
+  const shown = mode === "cyberpunk" && !cyber ? "dark" : mode;
+  const dark = cyber || shown === "dark" || (shown === "system" && darkQuery.matches);
   const changed = isDark() !== dark || isCyber() !== cyber;
   document.documentElement.setAttribute("data-bs-theme", dark ? "dark" : "light");
   if (cyber) document.documentElement.setAttribute("data-skin", "cyberpunk");
   else document.documentElement.removeAttribute("data-skin");
-  $$(".theme-switch button").forEach((b) => b.classList.toggle("active", b.dataset.theme === mode));
-  $$("#theme-choice input").forEach((i) => (i.checked = i.value === mode));
+  $$(".theme-switch button").forEach((b) => b.classList.toggle("active", b.dataset.theme === shown));
+  $$("#theme-choice input").forEach((i) => (i.checked = i.value === shown));
   if (changed && S.page === "dashboard") { Charts.reset(); renderDashboard(); }
+}
+async function setFunMode(on) {
+  S.settings.fun_mode = on; applyFun();  // đổi ngay, lưu sau
+  await saveSettings({ fun_mode: on });
 }
 async function setTheme(mode) {
   S.settings.theme = mode; applyTheme();  // đổi ngay, lưu sau
   await saveSettings({ theme: mode });
 }
 darkQuery.addEventListener("change", () => (S.settings.theme || "system") === "system" && applyTheme());
+
+// ===================================================================== chế độ vui
+// Tắt (mặc định): giao diện gọn, icon nét, không có trang Văn phòng và skin Cyberpunk. Đổi là áp ngay, không cần tải lại.
+function applyFun(rerender = true) {
+  const fun = isFun();
+  document.documentElement.setAttribute("data-fun", fun ? "on" : "off");
+  $$("[data-fun-only]").forEach((e) => (e.hidden = !fun));
+  $("#set-fun-mode").checked = fun;
+  window.Office?.setFun(fun);  // tắt chế độ vui thì dừng nhạc lofi
+  // tắt chế độ vui: Lịch nhiệt + Nguồn điểm vào mục "Thêm biểu đồ" gập sẵn; bật lại thì về vị trí cũ trong lưới
+  const heat = $("#heat-col"), src = $("#sources-col"), more = $("#more-charts-body > .row");
+  if (fun) $("#compare-panel").before(heat, src); else more.append(heat, src);
+  $("#more-charts").hidden = fun;
+  applyTheme();
+  if (!rerender) return;
+  if (!fun) {
+    const sd = $("#settings-dialog");
+    if (sd.open) sd.close();  // hộp Cài đặt mở từ trang Văn phòng: đóng (sự kiện close trả khối cài đặt về trang Cài đặt)
+  }
+  if (!fun && S.page === "office") { go("dashboard"); return; }
+  Charts.reset();
+  renderAll();
+}
 
 // ===================================================================== điều hướng + nút cố định
 // ===================================================================== ngôn ngữ (i18n.js dịch giao diện sang English)
@@ -211,6 +273,10 @@ function bindStatic() {
   });
   $$(".theme-switch button").forEach((b) => (b.onclick = () => setTheme(sideCycle(b, "theme"))));
   $$("#theme-choice input").forEach((i) => (i.onchange = () => setTheme(i.value)));
+  $("#set-fun-mode").onchange = (e) => setFunMode(e.target.checked);
+  $("#error-dismiss").onclick = () => ($("#error-banner").hidden = true);
+  $("#more-charts-body").addEventListener("shown.bs.collapse", () => { Charts.reset(); renderDashboard(); });  // biểu đồ trong khối đang gập chưa có kích thước thật
+  document.addEventListener("hidden.bs.dropdown", () => { if (renderProfiles._defer) { renderProfiles._defer = false; if (S.page === "profiles") renderProfiles(); } });
   $("#btn-refresh").onclick = () => S.selected && start([S.selected], "refresh");
   $("#btn-run-one").onclick = () => S.selected && start([S.selected], "run");
   $("#btn-run-all").onclick = () => start(null, "run");
@@ -236,7 +302,7 @@ function setSideCollapsed(on) {
 // thanh bên thu gọn chỉ hiện nút đang chọn: bấm nó thì lấy lựa chọn kế tiếp trong nhóm
 function sideCycle(b, key) {
   if (!document.documentElement.classList.contains("side-collapsed") || !b.classList.contains("active")) return b.dataset[key];
-  const all = [...b.parentElement.querySelectorAll("button")];
+  const all = [...b.parentElement.querySelectorAll("button:not([hidden])")];  // bỏ nút đang ẩn (Cyberpunk khi tắt chế độ vui)
   return all[(all.indexOf(b) + 1) % all.length].dataset[key];
 }
 function syncSide() {
@@ -253,6 +319,7 @@ function syncSide() {
 }
 
 function go(page) {
+  if (page === "office" && !isFun()) page = "dashboard";  // trang Văn phòng chỉ có ở chế độ vui
   S.page = page;
   $$("#nav [data-page]").forEach((b) => b.classList.toggle("active", b.dataset.page === page));
   $$(".view").forEach((p) => (p.hidden = p.id !== "page-" + page));
@@ -264,7 +331,7 @@ function go(page) {
 
 async function start(names, action) {
   const r = await api().start(names, action);
-  if (r.ok === false) { toast(r.error); return; }
+  if (r.ok === false) { showError(r.error); return; }
   r.running.forEach((n) => S.running.add(n));
   renderSide(); renderDashboard(); renderProfiles();
   toast({ run: "Bắt đầu chạy", everything: "Bắt đầu làm tất cả các việc", refresh: "Đang làm mới điểm", login: "Đã mở cửa sổ đăng nhập",
@@ -317,17 +384,25 @@ const bar = (pct, color) => `<div class="progress"><div class="progress-bar" sty
 // ===================================================================== tổng quan
 function renderDashboard() {
   const chips = $("#profile-chips");
-  if (!S.profiles.length) {
-    chips.innerHTML = `<button class="btn btn-primary" id="btn-first-profile"><i class="ti ti-user-plus"></i>Thêm tài khoản đầu tiên</button>`;
-    $("#btn-first-profile").addEventListener("click", () => { go("profiles"); openProfileDialog(null); });
-  } else {
-    chips.innerHTML = S.profiles.map((p) => `
+  const none = !S.profiles.length;
+  $("#dash-main").hidden = none;
+  $("#dash-empty").hidden = !none;
+  if (none) {  // chưa có tài khoản: một khối hướng dẫn thay cho cả trang toàn dấu gạch
+    chips.innerHTML = "";
+    for (const id of ["#btn-run-one", "#btn-refresh"]) $(id).disabled = true;
+    Charts.reset();
+    $("#dash-empty").innerHTML = stateBlock({ icon: "ti-user-plus", title: "Chưa có tài khoản",
+      text: "Thêm một tài khoản Microsoft, đăng nhập một lần rồi bot sẽ làm việc thay bạn.",
+      action: { id: "btn-first-profile", icon: "ti-user-plus", label: "Thêm tài khoản đầu tiên" } });
+    $("#btn-first-profile").onclick = addFirstProfile;
+    return;
+  }
+  chips.innerHTML = S.profiles.map((p) => `
       <button class="chip ${p.name === S.selected ? "active" : ""}" data-name="${esc(p.name)}">
         ${avatarHtml(p.name, `avatar-sm rounded-circle ${S.running.has(p.name) ? "run" : ""}`)}
         <span>${esc(p.name)}</span><span class="pts">${POINT_IMG()}${fmt(st(p.name).points)}</span>
       </button>`).join("");
-    $$(".chip", chips).forEach((c) => (c.onclick = () => { S.selected = c.dataset.name; Charts.reset(); renderDashboard(); }));
-  }
+  $$(".chip", chips).forEach((c) => (c.onclick = () => { S.selected = c.dataset.name; Charts.reset(); renderDashboard(); }));
   const name = S.selected;
   const s = st(name);
   const stats = s.stats || {};
@@ -335,6 +410,7 @@ function renderDashboard() {
   $("#hero-avatar").textContent = name && !heroUrl ? initials(name) : "";
   $("#hero-avatar").style.backgroundImage = heroUrl ? `url('${heroUrl}')` : "";
   $("#hero-avatar").classList.toggle("has-img", !!heroUrl);
+  $("#hero-coin").innerHTML = POINT_IMG("hero-coin-img");
   $("#hero-name").textContent = name || "Chưa có tài khoản";
   $("#hero-state").textContent = name ? `${s.state || "Sẵn sàng"}${s.progress ? " · " + s.progress : ""}` : "";
   $("#hero-points").textContent = fmt(s.points);
@@ -411,10 +487,25 @@ function bindGoalDialog() {
 function renderStamps(s) {
   // mỗi task có điểm của hôm nay là 1 con dấu: search PC/Mobile, Daily Set, Keep earning
   const tasks = (s.tasks || []).filter((t) => ["Tìm kiếm", "Daily Set", "Keep earning"].includes(t.group));
-  const box = $("#stamps");
+  const box = $("#stamps"), fun = isFun();
+  $("#stamp-title").innerHTML = fun ? `<i class="ti ti-rosette-discount-check me-2 text-yellow"></i>Thẻ đóng dấu hôm nay`
+    : `<i class="ti ti-checklist me-2"></i>Tiến độ hôm nay`;
+  box.className = fun ? "stamps" : "plist";
   if (!tasks.length) {
     box.innerHTML = `<p class="empty-note w-100">Chưa có dữ liệu. Bấm <b>Làm mới</b> để đọc task hôm nay từ Rewards.</p>`;
     $("#stamp-count").textContent = "";
+    return;
+  }
+  if (!fun) {
+    // gọn: mỗi việc một dòng (icon, tên, +điểm, dấu xong hoặc N/M). Search PC / Mobile đã có thanh tiến độ ngay bên dưới nên không lặp
+    const list = tasks.filter((t) => t.group !== "Tìm kiếm");
+    $("#stamp-count").textContent = `${list.filter((t) => t.done).length}/${list.length} xong`;
+    box.innerHTML = list.map((t) => `
+      <div class="prow ${t.done ? "done" : ""}" title="${esc(t.title)}">
+        <span class="ticon">${taskIcon(t)}</span><span class="pname">${esc(t.title)}</span>
+        <span class="pts">+${fmt(t.max)} điểm</span>
+        <span class="pstat">${t.done ? '<i class="ti ti-circle-check" aria-label="Đã xong"></i>' : `${fmt(t.progress)}/${fmt(t.max)}`}</span>
+      </div>`).join("");
     return;
   }
   const done = tasks.filter((t) => t.done).length;
@@ -435,17 +526,43 @@ function renderStreak(s) {
   if (!stamps && !streaks.length) { panel.hidden = true; return; }
   panel.hidden = false;
   const have = stamps?.progress ?? 0, max = stamps?.max || 12, bonus = stamps?.bonus || 1000;
-  const left = Math.max(0, max - have);
-  $("#streak-sub").textContent = stamps ? `${have}/${max} dấu` : "";
-  $("#daily-streak").innerHTML = info.daily_streak != null
-    ? `<span class="flame">${STREAK_IMG()}</span><div><b>${fmt(info.daily_streak)} ngày</b><span>Daily streak liên tiếp</span></div>` : "";
-  $("#stamp-grid").setAttribute("aria-label", `${have} trên ${max} dấu`);
-  $("#stamp-grid").innerHTML = Array.from({ length: max }, (_, i) =>
-    `<span class="sdot ${i < have ? "on" : i === have ? "next" : ""}"><i class="ti ${i < have ? "ti-star-filled" : "ti-star"}"></i></span>`).join("");
+  const left = Math.max(0, max - have), fun = isFun();
+  $("#streak-title").innerHTML = `${STREAK_IMG("me-2")}Streak &amp; Stamp bonus`;
+  $("#streak-panel").classList.toggle("streak-plain", !fun);
+  const grid = $("#stamp-grid");
+  grid.classList.toggle("stampbar", !fun);
+  if (!fun) {
+    // gọn: một dòng daily streak, một thanh "x/12" cho Stamp bonus, mỗi streak một dòng với thanh 7 đoạn
+    $("#streak-sub").textContent = "";
+    $("#daily-streak").innerHTML = info.daily_streak != null
+      ? `<i class="ti ti-flame"></i><span class="ds-label">Daily streak liên tiếp</span><b>${fmt(info.daily_streak)} ngày</b>` : "";
+    grid.setAttribute("role", "progressbar");
+    grid.setAttribute("aria-valuemin", "0"); grid.setAttribute("aria-valuemax", String(max)); grid.setAttribute("aria-valuenow", String(have));
+    grid.setAttribute("aria-label", "Stamp bonus");
+    grid.innerHTML = `<div class="sbonus-head"><span>Stamp bonus</span><b>${have}/${max}</b></div>${bar(max ? (have / max) * 100 : 0)}`;
+  } else {
+    $("#streak-sub").textContent = stamps ? `${have}/${max} dấu` : "";
+    $("#daily-streak").innerHTML = info.daily_streak != null
+      ? `<span class="flame">${STREAK_IMG()}</span><div><b>${fmt(info.daily_streak)} ngày</b><span>Daily streak liên tiếp</span></div>` : "";
+    grid.setAttribute("role", "img");
+    for (const a of ["aria-valuemin", "aria-valuemax", "aria-valuenow"]) grid.removeAttribute(a);
+    grid.setAttribute("aria-label", `${have} trên ${max} dấu`);
+    grid.innerHTML = Array.from({ length: max }, (_, i) =>
+      `<span class="sdot ${i < have ? "on" : i === have ? "next" : ""}"><i class="ti ${i < have ? "ti-star-filled" : "ti-star"}"></i></span>`).join("");
+  }
   $("#streak-hint").innerHTML = !stamps ? "Chưa đọc được số dấu."
     : left ? `Còn <b>${left}</b> dấu nữa để nhận <b>+${fmt(bonus)}</b> điểm. Giữ các chuỗi streak bên cạnh mỗi ngày để nhận dấu.`
     : `Đã đủ ${max} dấu: vào Rewards để nhận <b>+${fmt(bonus)}</b> điểm.`;
   $("#streak-list").innerHTML = streaks.map((r) => {
+    if (!fun) {
+      const n = r.of || 7, day = Math.max(0, Math.min(r.day, n)), todayIdx = r.today_done ? day - 1 : day;
+      const segs = Array.from({ length: n }, (_, i) => `<span class="seg ${i < day ? "on" : ""} ${i === todayIdx ? "today" : ""}"></span>`).join("");
+      const status = r.today_done ? `<span class="badge bg-green-lt">Hôm nay xong</span>`
+        : `<span class="badge bg-yellow-lt">Hôm nay chưa${r.today ? " · " + esc(r.today) : ""}</span>`;
+      return `<div class="srow" title="${esc(r.title)}${r.next ? ` · ngày tới +${r.next} điểm` : ""}">${taskIcon(r)}
+        <span class="sname">${esc(r.title)}</span><span class="sub">Ngày ${r.day}/${n}</span>
+        <span class="segbar" role="img" aria-label="${day} trên ${n} ngày">${segs}</span>${status}</div>`;
+    }
     // giống trang Rewards: 7 ô cho 7 ngày; ô đã xong tô vàng, ô hôm nay viền nổi
     const n = r.of || 7, day = Math.min(r.day, n);
     const todayIdx = r.today_done ? day - 1 : day;
@@ -656,10 +773,10 @@ function renderStats(name, s) {
     <div class="min-w-0"><div class="kpi-label">${label}</div><div class="kpi-value">${value}</div><div class="kpi-sub">${sub}</div></div></div>`;
   const pcLine = stats.pc_max ? `PC ${fmt(stats.pc)}/${fmt(stats.pc_max)} · Mobile ${fmt(stats.mobile)}/${fmt(stats.mobile_max)}` : "chưa đọc được điểm search";
   $("#kpis").innerHTML = name ? [
-    tile(POINT_IMG(), "Hôm nay", s.today != null ? "+" + fmt(s.today) : "—", pcLine),
+    tile(isFun() ? POINT_IMG() : "ti-coin", "Hôm nay", s.today != null ? "+" + fmt(s.today) : "—", pcLine),
     tile("ti-chart-line", "Trung bình 7 ngày", k.avg7 != null ? fmt(k.avg7) : "—",
       k.avgDays ? `điểm/ngày, tính trên ${k.avgDays} ngày có số liệu` : "chưa có lịch sử"),
-    tile(STREAK_IMG(), "Chuỗi đủ điểm search", `${k.streak} ngày`, searchFull(h) ? "hôm nay đã đủ PC + Mobile" : "hôm nay chưa đủ PC + Mobile",
+    tile(isFun() ? STREAK_IMG() : "ti-flame", "Chuỗi đủ điểm search", `${k.streak} ngày`, searchFull(h) ? "hôm nay đã đủ PC + Mobile" : "hôm nay chưa đủ PC + Mobile",
       k.streak >= 7 ? "good" : ""),
     tile(k.change == null || k.change >= 0 ? "ti-trending-up" : "ti-trending-down", "Tháng này",
       fmt(stats.month ?? k.thisMonth),
@@ -681,7 +798,8 @@ function renderStats(name, s) {
   const d30 = Object.keys(hist).filter((d) => d > addDays(today, -30)).sort();
   const sums = SERIES.map(([key]) => d30.reduce((a, d) => a + (hist[d]?.[key] || 0), 0));
   const theme = isCyber() ? "c" : isDark() ? "d" : "l";
-  if (!sums.some(Boolean)) emptyChart("chart-sources", "Chưa có số liệu điểm search / thẻ.");
+  if (!$("#chart-sources").clientWidth) { /* khối đang gập: vẽ khi mở ra (shown.bs.collapse) */ }
+  else if (!sums.some(Boolean)) emptyChart("chart-sources", "Chưa có số liệu điểm search / thẻ.");
   else Charts.draw("chart-sources", theme + JSON.stringify(sums), () => ({
     ...chartBase(),
     chart: { ...chartBase().chart, type: "donut", height: 250 },
@@ -701,7 +819,7 @@ function renderStats(name, s) {
   if (names.length >= 2) {
     const d14 = Array.from({ length: 14 }, (_, i) => addDays(today, i - 13));
     const series = names.map((n) => ({ name: n, data: d14.map((d) => S.history[n]?.[d]?.today ?? null) }));
-    const palette = isCyber() ? ["#05d9e8", "#fcee0a", "#ff2a6d", "#b892ff", "#3dff9a"] : ["#2a78d6", "#e9a400", "#d63939", "#ae3ec9", "#2fb344"];
+    const palette = isCyber() ? ["#05d9e8", "#fcee0a", "#ff2a6d", "#b892ff", "#3dff9a"] : [1, 2, 3, 4, 5].map((i) => cssVar("--rb-series-" + i, "#2563eb"));
     Charts.draw("chart-compare", theme + JSON.stringify(series), () => ({
       ...chartBase(),
       chart: { ...chartBase().chart, type: "line", height: 240 },
@@ -719,10 +837,20 @@ window.addEventListener("resize", () => { clearTimeout(window._rz); window._rz =
 // ===================================================================== tài khoản
 function renderProfiles() {
   const tb = $("#profile-table tbody");
+  if ($(".dropdown-menu.show", tb)) { renderProfiles._defer = true; return; }  // đang mở menu thao tác: vẽ lại sau khi đóng
   if (!S.profiles.length) {
-    tb.innerHTML = `<tr><td colspan="8" class="empty-note">Chưa có tài khoản. Bấm <b>Thêm tài khoản</b>, rồi <b>Đăng nhập</b> một lần.</td></tr>`;
+    tb.innerHTML = `<tr><td colspan="8">${stateBlock({ icon: "ti-users", title: "Chưa có tài khoản",
+      text: "Thêm tài khoản, bấm Đăng nhập một lần rồi chạy.",
+      action: { id: "btn-empty-add", icon: "ti-user-plus", label: "Thêm tài khoản" } })}</td></tr>`;
+    $("#btn-empty-add").onclick = () => openProfileDialog(null);
   } else {
     const ib = (act, icon, label, cls = "") => `<button class="btn btn-sm ${cls}" data-act="${act}" title="${label}"><i class="ti ${icon}"></i>${label}</button>`;
+    const mi = (act, icon, label, cls = "") => `<li><button type="button" class="dropdown-item ${cls}" data-act="${act}"><i class="ti ${icon}"></i>${label}</button></li>`;
+    // Chạy là nút chính; các thao tác còn lại nằm trong menu ba chấm (Bootstrap dropdown: Enter mở, mũi tên chọn, Esc đóng)
+    const more = `<div class="dropdown"><button type="button" class="btn btn-sm btn-icon btn-more" data-bs-toggle="dropdown" data-bs-popper-config='{"strategy":"fixed"}'
+        aria-expanded="false" aria-haspopup="true" aria-label="Thêm thao tác" title="Thêm thao tác"><i class="ti ti-dots-vertical"></i></button>
+      <ul class="dropdown-menu dropdown-menu-end">${mi("check", "ti-stethoscope", "Kiểm tra") + mi("login", "ti-login", "Đăng nhập")
+        + mi("edit", "ti-pencil", "Sửa") + `<li><hr class="dropdown-divider"></li>` + mi("del", "ti-trash", "Xóa", "text-danger")}</ul></div>`;
     tb.innerHTML = S.profiles.map((p) => {
       const s = st(p.name), run = S.running.has(p.name);
       return `<tr data-name="${esc(p.name)}">
@@ -734,9 +862,7 @@ function renderProfiles() {
         <td class="text-end">${s.today != null ? "+" + fmt(s.today) : "—"}</td>
         <td class="text-secondary small">${esc(s.progress || "")}</td>
         <td><div class="row-actions">
-          ${run ? ib("stop", "ti-player-stop", "Dừng", "btn-outline-danger")
-                : ib("run", "ti-player-play", "Chạy", "btn-primary") + ib("check", "ti-stethoscope", "Kiểm tra")
-                  + ib("login", "ti-login", "Đăng nhập") + ib("edit", "ti-pencil", "Sửa") + ib("del", "ti-trash", "Xóa", "btn-ghost-danger")}
+          ${run ? ib("stop", "ti-player-stop-filled", "Dừng", "btn-run btn-run-stop") : ib("run", "ti-player-play-filled", "Chạy", "btn-primary btn-run") + more}
         </div></td></tr>`;
     }).join("");
     $$("button[data-act]", tb).forEach((b) => (b.onclick = async () => {
@@ -749,7 +875,10 @@ function renderProfiles() {
       }
       else if (act === "stop") { await api().stop([name]); toast("Đang dừng " + name); }
       else if (act === "edit") openProfileDialog(S.profiles.find((p) => p.name === name));
-      else if (act === "del" && confirm(`Xóa tài khoản "${name}" khỏi app?\nPhiên đăng nhập trong data/profiles vẫn được giữ.`)) {
+      else if (act === "del") {
+        const ok = await confirmDialog({ title: "Xóa tài khoản?", names: [name], okLabel: "Xóa",
+          text: "Tài khoản sẽ bị xóa khỏi app. Phiên đăng nhập trong data/profiles vẫn được giữ." });
+        if (!ok) return;
         const r = await api().delete_profiles([name]); S.profiles = r.profiles;
         if (S.selected === name) S.selected = S.profiles[0]?.name ?? null;
         renderAll();
@@ -806,7 +935,7 @@ function renderToggles() {
 async function saveSettings(partial) {
   const r = await api().save_settings(partial);
   S.settings = r.settings;
-  if (!r.ok) toast(r.error);
+  if (!r.ok) showError(r.error);
   return r.ok;
 }
 
@@ -910,21 +1039,30 @@ function renderHistory() {
   const sel = $("#history-filter"), cur = sel.value || "";
   sel.innerHTML = `<option value="">Tất cả tài khoản</option>` + S.profiles.map((p) => `<option ${p.name === cur ? "selected" : ""}>${esc(p.name)}</option>`).join("");
   sel.onchange = renderHistory;
+  $("#history-range").onchange = renderHistory;
+  const range = parseInt($("#history-range").value, 10) || 30;
   const rows = [];
   for (const [name, days] of Object.entries(S.history || {})) {
     if (cur && name !== cur) continue;
     for (const [day, h] of Object.entries(days || {})) rows.push({ name, day, h: h || {} });
   }
   rows.sort((a, b) => b.day.localeCompare(a.day) || a.name.localeCompare(b.name));
-  const cutoff = new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10);
+  const cutoff = new Date(Date.now() - range * 864e5).toISOString().slice(0, 10);
   const shown = rows.filter((r) => r.day >= cutoff);
+  $("#history-sub").textContent = `${range} ngày gần nhất`;
+  renderHistoryKpis(shown);
   const tb = $("#history-table tbody");
   if (!shown.length) {
-    tb.innerHTML = `<tr><td colspan="7" class="empty-note">Chưa có lịch sử. Mỗi lần chạy hoặc làm mới sẽ ghi lại số liệu của ngày đó.</td></tr>`;
+    tb.innerHTML = `<tr><td colspan="7">${stateBlock({ icon: "ti-calendar-stats", title: "Chưa có lịch sử",
+      text: "Mỗi lần chạy hoặc làm mới sẽ ghi lại số liệu của ngày đó.",
+      action: { id: "btn-history-go", icon: "ti-users", label: "Đến trang Tài khoản" } })}</td></tr>`;
+    $("#btn-history-go").onclick = () => go("profiles");
     return;
   }
-  // ô search: xanh khi đủ, vàng khi thiếu
-  const search = (p, m) => (m ? `<span class="hs ${p >= m ? "full" : "short"}">${fmt(p)}/${fmt(m)}</span>` : `<span class="text-secondary">—</span>`);
+  // ô search: số + thanh mảnh; xanh khi đủ, vàng khi thiếu
+  const search = (p, m) => (m ? `<div class="hs-cell"><span class="hs ${p >= m ? "full" : "short"}">${fmt(p)}/${fmt(m)}</span>`
+    + `<span class="hs-bar ${p >= m ? "full" : "short"}"><span style="width:${Math.min(100, (100 * (p || 0)) / m).toFixed(0)}%"></span></span></div>`
+    : `<span class="text-secondary">—</span>`);
   tb.innerHTML = shown.map(({ name, day, h }) => {
     const d = new Date(day + "T00:00:00");
     const miss = (h.missing || []).filter((x) => x.g !== "Tìm kiếm");  // PC/Mobile đã có cột riêng
@@ -933,7 +1071,7 @@ function renderHistory() {
       : `<span class="badge bg-green-lt">Đủ hết</span>`;
     return `<tr>
       <td class="text-nowrap"><b>${day.slice(8, 10)}/${day.slice(5, 7)}</b> <span class="text-secondary">${WEEKDAYS[d.getDay()]}</span></td>
-      <td><span class="nm-tag tone-${nameTone(name)}">${esc(name)}</span></td>
+      <td><span class="d-inline-flex align-items-center gap-2">${avatarHtml(name, "avatar-xs rounded-circle")}<span class="fw-medium">${esc(name)}</span></span></td>
       <td class="text-end"><b>${h.today != null ? "+" + fmt(h.today) : "—"}</b></td>
       <td>${search(h.pc, h.pc_max)}</td>
       <td>${search(h.mobile, h.mobile_max)}</td>
@@ -942,18 +1080,40 @@ function renderHistory() {
   }).join("");
 }
 
+// 4 ô tổng kết trên bảng lịch sử, theo tài khoản và khoảng ngày đang chọn
+function renderHistoryKpis(rows) {
+  const days = new Set(rows.map((r) => r.day)).size;
+  const total = rows.reduce((a, r) => a + (r.h.today || 0), 0);
+  const withPts = rows.filter((r) => r.h.today != null);
+  const avg = withPts.length ? Math.round(total / withPts.length) : null;
+  const full = rows.filter((r) => r.h.pc_max && r.h.pc >= r.h.pc_max && (!r.h.mobile_max || r.h.mobile >= r.h.mobile_max)).length;
+  const withSearch = rows.filter((r) => r.h.pc_max).length;
+  const kpi = (ic, label, val, sub) => `<div class="kpi"><span class="kpi-ic"><i class="ti ${ic}"></i></span>
+    <div class="min-w-0"><div class="kpi-label">${label}</div><div class="kpi-value">${val}</div>${sub ? `<div class="kpi-sub">${sub}</div>` : ""}</div></div>`;
+  $("#history-kpis").innerHTML = kpi("ti-calendar", "Ngày có số liệu", fmt(days), "")
+    + kpi("ti-sum", "Tổng điểm kiếm được", total ? "+" + fmt(total) : "—", "")
+    + kpi("ti-chart-line", "Trung bình mỗi tài khoản/ngày", avg != null ? "+" + fmt(avg) : "—", "")
+    + kpi("ti-circle-check", "Ngày đủ điểm search", withSearch ? `${fmt(full)}/${fmt(withSearch)}` : "—", "PC và Mobile");
+}
+
 // ===================================================================== nhật ký
 const logFilter = () => $("#log-filter").value;
 const LOG_LEVELS = [["", "Tất cả", "ti-list"], ["er", "Lỗi", "ti-alert-octagon"], ["warn", "Cảnh báo", "ti-alert-triangle"],
                     ["ok", "Xong", "ti-circle-check"]];
-const LOG_EMPTY = `<div class="log-empty"><span class="log-empty-ic"><i class="ti ti-terminal-2"></i></span>
-  <b>Chưa có nhật ký</b><span>Bấm <em>Chạy</em> hoặc <em>Kiểm tra</em> một tài khoản, từng bước bot làm sẽ hiện ở đây.</span></div>`;
+const logEmpty = () => stateBlock({ cls: "log-empty", icon: "ti-terminal-2", title: "Chưa có nhật ký",
+  text: "Chạy hoặc kiểm tra một tài khoản, từng bước bot làm sẽ hiện ở đây.",
+  action: { id: "btn-log-go", icon: "ti-users", label: "Đến trang Tài khoản" } });
 function renderLog() {
   const sel = $("#log-filter"), cur = sel.value || "";
   sel.innerHTML = `<option value="">Tất cả tài khoản</option>` + S.profiles.map((p) => `<option ${p.name === cur ? "selected" : ""}>${esc(p.name)}</option>`).join("");
+  $("#log-search").oninput = (ev) => { S.logQuery = ev.target.value.trim().toLowerCase(); renderLog(); };
   const box = $("#logbox"); box.innerHTML = "";
   S.logs.filter((l) => !cur || l.name === cur).slice(-1500).forEach((l) => appendLog(l, false));
-  if (!box.children.length) box.innerHTML = LOG_EMPTY;
+  if (!box.children.length) {
+    if (S.logQuery || S.logLevel) box.innerHTML = stateBlock({ cls: "log-empty", icon: "ti-search-off", title: "Không có dòng nào khớp",
+      text: "Thử từ khóa khác hoặc chọn lại mức lọc." });
+    else { box.innerHTML = logEmpty(); $("#btn-log-go").onclick = () => go("profiles"); }
+  }
   logCount();
 }
 // mức của 1 dòng: lỗi / cảnh báo / xong (dòng [Kiểm tra] ghi OK / WARN / FAIL)
@@ -986,6 +1146,7 @@ function appendLog(e, count = true) {
   const cur = logFilter(), lvl = logLevel(e.msg);
   if (cur && e.name !== cur) return;
   if (S.logLevel && lvl !== S.logLevel) { if (count) logCount(); return; }
+  if (S.logQuery && !`${e.name} ${e.msg}`.toLowerCase().includes(S.logQuery)) { if (count) logCount(); return; }
   const box = $("#logbox"), atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
   box.querySelector(".log-empty")?.remove();
   if (isRunStart(e.msg) && !S.logLevel) {
@@ -1017,28 +1178,59 @@ async function copyLog() {
 }
 
 // ===================================================================== cài đặt
-const SETTING_FIELDS = [
-  ["search_delay_min", "Nghỉ ít nhất giữa 2 lượt search (giây)"],
-  ["search_delay_max", "Nghỉ nhiều nhất giữa 2 lượt search (giây)"],
-  ["extra_searches", "Số lượt search thêm cho chắc đủ điểm"],
-  ["search_click_pct", "Tỉ lệ lượt search có bấm vào một kết quả (%)"],
-  ["browse_minutes", "Thời gian browse (phút)"],
-  ["history_days", "Không lặp lại câu search đã dùng trong (ngày)"],
+// Mỗi nhóm là một card; mỗi dòng: [khóa, nhãn, đơn vị, giải thích, min, max] cho ô số,
+// {sw: khóa, label, hint} cho công tắc, {select: "browser"} cho ô chọn trình duyệt.
+// Khóa nào có ở đây thì saveSettingsForm gửi đi (phải có trong SETTING_SCHEMA của webapp.py).
+const SETTING_GROUPS = [
+  ["Search", "ti-search", [
+    ["search_delay_min", "Nghỉ ít nhất giữa 2 lượt search", "giây", "Bot chờ một khoảng ngẫu nhiên giữa mức ít nhất và nhiều nhất.", 1, 600],
+    ["search_delay_max", "Nghỉ nhiều nhất giữa 2 lượt search", "giây", "", 1, 600],
+    ["extra_searches", "Số lượt search thêm", "lượt", "Search thêm vài lượt sau khi đủ điểm, phòng khi Rewards cập nhật chậm.", 0, 20],
+    ["stall_after", "Dừng khi không được cộng điểm sau", "lượt", "Số lượt liên tiếp không lên điểm thì dừng loại search đó và ghi lý do vào nhật ký.", 3, 30],
+    ["history_days", "Không lặp lại câu search trong", "ngày", "Câu đã dùng không được dùng lại trong khoảng này, ở mọi tài khoản.", 0, 365],
+  ]],
+  ["Hành vi giống người dùng", "ti-hand-click", [
+    { sw: "search_browse", label: "Lướt trang kết quả trong lúc chờ", hint: "Cuộn đọc trang kết quả và thỉnh thoảng mở một kết quả, trong đúng thời gian nghỉ giữa 2 lượt search." },
+    ["search_click_pct", "Tỉ lệ lượt search có mở một kết quả", "%", "Bỏ qua quảng cáo và link tải file.", 0, 100],
+  ]],
+  ["Task", "ti-checklist", [
+    ["browse_minutes", "Thời gian Browse tối đa", "phút", "Thời gian lướt web cho Edge – Minutes trong một lượt chạy.", 1, 240],
+    ["visual_max_tries", "Số lần thử Visual Search mỗi ngày", "lần", "Bing chặn khi một tài khoản thử quá nhiều lần trong ngày.", 1, 10],
+  ]],
+  ["Trình duyệt", "ti-browser", [
+    { select: "browser" },
+    { sw: "bypass_proxy", label: "Không đi qua proxy hệ thống", hint: "Chặn proxy chen giữa. Tắt nếu mạng của bạn bắt buộc đi qua proxy." },
+  ]],
+  ["Dữ liệu", "ti-database", [
+    ["log_keep_days", "Giữ file nhật ký", "ngày", "File cũ hơn trong data/logs tự xóa khi bot chạy.", 1, 90],
+  ]],
 ];
+const BROWSERS = [["msedge", "Microsoft Edge"], ["chrome", "Google Chrome"], ["", "Chromium"]];
+function settingRow(f) {
+  const v = S.settings;
+  const text = (id, label, hint) => `<div class="set-text"><label class="set-label" for="${id}">${label}</label>${hint ? `<div class="set-hint">${hint}</div>` : ""}</div>`;
+  if (f.sw) {
+    const id = "set-" + f.sw.replace(/_/g, "-");
+    return `<div class="set-row">${text(id, f.label, f.hint)}<div class="set-ctl"><label class="form-check form-switch m-0">
+      <input class="form-check-input" type="checkbox" id="${id}" data-sw="${f.sw}" ${v[f.sw] !== false ? "checked" : ""}></label></div></div>`;
+  }
+  if (f.select) {
+    return `<div class="set-row">${text("set-browser", "Trình duyệt cho cửa sổ riêng", "Trình duyệt bot mở cho mỗi tài khoản. Nên dùng Edge.")}
+      <div class="set-ctl"><select id="set-browser" class="form-select">${BROWSERS.map(([val, t]) =>
+        `<option value="${val}" ${v.browser_channel === val ? "selected" : ""}>${t}</option>`).join("")}</select></div></div>`;
+  }
+  const [k, label, unit, hint, min, max] = f;
+  return `<div class="set-row">${text("set-" + k, label, hint)}<div class="set-ctl"><div class="input-group">
+    <input type="number" class="form-control" id="set-${k}" data-key="${k}" min="${min}" max="${max}" value="${esc(v[k] ?? "")}">
+    <span class="input-group-text">${unit}</span></div></div></div>`;
+}
 function renderSettings() {
-  $("#settings-form").innerHTML = `<div class="settings-grid">` + SETTING_FIELDS.map(([k, l]) =>
-    `<label for="set-${k}" class="form-label m-0">${l}</label><input type="number" class="form-control" min="0" id="set-${k}" data-key="${k}" value="${esc(S.settings[k])}">`).join("")
-    + `<label for="set-browser" class="form-label m-0">Trình duyệt cho cửa sổ riêng</label>
-       <select id="set-browser" class="form-select">${[["msedge", "Microsoft Edge"], ["chrome", "Google Chrome"], ["", "Chromium"]]
-        .map(([v, t]) => `<option value="${v}" ${S.settings.browser_channel === v ? "selected" : ""}>${t}</option>`).join("")}</select>
-       </div>
-       <label class="form-check form-switch mt-4 mb-0">
-         <input class="form-check-input" type="checkbox" id="set-bypass-proxy" ${S.settings.bypass_proxy !== false ? "checked" : ""}>
-         <span class="form-check-label">Không đi qua proxy hệ thống (chặn proxy chen giữa)</span></label>
-       <label class="form-check form-switch mt-2 mb-0">
-         <input class="form-check-input" type="checkbox" id="set-search-browse" ${S.settings.search_browse !== false ? "checked" : ""}>
-         <span class="form-check-label">Lướt trang kết quả và bấm vào link trong lúc chờ lượt search kế tiếp (giống người dùng thật)</span></label>`;
-  $$("#theme-choice input").forEach((i) => (i.checked = i.value === (S.settings.theme || "system")));
+  $("#settings-form").innerHTML = SETTING_GROUPS.map(([title, ic, rows]) =>
+    `<div class="card"><div class="card-header"><h3 class="card-title"><i class="ti ${ic} me-2"></i>${title}</h3></div>
+      <div class="set-list">${rows.map(settingRow).join("")}</div></div>`).join("");
+  const th = S.settings.theme || "system";
+  $$("#theme-choice input").forEach((i) => (i.checked = i.value === (th === "cyberpunk" && !isFun() ? "dark" : th)));
+  $("#set-fun-mode").checked = isFun();
   $$("#lang-choice input").forEach((i) => (i.checked = i.value === (S.settings.language === "en" ? "en" : "vi")));
   const app = S.app || {};
   $("#app-version").textContent = `Phiên bản ${app.version || "?"}${app.frozen ? "" : " (mã nguồn)"}`;
@@ -1047,12 +1239,14 @@ function renderSettings() {
 async function saveSettingsForm() {
   const partial = { browser_channel: $("#set-browser").value };
   for (const i of $$("#settings-form input[data-key]")) {
-    const v = parseInt(i.value, 10);
-    if (Number.isNaN(v) || v < 0) { toast("Ô “" + i.previousElementSibling.textContent + "” cần là số không âm"); i.focus(); return; }
+    const v = parseInt(i.value, 10), min = +i.min, max = +i.max;
+    if (Number.isNaN(v) || v < min || v > max) {
+      const label = i.closest(".set-row")?.querySelector(".set-label")?.textContent || i.dataset.key;
+      showError(`“${label}” cần là số từ ${min} đến ${max}`); i.focus(); return false;
+    }
     partial[i.dataset.key] = v;
   }
-  partial.bypass_proxy = $("#set-bypass-proxy").checked;
-  partial.search_browse = $("#set-search-browse").checked;
+  for (const c of $$("#settings-form input[data-sw]")) partial[c.dataset.sw] = c.checked;
   partial.check_updates = $("#set-check-updates").checked;
   const ok = await saveSettings(partial);
   renderSettings();

@@ -607,3 +607,36 @@ def test_idle_browse_short_wait_just_sleeps():
     page = SerpPage()
     bot._idle_browse(page, 3)
     assert not page.wheels and t[0] == pytest.approx(3)
+
+
+# ---------------------------------------------------------------- giới hạn chỉnh được trong Cài đặt
+def test_stall_after_setting():
+    bot, logs = make_bot(stall_after=3)
+    bot.state = empty_state()
+    bot.state["pc"] = {"progress": 0, "max": 90}
+    bot._recheck = lambda page, kind: {"progress": 0, "max": 90}  # không bao giờ tăng
+    page = FakePage()
+    bot.do_searches(page, "pc", "Search PC")
+    assert "pc" in bot.stalled and len(page.visits) == 3
+
+
+def test_visual_max_tries_setting():
+    bot, _ = make_bot(visual_max_tries=2)
+    assert bot.VISUAL_MAX_TRIES == 2 and RewardsBot.VISUAL_MAX_TRIES == 4
+    assert make_bot()[0].STALL_AFTER == RewardsBot.STALL_AFTER  # thiếu cài đặt: dùng mặc định
+
+
+def test_log_keep_days_prunes_old_files(tmp_path, monkeypatch):
+    from datetime import date, timedelta
+    from rewards_bot.core import runner
+    monkeypatch.setattr(runner, "LOG_DIR", tmp_path)
+    old = (date.today() - timedelta(days=10)).isoformat()
+    new = (date.today() - timedelta(days=2)).isoformat()
+    for d in (old, new):
+        (tmp_path / f"{d}.log").write_text("x", encoding="utf-8")
+    runner.FileLog.prune(14)
+    assert (tmp_path / f"{old}.log").exists()
+    runner.FileLog.prune(5)
+    assert not (tmp_path / f"{old}.log").exists() and (tmp_path / f"{new}.log").exists()
+    runner.FileLog.prune("x")  # giá trị hỏng: không xóa gì, không lỗi
+    assert (tmp_path / f"{new}.log").exists()

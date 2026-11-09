@@ -26,7 +26,7 @@
       <ul class="navbar-nav pt-lg-3" id="nav">
         <li class="nav-item"><a class="nav-link active" href="#" data-page="dashboard">
           <span class="nav-link-icon"><i class="ti ti-layout-dashboard"></i></span><span class="nav-link-title">Tổng quan</span></a></li>
-        <li class="nav-item"><a class="nav-link" href="#" data-page="office">
+        <li class="nav-item" data-fun-only hidden><a class="nav-link" href="#" data-page="office">
           <span class="nav-link-icon"><i class="ti ti-building-skyscraper"></i></span><span class="nav-link-title">Văn phòng</span></a></li>
         <li class="nav-item"><a class="nav-link" href="#" data-page="profiles">
           <span class="nav-link-icon"><i class="ti ti-users"></i></span><span class="nav-link-title">Tài khoản</span></a></li>
@@ -43,9 +43,9 @@
       <div class="side-foot">
         <div class="theme-switch" role="radiogroup" aria-label="Giao diện">
           <button type="button" data-theme="light" title="Sáng"><i class="ti ti-sun"></i></button>
-          <button type="button" data-theme="system" title="Theo Windows"><i class="ti ti-device-desktop"></i></button>
+          <button type="button" data-theme="system" title="Theo hệ thống"><i class="ti ti-device-desktop"></i></button>
           <button type="button" data-theme="dark" title="Tối"><i class="ti ti-moon"></i></button>
-          <button type="button" data-theme="cyberpunk" title="Cyberpunk"><i class="ti ti-bolt"></i></button>
+          <button type="button" data-theme="cyberpunk" title="Cyberpunk" data-fun-only hidden><i class="ti ti-bolt"></i></button>
         </div>
         <div class="lang-switch" role="radiogroup" aria-label="Ngôn ngữ">
           <button type="button" data-set-lang="vi" title="Tiếng Việt">VI</button>
@@ -64,6 +64,10 @@
       <span class="update-actions" id="update-actions"></span>
       <button type="button" class="btn-close btn-close-white ms-1" id="update-dismiss" aria-label="Ẩn thông báo cập nhật"></button>
     </div>
+    <div class="alert alert-danger alert-dismissible error-banner" id="error-banner" role="alert" hidden>
+      <i class="ti ti-alert-circle"></i><span id="error-text"></span>
+      <button type="button" class="btn-close" id="error-dismiss" aria-label="Đóng"></button>
+    </div>
     <!-- ======================== Tổng quan ======================== -->
     <section class="view" id="page-dashboard">
       <div class="page-header">
@@ -71,12 +75,13 @@
           <div class="chips" id="profile-chips"></div>
           <div class="ms-auto btn-list">
             <button class="btn" id="btn-refresh" title="Chỉ đọc điểm, không làm task"><i class="ti ti-refresh"></i>Làm mới</button>
-            <button class="btn btn-primary" id="btn-run-one"><i class="ti ti-player-play"></i>Chạy tài khoản này</button>
+            <button class="btn btn-primary" id="btn-run-one"><i class="ti ti-player-play-filled"></i>Chạy tài khoản này</button>
           </div>
         </div>
       </div>
       <div class="page-body"><div class="container-xl">
-        <div class="row row-deck row-cards">
+        <div id="dash-empty" hidden></div>
+        <div class="row row-deck row-cards" id="dash-main">
           <div class="col-lg-4">
             <div class="card hero">
               <div class="card-body">
@@ -85,7 +90,7 @@
                   <div class="min-w-0"><h2 class="m-0 text-truncate" id="hero-name">—</h2>
                     <div class="hero-state" id="hero-state">—</div></div>
                 </div>
-                <div class="hero-figure"><img class="ico-point hero-coin" src="assets/point.svg" alt=""><span class="num" id="hero-points">—</span><span class="unit">điểm</span></div>
+                <div class="hero-figure"><span class="hero-coin" id="hero-coin"></span><span class="num" id="hero-points">—</span><span class="unit">điểm</span></div>
                 <div class="hero-mini">
                   <div><div class="lbl">Hôm nay</div><div class="val" id="hero-today">—</div></div>
                   <div><div class="lbl">Tháng này</div><div class="val" id="hero-month">—</div></div>
@@ -97,7 +102,7 @@
           </div>
           <div class="col-lg-8">
             <div class="card">
-              <div class="card-header"><h3 class="card-title"><i class="ti ti-rosette-discount-check me-2 text-yellow"></i>Thẻ đóng dấu hôm nay</h3>
+              <div class="card-header"><h3 class="card-title" id="stamp-title"><i class="ti ti-checklist me-2"></i>Tiến độ hôm nay</h3>
                 <div class="card-actions text-secondary" id="stamp-count"></div></div>
               <div class="card-body d-flex flex-column gap-3">
                 <div class="stamps" id="stamps"></div>
@@ -108,7 +113,7 @@
 
           <div class="col-12" id="streak-panel" hidden>
             <div class="card">
-              <div class="card-header"><h3 class="card-title"><img class="ico-streak me-2" src="assets/flame.png" alt="">Streak &amp; Stamp bonus</h3>
+              <div class="card-header"><h3 class="card-title" id="streak-title"><i class="ti ti-flame ico-streak me-2"></i>Streak &amp; Stamp bonus</h3>
                 <div class="card-actions text-secondary" id="streak-sub"></div></div>
               <div class="card-body streak-body">
                 <div class="stamp-box">
@@ -136,7 +141,7 @@
               <div class="card-body"><div class="chart" id="chart-balance"></div></div>
             </div>
           </div>
-          <div class="col-lg-7">
+          <div class="col-lg-7" id="heat-col">
             <div class="card">
               <div class="card-header"><h3 class="card-title">Độ đều đặn</h3><div class="card-actions text-secondary">12 tuần</div></div>
               <div class="card-body">
@@ -146,7 +151,7 @@
               </div>
             </div>
           </div>
-          <div class="col-lg-5">
+          <div class="col-lg-5" id="sources-col">
             <div class="card">
               <div class="card-header"><h3 class="card-title">Điểm đến từ đâu</h3><div class="card-actions text-secondary">30 ngày</div></div>
               <div class="card-body"><div class="chart" id="chart-sources"></div></div>
@@ -169,6 +174,13 @@
               <div class="card-body"><div id="task-groups" class="task-groups"></div></div>
             </div>
           </div>
+
+          <!-- chế độ vui tắt: Độ đều đặn + Điểm đến từ đâu chuyển vào đây (app.js applyFun), gập sẵn -->
+          <div class="col-12" id="more-charts" hidden>
+            <button type="button" class="more-toggle" data-bs-toggle="collapse" data-bs-target="#more-charts-body"
+              aria-expanded="false" aria-controls="more-charts-body"><i class="ti ti-chevron-right"></i>Thêm biểu đồ</button>
+            <div class="collapse" id="more-charts-body"><div class="row row-cards pt-3"></div></div>
+          </div>
         </div>
       </div></div>
     </section>
@@ -179,13 +191,14 @@
         <h2 class="page-title">Tài khoản</h2>
         <div class="ms-auto btn-list">
           <button class="btn" id="btn-add"><i class="ti ti-user-plus"></i>Thêm tài khoản</button>
-          <button class="btn btn-outline-danger" id="btn-stop-all"><i class="ti ti-player-stop"></i>Dừng tất cả</button>
+          <button class="btn btn-outline-danger" id="btn-stop-all"><i class="ti ti-player-stop-filled"></i>Dừng tất cả</button>
           <button class="btn" id="btn-do-everything" title="Chạy mọi tài khoản và làm mọi việc (Daily Set, Quests, Visual Search, PC, Mobile, Browse), bỏ qua các công tắc đang tắt">
-            <i class="ti ti-checklist"></i>Làm tất cả</button>
-          <button class="btn btn-primary" id="btn-run-all" title="Chạy mọi tài khoản theo các công tắc bên dưới"><i class="ti ti-player-play"></i>Chạy tất cả</button>
+            <i class="ti ti-checklist"></i>Chạy mọi task một lần</button>
+          <button class="btn btn-primary" id="btn-run-all" title="Chạy mọi tài khoản theo các công tắc bên dưới"><i class="ti ti-player-play-filled"></i>Chạy tất cả</button>
         </div>
       </div></div>
       <div class="page-body"><div class="container-xl">
+        <p class="text-secondary small page-hint">Chạy mọi task một lần: làm mọi việc kể cả công tắc đang tắt, chỉ lần này và không đổi cài đặt đã lưu.</p>
         <div class="row row-cards">
           <div class="col-12">
             <div class="card">
@@ -249,12 +262,17 @@
     <section class="view" id="page-history" hidden>
       <div class="page-header"><div class="container-xl d-flex flex-wrap gap-2 align-items-center">
         <h2 class="page-title">Lịch sử</h2>
-        <div class="ms-auto"><select class="form-select w-auto" id="history-filter"></select></div>
+        <div class="ms-auto btn-list">
+          <select class="form-select w-auto" id="history-filter" aria-label="Tài khoản"></select>
+          <select class="form-select w-auto" id="history-range" aria-label="Khoảng thời gian">
+            <option value="7">7 ngày</option><option value="30" selected>30 ngày</option><option value="90">90 ngày</option></select>
+        </div>
       </div></div>
       <div class="page-body"><div class="container-xl">
+        <div class="kpis mb-3" id="history-kpis"></div>
         <div class="card">
-          <div class="card-header"><h3 class="card-title">Mỗi ngày làm được gì, còn thiếu gì</h3>
-            <div class="card-actions text-secondary">30 ngày gần nhất</div></div>
+          <div class="card-header"><h3 class="card-title">Theo ngày</h3>
+            <div class="card-actions text-secondary" id="history-sub"></div></div>
           <div class="table-responsive">
             <table class="table table-vcenter card-table history-table" id="history-table">
               <thead><tr><th>Ngày</th><th>Tài khoản</th><th class="text-end">Điểm trong ngày</th><th>Search PC</th>
@@ -263,8 +281,7 @@
             </table>
           </div>
         </div>
-        <p class="text-secondary small mt-2 mb-0">Số liệu ghi lại mỗi lần bot chạy hoặc làm mới. Ngày không mở app thì không có dòng.
-          Mục "Còn thiếu" ghi từ phiên bản này trở đi.</p>
+        <p class="text-secondary small mt-2 mb-0">Số liệu được ghi mỗi lần bot chạy hoặc làm mới. Ngày không chạy thì không có dòng.</p>
       </div></div>
     </section>
 
@@ -273,15 +290,17 @@
       <div class="page-header"><div class="container-xl d-flex flex-wrap gap-2 align-items-center">
         <h2 class="page-title">Nhật ký</h2>
         <div class="ms-auto btn-list">
-          <select class="form-select w-auto" id="log-filter"></select>
+          <div class="input-icon log-search"><span class="input-icon-addon"><i class="ti ti-search"></i></span>
+            <input type="search" class="form-control" id="log-search" placeholder="Tìm trong nhật ký" aria-label="Tìm trong nhật ký"></div>
+          <select class="form-select w-auto" id="log-filter" aria-label="Tài khoản"></select>
           <button class="btn" id="btn-copy-log"><i class="ti ti-copy"></i>Sao chép</button>
           <button class="btn" id="btn-clear-log"><i class="ti ti-trash"></i>Xóa nhật ký</button>
         </div>
       </div></div>
       <div class="page-body"><div class="container-xl">
         <div class="card logcard">
-          <div class="log-head"><span class="log-dots"><i></i><i></i><i></i></span>
-            <span class="log-title">rewards-bot://nhat-ky</span>
+          <div class="log-head">
+            <span class="log-title">Nhật ký hoạt động</span>
             <div class="log-levels" id="log-levels" role="group" aria-label="Lọc theo mức"></div></div>
           <div class="logbox" id="logbox"></div>
         </div>
@@ -297,13 +316,9 @@
       <div class="page-body"><div class="container-xl" id="settings-home">
         <!-- khối này được chuyển tạm vào hộp #settings-dialog khi mở Cài đặt từ trang Văn phòng, đóng hộp thì trả về đây -->
         <div class="row row-cards" id="settings-cards">
-          <div class="col-lg-7">
-            <div class="card">
-              <div class="card-header"><h3 class="card-title">Search &amp; trình duyệt</h3></div>
-              <div class="card-body" id="settings-form"></div>
-            </div>
-          </div>
-          <div class="col-lg-5 d-flex flex-column gap-3">
+          <!-- các nhóm cài đặt do app.js vẽ (SETTING_GROUPS): mỗi dòng = nhãn + giải thích bên trái, ô nhập bên phải -->
+          <div class="col-lg-8 d-flex flex-column gap-3" id="settings-form"></div>
+          <div class="col-lg-4 d-flex flex-column gap-3">
             <div class="card">
               <div class="card-header"><h3 class="card-title">Giao diện</h3></div>
               <div class="card-body">
@@ -313,8 +328,8 @@
                   <label class="form-selectgroup-item flex-fill"><input type="radio" name="theme" value="dark" class="form-selectgroup-input">
                     <span class="form-selectgroup-label"><i class="ti ti-moon me-1"></i>Tối</span></label>
                   <label class="form-selectgroup-item flex-fill"><input type="radio" name="theme" value="system" class="form-selectgroup-input">
-                    <span class="form-selectgroup-label"><i class="ti ti-device-desktop me-1"></i>Theo Windows</span></label>
-                  <label class="form-selectgroup-item flex-fill"><input type="radio" name="theme" value="cyberpunk" class="form-selectgroup-input">
+                    <span class="form-selectgroup-label"><i class="ti ti-device-desktop me-1"></i>Theo hệ thống</span></label>
+                  <label class="form-selectgroup-item flex-fill" data-fun-only hidden><input type="radio" name="theme" value="cyberpunk" class="form-selectgroup-input">
                     <span class="form-selectgroup-label"><i class="ti ti-bolt me-1"></i>Cyberpunk</span></label>
                 </div>
                 <div class="form-label mt-3">Ngôn ngữ</div>
@@ -324,6 +339,9 @@
                   <label class="form-selectgroup-item flex-fill"><input type="radio" name="language" value="en" class="form-selectgroup-input">
                     <span class="form-selectgroup-label" data-no-i18n>English</span></label>
                 </div>
+                <label class="form-check form-switch mt-3 mb-0">
+                  <input class="form-check-input" type="checkbox" id="set-fun-mode">
+                  <span class="form-check-label">Chế độ vui (Văn phòng robot, skin Cyberpunk, icon 3D)</span></label>
               </div>
             </div>
             <div class="card">
@@ -359,8 +377,9 @@
     <!-- ======================== Hướng dẫn ======================== -->
     <section class="view" id="page-guide" hidden>
       <div class="page-header"><div class="container-xl"><h2 class="page-title">Hướng dẫn sử dụng</h2>
-        <div class="text-secondary mt-1">Đọc một lần là dùng được. Bấm từng mục để mở.</div></div></div>
+        <div class="text-secondary mt-1">Cách dùng app từ lúc thêm tài khoản đến khi chạy tự động mỗi ngày.</div></div></div>
       <div class="page-body"><div class="container-xl">
+        <!-- ===== Tiếng Việt ===== -->
         <div class="row row-cards" data-lang="vi">
           <div class="col-lg-8">
             <div class="card"><div class="card-body">
@@ -371,13 +390,32 @@
                     <i class="ti ti-rocket me-2"></i>Bắt đầu trong 4 bước</button></h2>
                   <div id="g-start" class="accordion-collapse collapse show" data-bs-parent="#guide"><div class="accordion-body">
                     <ol class="steps-list">
-                      <li><b>Thêm tài khoản</b>: trang <em>Tài khoản</em> → <em>Thêm tài khoản</em>. Mỗi tài khoản Microsoft một dòng.</li>
-                      <li><b>Đăng nhập</b> (chỉ 1 lần): bấm <em>Đăng nhập</em> ở dòng đó. Cửa sổ mở 2 tab: đăng nhập ở tab Rewards,
-                        rồi xem tab <b>bing.com</b> góc phải phải là <b>cùng tài khoản</b>. Xong thì đóng cửa sổ.</li>
-                      <li><b>Kiểm tra</b>: bấm <em>Kiểm tra</em> ở dòng tài khoản, bot tự chẩn đoán (không search). Kết quả từng mục
-                        (dòng <code>[Kiểm tra]</code> OK / WARN / FAIL kèm cách sửa) hiện ở trang <em>Nhật ký</em>.</li>
-                      <li><b>Chạy</b>: chọn việc ở mục <em>Việc bot sẽ làm khi chạy</em>, rồi bấm <em>Chạy</em> (1 tài khoản) hoặc <em>Chạy tất cả</em>.</li>
+                      <li><b>Thêm tài khoản</b>: trang <em>Tài khoản</em> → <em>Thêm tài khoản</em>. Mỗi tài khoản Microsoft là một dòng.</li>
+                      <li><b>Đăng nhập</b> (chỉ 1 lần): ở dòng tài khoản, mở menu <i class="ti ti-dots-vertical"></i> → <em>Đăng nhập</em>.
+                        Cửa sổ trình duyệt mở 2 tab: đăng nhập ở tab Rewards, rồi xem tab <b>bing.com</b> góc phải phải là
+                        <b>cùng tài khoản</b>. Xong thì đóng cửa sổ.</li>
+                      <li><b>Kiểm tra</b>: menu <i class="ti ti-dots-vertical"></i> → <em>Kiểm tra</em>. Bot tự chẩn đoán (không search)
+                        và ghi từng mục OK / WARN / FAIL kèm cách sửa vào trang <em>Nhật ký</em>.</li>
+                      <li><b>Chạy</b>: bật các việc ở mục <em>Việc bot sẽ làm khi chạy</em>, rồi bấm <em>Chạy</em> ở một dòng hoặc
+                        <em>Chạy tất cả</em>. <em>Chạy mọi task một lần</em> làm mọi việc kể cả việc đang tắt, chỉ trong lượt đó.</li>
                     </ol>
+                  </div></div>
+                </div>
+
+                <div class="accordion-item">
+                  <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#g-overview">
+                    <i class="ti ti-layout-dashboard me-2"></i>Đọc trang Tổng quan</button></h2>
+                  <div id="g-overview" class="accordion-collapse collapse" data-bs-parent="#guide"><div class="accordion-body">
+                    <ul>
+                      <li><b>Hàng trên cùng</b>: chọn tài khoản. <em>Làm mới</em> chỉ đọc lại điểm (chạy ẩn, không làm task).</li>
+                      <li><b>Khối điểm</b>: điểm hiện có, hôm nay, tháng này, trọn đời. Bấm <em>Đặt mục tiêu đổi quà</em> để xem còn
+                        bao nhiêu điểm và dự kiến bao nhiêu ngày nữa (tính theo trung bình 14 ngày gần nhất).</li>
+                      <li><b>Tiến độ hôm nay</b>: các thẻ Daily Set / Keep earning và điểm của từng thẻ, cùng thanh Search PC / Mobile.</li>
+                      <li><b>Streak &amp; Stamp bonus</b>: mỗi chuỗi streak có thanh 7 ngày và nhãn hôm nay đã xong hay chưa.</li>
+                      <li><b>Biểu đồ</b>: điểm mỗi ngày (14 ngày) và số điểm hiện có (30 ngày). Lịch đều đặn 12 tuần và nguồn điểm
+                        nằm trong mục <em>Thêm biểu đồ</em> ở cuối trang.</li>
+                      <li><b>Task hôm nay</b>: từng việc kèm tiến độ. Bật <em>Ẩn việc đã xong</em> để chỉ còn việc chưa làm.</li>
+                    </ul>
                   </div></div>
                 </div>
 
@@ -386,17 +424,35 @@
                     <i class="ti ti-checklist me-2"></i>Bot làm được gì</button></h2>
                   <div id="g-tasks" class="accordion-collapse collapse" data-bs-parent="#guide"><div class="accordion-body">
                     <ul>
-                      <li><b>Daily Set, Keep earning</b>: bấm từng thẻ, làm quiz và poll cơ bản.</li>
-                      <li><b>Quests</b>: làm từng bước của các quest nhiều bước ở trang Earn. Bước nào phải mở khóa bằng app
-                        Microsoft Rewards trên máy tính hoặc app điện thoại thì bot bỏ qua và ghi lý do vào nhật ký.</li>
-                      <li><b>Search PC / Search Mobile</b>: tìm đến khi đủ 90 / 60 điểm. Cứ 3 lượt đọc lại điểm; 6 lượt liền không được cộng thì dừng và ghi lý do.</li>
-                      <li><b>Browse</b>: lướt web cho <em>Edge – Minutes</em> (Edge Browsing Streak, 30 phút/ngày). <b>Làm được</b>,
-                        nhưng Rewards không tính phút ngay và đều: thường phải <b>chạy lại 3–4 lượt</b> trong ngày thì mới lên đủ 30/30.
-                        Mỗi lượt bot đọc số phút 10 phút một lần và ghi vào nhật ký, nên xem nhật ký là biết đã lên bao nhiêu.
-                        Nếu chạy nhiều lượt, nên <b>tắt "Tự dừng khi không được tính phút"</b> (mục con dưới Browse ở trang Tài khoản),
-                        vì lượt đầu thường chưa tăng và bot sẽ dừng sớm.</li>
-                      <li><b>Visual Search</b>: mỗi ngày tải 1 ảnh lên bằng nút camera của Bing Images (ảnh lấy ngẫu nhiên từ Bing).</li>
+                      <li><b>Daily Set, Keep earning</b>: bấm từng thẻ, làm quiz và poll cơ bản. Thẻ chưa được ghi nhận thì làm lại 1 lần.</li>
+                      <li><b>Quests</b>: làm từng bước của quest nhiều bước ở trang Earn. Bước phải mở bằng app Microsoft Rewards trên
+                        máy tính hoặc điện thoại thì bỏ qua và ghi lý do vào nhật ký.</li>
+                      <li><b>Search PC / Search Mobile</b>: tìm đến khi đủ điểm (hoặc đúng số lượt bạn chọn). Cứ 3 lượt đọc lại điểm;
+                        nếu nhiều lượt liền không được cộng thì dừng và ghi lý do (số lượt chỉnh trong <em>Cài đặt</em>).</li>
+                      <li><b>Visual Search</b>: mỗi ngày tải 1 ảnh lên bằng nút camera của Bing Images. Số lần thử mỗi ngày có giới hạn,
+                        vì Bing chặn khi thử quá nhiều.</li>
+                      <li><b>Browse</b>: lướt web cho <em>Edge – Minutes</em> (30 phút/ngày). Rewards không tính phút ngay và đều: thường
+                        phải <b>chạy lại 3–4 lượt</b> trong ngày mới đủ 30/30. Bot ghi số phút vào nhật ký 10 phút một lần. Nếu chạy nhiều
+                        lượt, nên tắt <em>Tự dừng khi không được tính phút</em> (mục con dưới Browse).</li>
                     </ul>
+                  </div></div>
+                </div>
+
+                <div class="accordion-item">
+                  <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#g-settings">
+                    <i class="ti ti-adjustments me-2"></i>Các cài đặt nên biết</button></h2>
+                  <div id="g-settings" class="accordion-collapse collapse" data-bs-parent="#guide"><div class="accordion-body">
+                    <dl class="fix-list">
+                      <dt>Nghỉ giữa 2 lượt search</dt><dd>Bot chờ ngẫu nhiên trong khoảng bạn đặt. Khoảng dài hơn thì chậm hơn nhưng giống người hơn.</dd>
+                      <dt>Hành vi giống người dùng</dt><dd>Trong lúc nghỉ, bot cuộn trang kết quả và thỉnh thoảng mở một kết quả (theo tỉ lệ bạn chọn).
+                        Tính năng này không cộng thêm điểm và không làm chậm tổng thời gian.</dd>
+                      <dt>Dừng khi không được cộng điểm</dt><dd>Bảo vệ khỏi search vô ích khi Microsoft tạm không tính điểm cho tài khoản.</dd>
+                      <dt>Số lần thử Visual Search</dt><dd>Mặc định 4 lần mỗi ngày, tính cả các lượt chạy trước.</dd>
+                      <dt>Giữ file nhật ký</dt><dd>File trong <code>data/logs</code> cũ hơn số ngày này sẽ tự xóa.</dd>
+                      <dt>Trang Tài khoản</dt><dd><em>Chạy ẩn</em> (không hiện cửa sổ trình duyệt), <em>Số tài khoản chạy cùng lúc</em>,
+                        và proxy riêng cho từng tài khoản (trong hộp <em>Sửa</em>).</dd>
+                      <dt>Chế độ vui</dt><dd>Bật trong <em>Cài đặt → Giao diện</em> để có trang Văn phòng robot, skin Cyberpunk và icon 3D.</dd>
+                    </dl>
                   </div></div>
                 </div>
 
@@ -406,8 +462,7 @@
                   <div id="g-manual" class="accordion-collapse collapse" data-bs-parent="#guide"><div class="accordion-body">
                     <ul>
                       <li><b>Bing App – Check-in</b> (Bing App Streak): mở app Bing trên điện thoại mỗi ngày.</li>
-                      <li><b>Edge – Minutes</b> (Edge Browsing Streak): nếu Browse chạy 3–4 lượt vẫn chưa đủ 30/30, tự dùng Edge đã
-                        đăng nhập tài khoản đó thêm một lúc.</li>
+                      <li><b>Edge – Minutes</b>: nếu Browse chạy 3–4 lượt vẫn chưa đủ 30/30, tự dùng Edge đã đăng nhập tài khoản đó thêm một lúc.</li>
                     </ul>
                     <p class="text-secondary m-0">Hai việc này giữ các chuỗi streak, giúp nhận dấu cho Stamp bonus.</p>
                   </div></div>
@@ -415,12 +470,13 @@
 
                 <div class="accordion-item">
                   <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#g-streak">
-                    <img class="ico-streak me-2" src="assets/flame.png" alt="">Streak &amp; Stamp bonus</button></h2>
+                    <i class="ti ti-flame me-2"></i>Streak &amp; Stamp bonus</button></h2>
                   <div id="g-streak" class="accordion-collapse collapse" data-bs-parent="#guide"><div class="accordion-body">
-                    <p>Mỗi chuỗi streak (Bing Search, Daily Set, Bing App, Visual Search) có 7 ô cho 7 ngày. Làm đủ việc trong ngày thì ô hôm nay được tô.
-                      Giữ các chuỗi để nhận dấu; đủ <b>12 dấu</b> thì nhận <b>+1.000 điểm</b>.</p>
-                    <p class="m-0">Ở trang Tổng quan: ô <span class="sday on d-inline-grid align-middle"><i class="ti ti-check"></i></span> là ngày đã xong,
-                      ô <span class="sday today d-inline-grid align-middle"></span> là hôm nay chưa làm.</p>
+                    <p>Mỗi chuỗi streak (Bing Search, Daily Set, Bing App, Visual Search) có 7 ô cho 7 ngày. Làm đủ việc trong ngày thì
+                      ô hôm nay được tô. Giữ các chuỗi để nhận dấu; đủ <b>12 dấu</b> thì nhận <b>+1.000 điểm</b>.</p>
+                    <p class="m-0 d-flex align-items-center gap-2 flex-wrap">Trên thanh 7 ngày:
+                      <span class="segbar guide-seg"><span class="seg on"></span><span class="seg on"></span><span class="seg today"></span><span class="seg"></span></span>
+                      ô đậm là ngày đã xong, ô nhạt là hôm nay chưa làm.</p>
                   </div></div>
                 </div>
 
@@ -428,9 +484,24 @@
                   <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#g-auto">
                     <i class="ti ti-calendar-time me-2"></i>Chạy tự động hằng ngày</button></h2>
                   <div id="g-auto" class="accordion-collapse collapse" data-bs-parent="#guide"><div class="accordion-body">
-                    <p>Tạo task trong <b>Windows Task Scheduler</b>, thư mục bắt đầu là thư mục dự án, lệnh:</p>
-                    <pre>python -m rewards_bot --run-all --headless</pre>
-                    <p class="text-secondary m-0">Chỉ chạy được khi cửa sổ app đang đóng.</p>
+                    <p>Tạo một task trong <b>Windows Task Scheduler</b> chạy mỗi ngày một lần với lệnh:</p>
+                    <pre>RewardsBot.exe --run-all --headless</pre>
+                    <p>Đặt <em>Start in</em> là thư mục chứa <code>RewardsBot.exe</code>. Nếu chạy từ mã nguồn, dùng
+                      <code>python -m rewards_bot --run-all --headless</code> với thư mục dự án.</p>
+                    <p class="text-secondary m-0">Task chỉ chạy được khi cửa sổ app đang đóng. Kết quả xem ở trang <em>Lịch sử</em> và <em>Nhật ký</em>.</p>
+                  </div></div>
+                </div>
+
+                <div class="accordion-item">
+                  <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#g-history">
+                    <i class="ti ti-calendar-stats me-2"></i>Lịch sử và nhật ký</button></h2>
+                  <div id="g-history" class="accordion-collapse collapse" data-bs-parent="#guide"><div class="accordion-body">
+                    <ul>
+                      <li><b>Lịch sử</b>: mỗi ngày, mỗi tài khoản một dòng (điểm, search PC/Mobile, việc còn thiếu). Chọn tài khoản và
+                        khoảng 7 / 30 / 90 ngày; 4 ô phía trên tổng kết khoảng đó.</li>
+                      <li><b>Nhật ký</b>: từng bước bot làm. Lọc theo tài khoản, theo mức (Lỗi / Cảnh báo / Xong) hoặc gõ từ khóa vào ô tìm.
+                        <em>Sao chép</em> để gửi cho người khác khi cần hỗ trợ.</li>
+                    </ul>
                   </div></div>
                 </div>
 
@@ -439,10 +510,13 @@
                     <i class="ti ti-tool me-2"></i>Xử lý lỗi thường gặp</button></h2>
                   <div id="g-fix" class="accordion-collapse collapse" data-bs-parent="#guide"><div class="accordion-body">
                     <dl class="fix-list">
-                      <dt>bing.com đăng nhập sai tài khoản</dt><dd>Bấm <em>Đăng nhập</em>, đăng xuất ở tab bing.com rồi đăng nhập lại đúng tài khoản.</dd>
-                      <dt>Search không được cộng điểm</dt><dd>Bấm <em>Kiểm tra</em>. Thử search tay 1 lượt trên điện thoại / máy: nếu tay cũng không lên thì Microsoft đang tạm không tính cho tài khoản đó.</dd>
+                      <dt>bing.com đăng nhập sai tài khoản</dt><dd>Mở <em>Đăng nhập</em>, đăng xuất ở tab bing.com rồi đăng nhập lại đúng tài khoản.</dd>
+                      <dt>Search không được cộng điểm</dt><dd>Chạy <em>Kiểm tra</em>. Thử search tay 1 lượt: nếu tay cũng không lên thì Microsoft
+                        đang tạm không tính cho tài khoản đó.</dd>
                       <dt>"Profile đang mở trong một cửa sổ trình duyệt khác"</dt><dd>Đóng cửa sổ Edge đang dùng thư mục của tài khoản đó rồi chạy lại.</dd>
-                      <dt>"không vào được … bỏ qua trang này"</dt><dd>Mạng của bạn chặn trang đó (ví dụ bbc.com). Không sao, bot tự chuyển trang khác.</dd>
+                      <dt>"không vào được … bỏ qua trang này"</dt><dd>Mạng của bạn chặn trang đó. Không sao, bot tự chuyển trang khác.</dd>
+                      <dt>Phiên đăng nhập hết hạn</dt><dd>Lưu email và mật khẩu trong hộp <em>Sửa</em> để bot tự đăng nhập lại. Nếu Microsoft hỏi mã
+                        xác minh, bot dừng để bạn tự làm.</dd>
                       <dt>Cần gửi lỗi cho người khác</dt><dd>Trang <em>Nhật ký</em> → <em>Sao chép</em>, hoặc gửi file <code>data/logs/&lt;ngày&gt;.log</code>.</dd>
                     </dl>
                   </div></div>
@@ -451,23 +525,34 @@
               </div>
             </div></div>
           </div>
-          <div class="col-lg-4">
+          <div class="col-lg-4 d-flex flex-column gap-3">
             <div class="card">
               <div class="card-header"><h3 class="card-title"><i class="ti ti-folder me-2"></i>Dữ liệu lưu ở đâu</h3></div>
               <div class="list-group list-group-flush small">
                 <div class="list-group-item"><code>data/profiles/</code><div class="text-secondary">Phiên đăng nhập của từng tài khoản</div></div>
-                <div class="list-group-item"><code>data/points_history.json</code><div class="text-secondary">Điểm mỗi ngày (biểu đồ)</div></div>
-                <div class="list-group-item"><code>data/logs/</code><div class="text-secondary">Nhật ký, giữ 14 ngày</div></div>
+                <div class="list-group-item"><code>data/points_history.json</code><div class="text-secondary">Điểm mỗi ngày (biểu đồ, lịch sử)</div></div>
+                <div class="list-group-item"><code>data/logs/</code><div class="text-secondary">Nhật ký, giữ theo cài đặt (mặc định 14 ngày)</div></div>
                 <div class="list-group-item"><code>data/settings.json</code><div class="text-secondary">Cài đặt và danh sách tài khoản</div></div>
               </div>
-              <div class="card-footer text-secondary small">Thư mục <code>data/</code> chỉ tài khoản Windows của bạn đọc được và không bao giờ được đưa lên git.</div>
+              <div class="card-footer text-secondary small">Thư mục <code>data/</code> nằm trên máy bạn, chỉ tài khoản Windows của bạn đọc được.
+                Mật khẩu (nếu lưu) được mã hóa bằng Windows.</div>
             </div>
-            <div class="alert alert-warning mt-3" role="alert">
+            <div class="card">
+              <div class="card-header"><h3 class="card-title"><i class="ti ti-keyboard me-2"></i>Mẹo nhanh</h3></div>
+              <div class="card-body small d-flex flex-column gap-2">
+                <div><b>Esc</b> đóng mọi hộp thoại.</div>
+                <div>Bấm vào tên tài khoản ở trang Tổng quan để chuyển nhanh giữa các tài khoản.</div>
+                <div>Nút <i class="ti ti-layout-sidebar-left-collapse"></i> ở cuối thanh bên thu gọn menu cho màn hình nhỏ.</div>
+              </div>
+            </div>
+            <div class="alert alert-warning m-0" role="alert">
               <div class="d-flex gap-2"><i class="ti ti-alert-triangle"></i>
-                <div>Microsoft Rewards cấm dùng bot. Tài khoản có thể bị khóa hoặc mất điểm. Bạn tự chịu rủi ro.</div></div>
+                <div>Điều khoản Microsoft Rewards cấm dùng công cụ tự động. Tài khoản có thể bị khóa hoặc mất điểm. Bạn tự chịu rủi ro khi sử dụng.</div></div>
             </div>
           </div>
         </div>
+
+        <!-- ===== English ===== -->
         <div class="row row-cards" data-lang="en">
           <div class="col-lg-8">
             <div class="card"><div class="card-body">
@@ -479,13 +564,31 @@
                   <div id="ge-start" class="accordion-collapse collapse show" data-bs-parent="#guide-en"><div class="accordion-body">
                     <ol class="steps-list">
                       <li><b>Add an account</b>: <em>Accounts</em> page → <em>Add account</em>. One row per Microsoft account.</li>
-                      <li><b>Log in</b> (once): click <em>Log in</em> on that row. A window opens with 2 tabs: log in on the Rewards tab,
-                        then check that the <b>bing.com</b> tab shows the <b>same account</b> in the top right. Close the window when done.</li>
-                      <li><b>Check</b>: click <em>Check</em> on the account row. The bot diagnoses itself (no searches). Each result
-                        (a <code>[Kiểm tra]</code> OK / WARN / FAIL line with how to fix it) shows up on the <em>Log</em> page.</li>
-                      <li><b>Run</b>: pick the tasks under <em>What the bot does on a run</em>, then click <em>Run</em> (one account), <em>Run all</em>,
-                        or <em>Do everything</em> to do every task regardless of the switches.</li>
+                      <li><b>Sign in</b> (once): on the account row, open the <i class="ti ti-dots-vertical"></i> menu → <em>Log in</em>.
+                        A browser window opens with 2 tabs: sign in on the Rewards tab, then check that the <b>bing.com</b> tab shows the
+                        <b>same account</b> in the top right. Close the window when done.</li>
+                      <li><b>Check</b>: <i class="ti ti-dots-vertical"></i> menu → <em>Check</em>. The bot diagnoses itself (no searches) and
+                        writes each item as OK / WARN / FAIL with how to fix it on the <em>Log</em> page.</li>
+                      <li><b>Run</b>: turn on tasks under <em>What the bot does on a run</em>, then click <em>Run</em> on a row or
+                        <em>Run all</em>. <em>Run every task once</em> does every task, including switched-off ones, for that run only.</li>
                     </ol>
+                  </div></div>
+                </div>
+
+                <div class="accordion-item">
+                  <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#ge-overview">
+                    <i class="ti ti-layout-dashboard me-2"></i>Reading the Overview page</button></h2>
+                  <div id="ge-overview" class="accordion-collapse collapse" data-bs-parent="#guide-en"><div class="accordion-body">
+                    <ul>
+                      <li><b>Top row</b>: pick an account. <em>Refresh</em> only re-reads points (hidden window, no tasks).</li>
+                      <li><b>Points card</b>: current balance, today, this month and lifetime. <em>Set a reward goal</em> shows how many
+                        points are left and an estimate in days (based on the last 14 days).</li>
+                      <li><b>Today's progress</b>: Daily Set / Keep earning cards with their points, plus the Search PC / Mobile bars.</li>
+                      <li><b>Streak &amp; Stamp bonus</b>: each streak has a 7-day bar and a label saying whether today is done.</li>
+                      <li><b>Charts</b>: points per day (14 days) and balance (30 days). The 12-week consistency map and point sources are
+                        under <em>More charts</em> at the bottom.</li>
+                      <li><b>Today's tasks</b>: every task with its progress. Turn on <em>Hide finished</em> to see only what is left.</li>
+                    </ul>
                   </div></div>
                 </div>
 
@@ -494,18 +597,36 @@
                     <i class="ti ti-checklist me-2"></i>What the bot can do</button></h2>
                   <div id="ge-tasks" class="accordion-collapse collapse" data-bs-parent="#guide-en"><div class="accordion-body">
                     <ul>
-                      <li><b>Daily Set, Keep earning</b>: opens each card and answers basic quizzes and polls.</li>
-                      <li><b>Quests</b>: works through the steps of multi-step quests on the Earn page. Steps that must be unlocked in the
-                        Microsoft Rewards desktop app or the phone app are skipped, with the reason written to the log.</li>
-                      <li><b>Search PC / Search Mobile</b>: searches until 90 / 60 points. Re-reads the points every 3 searches; after 6 searches
-                        in a row without points it stops and writes why.</li>
-                      <li><b>Browse</b>: browses the web for <em>Edge – Minutes</em> (Edge Browsing Streak, 30 min/day). <b>It works</b>, but
-                        Rewards doesn't count minutes right away or evenly: it usually takes <b>3–4 runs</b> in a day to reach 30/30.
-                        Each run reads the minutes every 10 minutes and writes them to the log, so the log shows how far you got.
-                        If you run it several times, <b>turn off "Stop when minutes aren't counted"</b> (the sub-switch under Browse on the
-                        Accounts page), because the first run often shows no gain and the bot would stop early.</li>
-                      <li><b>Visual Search</b>: once a day, uploads one image (picked at random from Bing) with Bing Images' camera button.</li>
+                      <li><b>Daily Set, Keep earning</b>: opens each card and answers basic quizzes and polls. A card that isn't credited is retried once.</li>
+                      <li><b>Quests</b>: works through multi-step quests on the Earn page. Steps that need the Microsoft Rewards desktop or
+                        phone app are skipped, with the reason in the log.</li>
+                      <li><b>Search PC / Search Mobile</b>: searches until the points are full (or the number of searches you chose). Points
+                        are re-read every 3 searches; after several searches in a row without points it stops and says why (set the
+                        number in <em>Settings</em>).</li>
+                      <li><b>Visual Search</b>: once a day, uploads one image with Bing Images' camera button. Tries per day are limited
+                        because Bing blocks accounts that try too often.</li>
+                      <li><b>Browse</b>: browses the web for <em>Edge – Minutes</em> (30 min/day). Rewards doesn't count minutes right away or
+                        evenly: it usually takes <b>3–4 runs</b> a day to reach 30/30. The bot logs the minutes every 10 minutes. If you run it
+                        several times, turn off <em>Stop when minutes aren't counted</em> (the sub-switch under Browse).</li>
                     </ul>
+                  </div></div>
+                </div>
+
+                <div class="accordion-item">
+                  <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#ge-settings">
+                    <i class="ti ti-adjustments me-2"></i>Settings worth knowing</button></h2>
+                  <div id="ge-settings" class="accordion-collapse collapse" data-bs-parent="#guide-en"><div class="accordion-body">
+                    <dl class="fix-list">
+                      <dt>Pause between searches</dt><dd>The bot waits a random time within your range. A longer range is slower but more human-like.</dd>
+                      <dt>User-like behaviour</dt><dd>While waiting, the bot scrolls the results and sometimes opens one (at the rate you choose).
+                        It doesn't add points and doesn't make runs longer.</dd>
+                      <dt>Stop when searches aren't credited</dt><dd>Avoids useless searches when Microsoft pauses credit for an account.</dd>
+                      <dt>Visual Search tries</dt><dd>4 per day by default, counting earlier runs that day.</dd>
+                      <dt>Keep log files</dt><dd>Files in <code>data/logs</code> older than this are deleted automatically.</dd>
+                      <dt>Accounts page</dt><dd><em>Run hidden</em> (no browser window), <em>Accounts running at once</em>, and a proxy per account
+                        (in the <em>Edit</em> dialog).</dd>
+                      <dt>Fun mode</dt><dd>Turn it on in <em>Settings → Appearance</em> for the robot Office page, the Cyberpunk skin and 3D icons.</dd>
+                    </dl>
                   </div></div>
                 </div>
 
@@ -515,8 +636,7 @@
                   <div id="ge-manual" class="accordion-collapse collapse" data-bs-parent="#guide-en"><div class="accordion-body">
                     <ul>
                       <li><b>Bing App – Check-in</b> (Bing App Streak): open the Bing app on your phone every day.</li>
-                      <li><b>Edge – Minutes</b> (Edge Browsing Streak): if 3–4 Browse runs still don't reach 30/30, use Edge signed in to that
-                        account yourself for a while.</li>
+                      <li><b>Edge – Minutes</b>: if 3–4 Browse runs still don't reach 30/30, use Edge signed in to that account yourself for a while.</li>
                     </ul>
                     <p class="text-secondary m-0">These two keep the streaks going, which earns stamps for the Stamp bonus.</p>
                   </div></div>
@@ -524,12 +644,13 @@
 
                 <div class="accordion-item">
                   <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#ge-streak">
-                    <img class="ico-streak me-2" src="assets/flame.png" alt="">Streak &amp; Stamp bonus</button></h2>
+                    <i class="ti ti-flame me-2"></i>Streak &amp; Stamp bonus</button></h2>
                   <div id="ge-streak" class="accordion-collapse collapse" data-bs-parent="#guide-en"><div class="accordion-body">
                     <p>Each streak (Bing Search, Daily Set, Bing App, Visual Search) has 7 boxes for 7 days. Finish the day's task and today's
                       box fills in. Keep streaks going to earn stamps; <b>12 stamps</b> give <b>+1,000 points</b>.</p>
-                    <p class="m-0">On the Overview page: <span class="sday on d-inline-grid align-middle"><i class="ti ti-check"></i></span> is a finished day,
-                      <span class="sday today d-inline-grid align-middle"></span> is today, not done yet.</p>
+                    <p class="m-0 d-flex align-items-center gap-2 flex-wrap">On the 7-day bar:
+                      <span class="segbar guide-seg"><span class="seg on"></span><span class="seg on"></span><span class="seg today"></span><span class="seg"></span></span>
+                      solid boxes are finished days, the light box is today, not done yet.</p>
                   </div></div>
                 </div>
 
@@ -537,10 +658,24 @@
                   <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#ge-auto">
                     <i class="ti ti-calendar-time me-2"></i>Run automatically every day</button></h2>
                   <div id="ge-auto" class="accordion-collapse collapse" data-bs-parent="#guide-en"><div class="accordion-body">
-                    <p>Create a task in <b>Windows Task Scheduler</b> with the project folder as the start folder, and this command
-                      (for the .exe: <code>RewardsBot.exe --run-all --headless</code>):</p>
-                    <pre>python -m rewards_bot --run-all --headless</pre>
-                    <p class="text-secondary m-0">It only runs while the app window is closed.</p>
+                    <p>Create a task in <b>Windows Task Scheduler</b> that runs once a day with this command:</p>
+                    <pre>RewardsBot.exe --run-all --headless</pre>
+                    <p>Set <em>Start in</em> to the folder that holds <code>RewardsBot.exe</code>. When running from source, use
+                      <code>python -m rewards_bot --run-all --headless</code> in the project folder.</p>
+                    <p class="text-secondary m-0">The task only runs while the app window is closed. See the results on the <em>History</em> and <em>Log</em> pages.</p>
+                  </div></div>
+                </div>
+
+                <div class="accordion-item">
+                  <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#ge-history">
+                    <i class="ti ti-calendar-stats me-2"></i>History and log</button></h2>
+                  <div id="ge-history" class="accordion-collapse collapse" data-bs-parent="#guide-en"><div class="accordion-body">
+                    <ul>
+                      <li><b>History</b>: one row per account per day (points, PC/Mobile searches, what's missing). Pick an account and a
+                        7 / 30 / 90-day range; the 4 tiles on top summarise that range.</li>
+                      <li><b>Log</b>: every step the bot takes. Filter by account, by level (Errors / Warnings / Done) or type in the search box.
+                        Use <em>Copy</em> to send it to someone when you need help. Log lines written by the bot are in Vietnamese.</li>
+                    </ul>
                   </div></div>
                 </div>
 
@@ -549,33 +684,44 @@
                     <i class="ti ti-tool me-2"></i>Common problems</button></h2>
                   <div id="ge-fix" class="accordion-collapse collapse" data-bs-parent="#guide-en"><div class="accordion-body">
                     <dl class="fix-list">
-                      <dt>bing.com is logged in to the wrong account</dt><dd>Click <em>Log in</em>, log out on the bing.com tab, then log in again with the right account.</dd>
-                      <dt>Searches don't earn points</dt><dd>Click <em>Check</em>. Try one search by hand on your phone or computer: if that doesn't count either, Microsoft has paused credit for that account for now.</dd>
-                      <dt>"Profile đang mở trong một cửa sổ trình duyệt khác"</dt><dd>The profile is open in another browser window. Close the Edge window using that account's folder, then run again.</dd>
-                      <dt>"không vào được … bỏ qua trang này"</dt><dd>Your network blocks that site (for example bbc.com). That's fine, the bot moves on to another site.</dd>
+                      <dt>bing.com is signed in to the wrong account</dt><dd>Open <em>Log in</em>, sign out on the bing.com tab, then sign in again with the right account.</dd>
+                      <dt>Searches don't earn points</dt><dd>Run <em>Check</em>. Try one search by hand: if that doesn't count either, Microsoft has paused
+                        credit for that account for now.</dd>
+                      <dt>The profile is open in another browser window</dt><dd>Close the Edge window that uses that account's folder, then run again.</dd>
+                      <dt>A site is skipped ("không vào được")</dt><dd>Your network blocks that site. That's fine, the bot moves on to another one.</dd>
+                      <dt>The session expired</dt><dd>Save the email and password in the <em>Edit</em> dialog so the bot can sign in again. If Microsoft asks
+                        for a verification code, the bot stops so you can do it yourself.</dd>
                       <dt>Need to send an error to someone</dt><dd><em>Log</em> page → <em>Copy</em>, or send the file <code>data/logs/&lt;date&gt;.log</code>.</dd>
                     </dl>
-                    <p class="text-secondary small m-0">Log lines written by the bot stay in Vietnamese.</p>
                   </div></div>
                 </div>
 
               </div>
             </div></div>
           </div>
-          <div class="col-lg-4">
+          <div class="col-lg-4 d-flex flex-column gap-3">
             <div class="card">
               <div class="card-header"><h3 class="card-title"><i class="ti ti-folder me-2"></i>Where data is stored</h3></div>
               <div class="list-group list-group-flush small">
                 <div class="list-group-item"><code>data/profiles/</code><div class="text-secondary">Each account's login session</div></div>
-                <div class="list-group-item"><code>data/points_history.json</code><div class="text-secondary">Points per day (charts)</div></div>
-                <div class="list-group-item"><code>data/logs/</code><div class="text-secondary">Logs, kept for 14 days</div></div>
+                <div class="list-group-item"><code>data/points_history.json</code><div class="text-secondary">Points per day (charts, history)</div></div>
+                <div class="list-group-item"><code>data/logs/</code><div class="text-secondary">Logs, kept as set in Settings (14 days by default)</div></div>
                 <div class="list-group-item"><code>data/settings.json</code><div class="text-secondary">Settings and the account list</div></div>
               </div>
-              <div class="card-footer text-secondary small">Only your Windows user can read the <code>data/</code> folder, and it is never pushed to git.</div>
+              <div class="card-footer text-secondary small">The <code>data/</code> folder stays on your computer and only your Windows user can read it.
+                Saved passwords are encrypted by Windows.</div>
             </div>
-            <div class="alert alert-warning mt-3" role="alert">
+            <div class="card">
+              <div class="card-header"><h3 class="card-title"><i class="ti ti-keyboard me-2"></i>Quick tips</h3></div>
+              <div class="card-body small d-flex flex-column gap-2">
+                <div><b>Esc</b> closes any dialog.</div>
+                <div>Click an account name at the top of the Overview page to switch accounts quickly.</div>
+                <div>The <i class="ti ti-layout-sidebar-left-collapse"></i> button at the bottom of the sidebar collapses the menu on small screens.</div>
+              </div>
+            </div>
+            <div class="alert alert-warning m-0" role="alert">
               <div class="d-flex gap-2"><i class="ti ti-alert-triangle"></i>
-                <div>Microsoft Rewards forbids bots. Accounts can be banned or lose points. Use at your own risk.</div></div>
+                <div>Microsoft Rewards' terms forbid automated tools. Accounts can be suspended or lose points. Use at your own risk.</div></div>
             </div>
           </div>
         </div>
@@ -686,7 +832,21 @@
   </form>
 </dialog>
 
-<div class="app-toast" id="toast" role="status" hidden></div>
+<dialog id="confirm-dialog" class="dlg" aria-labelledby="cd-title">
+  <form method="dialog" id="confirm-form">
+    <div class="dlg-head"><h3 class="m-0" id="cd-title">Xóa tài khoản?</h3></div>
+    <div class="dlg-body">
+      <p class="mt-0" id="cd-text"></p>
+      <ul class="cd-names" id="cd-names"></ul>
+    </div>
+    <div class="dlg-foot">
+      <button class="btn" value="cancel" id="cd-cancel" formnovalidate>Hủy</button>
+      <button class="btn btn-danger" value="ok" id="cd-ok">Xóa</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="app-toast" id="toast" role="status" aria-live="polite" hidden></div>
 <script src="vendor/tabler/tabler.min.js"></script>
 <script src="vendor/apexcharts/apexcharts.min.js"></script>
 <script src="i18n.js"></script>

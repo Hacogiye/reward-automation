@@ -80,6 +80,9 @@ class RewardsBot:
         self._launched = None    # trình duyệt do bot mở (edge_launcher), None ở chế độ gắn vào Edge
         self._browser = None
         self.now = time.time     # đồng hồ (test thay bằng đồng hồ giả)
+        # giới hạn chỉnh được trong Cài đặt (thiếu thì dùng mặc định của lớp)
+        self.STALL_AFTER = int(settings.get("stall_after", RewardsBot.STALL_AFTER))
+        self.VISUAL_MAX_TRIES = int(settings.get("visual_max_tries", RewardsBot.VISUAL_MAX_TRIES))
 
     # ------------------------------------------------------------ helpers
     def log(self, msg: str) -> None:

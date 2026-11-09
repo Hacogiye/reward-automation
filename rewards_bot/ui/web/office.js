@@ -1281,6 +1281,7 @@ const Office = (() => {
     window.addEventListener("resize", () => { cardPos.x = -1; });
   }
 
+  let armResume = null, repaint = null;  // gán trong bindControls; Office.setFun dùng
   function bindControls() {
     const music = $("#office-music"), rain = $("#office-rain"), volume = $("#office-volume");
     const vol = pref.get("officeVolume", 0.6);
@@ -1314,14 +1315,22 @@ const Office = (() => {
     });
     paint();
     // lần trước để nhạc bật: bật lại ở lần bấm chuột đầu tiên (trình duyệt không cho tự phát tiếng khi chưa bấm gì)
-    if (pref.get("officeMusic", false)) {
-      const resume = (e) => {
-        if (e.target.closest("#office-music")) return;  // bấm chính nút nhạc thì để nút tự xử lý
-        document.removeEventListener("pointerdown", resume, true);
-        if (!Lofi.on) { Lofi.start(); paint(); }
-      };
+    // chế độ vui tắt thì không tự bật (giữ nguyên pref, bật chế độ vui lại là tiếp tục chờ lần bấm đầu)
+    let armed = false;
+    const resume = (e) => {
+      if (!S.settings.fun_mode) return;
+      if (e.target.closest("#office-music")) return;  // bấm chính nút nhạc thì để nút tự xử lý
+      document.removeEventListener("pointerdown", resume, true);
+      armed = false;
+      if (!Lofi.on) { Lofi.start(); paint(); }
+    };
+    armResume = () => {
+      if (armed || Lofi.on || !pref.get("officeMusic", false)) return;
+      armed = true;
       document.addEventListener("pointerdown", resume, true);
-    }
+    };
+    repaint = paint;
+    armResume();
   }
 
   return {
@@ -1356,6 +1365,11 @@ const Office = (() => {
       if (visible) wake();
     },
     onLog,
+    // app.js gọi khi bật / tắt chế độ vui: tắt thì dừng nhạc lofi (không xóa pref officeMusic), bật lại thì chờ lần bấm đầu để phát tiếp
+    setFun(on) {
+      if (!on) { if (Lofi.on) Lofi.stop(); } else if (armResume) armResume();
+      if (repaint) repaint();
+    },
     // chỉ để kiểm thử: khung (client) của màn hình từng bàn, kể cả khung viền
     _screens() {
       if (!cv) return [];

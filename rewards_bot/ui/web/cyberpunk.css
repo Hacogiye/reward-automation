@@ -43,6 +43,7 @@
   --tblr-border-color-translucent: rgba(38, 51, 92, .6);
   --tblr-secondary: var(--cp-dim);
   --tblr-secondary-color: var(--cp-dim);
+  --tblr-secondary-rgb: 139, 150, 196;  /* = --cp-dim, để .text-secondary giữ màu của skin */
   --tblr-primary: var(--cp-yellow);
   --tblr-primary-rgb: 252, 238, 10;
   --tblr-success: var(--cp-cyan);
@@ -237,9 +238,9 @@ html[lang="en"][data-skin="cyberpunk"] .hero .card-body::before { content: "EDDI
   letter-spacing: .08em;
   text-transform: uppercase;
 }
-[data-skin="cyberpunk"] .log-dots i { border-radius: 0; width: 14px; height: 6px; background: var(--cp-pink); transform: skewX(-30deg); }
-[data-skin="cyberpunk"] .log-dots i:nth-child(2) { background: var(--cp-yellow); }
-[data-skin="cyberpunk"] .log-dots i:nth-child(3) { background: var(--cp-cyan); }
+/* 3 vạch neon đầu thanh nhật ký (thay cho 3 chấm cũ đã bỏ khỏi HTML) */
+[data-skin="cyberpunk"] .log-head::before { content: ""; width: 54px; height: 6px; flex: none; transform: skewX(-30deg);
+  background: linear-gradient(90deg, var(--cp-pink) 0 14px, transparent 14px 20px, var(--cp-yellow) 20px 34px, transparent 34px 40px, var(--cp-cyan) 40px 54px); }
 [data-skin="cyberpunk"] .log-title { color: var(--cp-yellow); font-weight: 700; text-shadow: 0 0 8px rgba(252, 238, 10, .45); }
 [data-skin="cyberpunk"] .lvl { border-radius: 0; background: transparent; border-color: var(--cp-line); color: var(--cp-dim);
   font-family: var(--cp-display); text-transform: uppercase; letter-spacing: .06em;
@@ -259,10 +260,10 @@ html[lang="en"][data-skin="cyberpunk"] .hero .card-body::before { content: "EDDI
 [data-skin="cyberpunk"] .lsep::before, [data-skin="cyberpunk"] .lsep::after {
   border-top: 0; height: 6px; background: repeating-linear-gradient(-45deg, rgba(252, 238, 10, .5) 0 4px, transparent 4px 9px); }
 [data-skin="cyberpunk"] .lsep .avatar-xs { border-radius: 0 !important; }
-[data-skin="cyberpunk"] .log-empty { color: var(--cp-dim); font-family: var(--cp-display); }
-[data-skin="cyberpunk"] .log-empty-ic { border-radius: 0; background: rgba(5, 217, 232, .1); color: var(--cp-cyan);
+[data-skin="cyberpunk"] .state-block { color: var(--cp-dim); font-family: var(--cp-display); }
+[data-skin="cyberpunk"] .state-ic { border-radius: 0; background: rgba(5, 217, 232, .1); color: var(--cp-cyan);
   box-shadow: 0 0 18px rgba(5, 217, 232, .25); clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 0 100%); }
-[data-skin="cyberpunk"] .log-empty b { color: var(--cp-yellow); text-transform: uppercase; letter-spacing: .08em; }
+[data-skin="cyberpunk"] .state-title { color: var(--cp-yellow); text-transform: uppercase; letter-spacing: .08em; }
 /* chữ "ACCESS LOG" mờ chìm ở nền khung nhật ký */
 [data-skin="cyberpunk"] .logcard { position: relative; }
 [data-skin="cyberpunk"] .logcard .logbox { position: relative; }

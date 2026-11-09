@@ -29,6 +29,9 @@ DEFAULT_SETTINGS = {
     "extra_searches": 2,
     "search_browse": True,  # trong lúc chờ lượt search kế: cuộn trang kết quả, đôi khi bấm vào một kết quả
     "search_click_pct": 40,  # % số lượt search có bấm vào một kết quả (khi bật search_browse)
+    "stall_after": 6,  # số lượt search liên tiếp không được cộng điểm thì dừng loại search đó
+    "visual_max_tries": 4,  # số lần thử Visual Search tối đa mỗi tài khoản mỗi ngày
+    "log_keep_days": 14,  # giữ file nhật ký data/logs bao nhiêu ngày
     "browser_channel": "msedge",
     "headless": False,
     "max_parallel": 3,
@@ -43,6 +46,7 @@ DEFAULT_SETTINGS = {
     "do_visual": True,  # Visual Search: tải 1 ảnh lên bằng nút camera của Bing Images
     "do_browse": False,
     "language": "vi",  # ngôn ngữ giao diện: "vi" / "en" (nhật ký của bot vẫn tiếng Việt)
+    "fun_mode": False,  # chế độ vui: trang Văn phòng robot, skin Cyberpunk, icon 3D (tắt = giao diện gọn, icon nét)
     "theme": "system",  # giao diện: "system" (theo Windows) / "light" / "dark" / "cyberpunk"
     "bypass_proxy": True,  # trình duyệt của bot không đi qua proxy hệ thống
     "browse_minutes": 30,
