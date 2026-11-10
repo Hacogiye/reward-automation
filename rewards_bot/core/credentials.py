@@ -116,26 +116,8 @@ def load(name: str, path=None):
         return None
 
 
-# ---------------------------------------------------------------- bí mật khác (vd token GitHub), file riêng
-def save_secret(key: str, value: str, path=None) -> None:
-    path = path or config.SECRETS_FILE
-    with _LOCK:
-        data = read_json(path, {})
-        data[key] = protect(value)
-        write_json(path, data)
-        path.with_suffix(path.suffix + ".bak").unlink(missing_ok=True)
-
-
-def load_secret(key: str, path=None):
-    token = read_json(path or config.SECRETS_FILE, {}).get(key)
-    if not token or not supported():
-        return None
-    try:
-        return unprotect(token)
-    except (ValueError, OSError):
-        return None
-
-
+# ---------------------------------------------------------------- bí mật khác, file riêng
+# Chỉ còn dùng để xóa token GitHub cũ (bản có tự cập nhật đã lưu nó vào đây).
 def remove_secret(key: str, path=None) -> None:
     path = path or config.SECRETS_FILE
     with _LOCK:

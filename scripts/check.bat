@@ -1,6 +1,6 @@
 @echo off
 rem Chạy toàn bộ test (logic, dữ liệu, giao diện). Chạy trước mỗi lần commit.
-cd /d "%~dp0"
+cd /d "%~dp0.."
 python -m pytest -q tests %*
 if errorlevel 1 (
   echo.

@@ -1,7 +1,5 @@
 """Bảng truy vấn dùng chung: không trùng trong bảng, không lặp lại câu đã dùng gần đây."""
 
-import csv
-import json
 import random
 import threading
 from datetime import date, timedelta
@@ -20,7 +18,6 @@ class QueryBank:
         self.lock = threading.Lock()
         self.rows: list = []  # {"id", "category", "query", "used_by"}
         self.next_id = 1
-        self.on_change = None  # callback(kind, payload)
         self.history = self._load_history()
 
     # ------------------------------------------------------------ history
@@ -34,11 +31,6 @@ class QueryBank:
             write_json(self.history_path, self.history)
         except OSError:
             pass
-
-    def clear_history(self) -> None:
-        with self.lock:
-            self.history = {}
-            self._save_history()
 
     # ------------------------------------------------------------ generation
     def _pick(self, n: int) -> list:
@@ -75,17 +67,13 @@ class QueryBank:
     def generate(self, n: int) -> list:
         """Tạo bảng mới gồm n câu (thay bảng cũ)."""
         with self.lock:
-            self.rows = []
             self.rows = self._make_rows(self._pick(n))
-            rows = list(self.rows)
-        self._emit("reset", rows)
-        return rows
+            return list(self.rows)
 
     def take(self, who: str) -> str:
         """Lấy câu chưa dùng tiếp theo cho một profile; tự sinh thêm khi hết."""
         with self.lock:
             row = next((r for r in self.rows if not r["used_by"]), None)
-            added = []
             if row is None:
                 added = self._make_rows(self._pick(30))
                 self.rows.extend(added)
@@ -93,18 +81,4 @@ class QueryBank:
             row["used_by"] = who
             self.history[row["query"].lower()] = date.today().isoformat()
             self._save_history()
-        for r in added:
-            self._emit("add", r)
-        self._emit("update", row)
         return row["query"]
-
-    def export_csv(self, path: str) -> None:
-        with self.lock, open(path, "w", newline="", encoding="utf-8-sig") as f:
-            w = csv.writer(f)
-            w.writerow(["#", "Lĩnh vực", "Truy vấn", "Đã dùng bởi"])
-            for r in self.rows:
-                w.writerow([r["id"], r["category"], r["query"], r["used_by"]])
-
-    def _emit(self, kind, payload) -> None:
-        if self.on_change:
-            self.on_change(kind, payload)

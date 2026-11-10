@@ -94,7 +94,7 @@ python -m rewards_bot
 | `python -m rewards_bot --run-all --headless` | Chạy mọi tài khoản, không mở cửa sổ |
 | `python -m rewards_bot --check` | Kiểm tra mọi tài khoản, không search |
 
-Trên Windows có thể nhấp đúp `run.bat`. Mặc định app dùng Edge có sẵn; muốn dùng Chromium của Playwright thì chạy
+Trên Windows có thể nhấp đúp `scripts/run.bat`. Mặc định app dùng Edge có sẵn; muốn dùng Chromium của Playwright thì chạy
 `python -m playwright install chromium` rồi chọn trong trang Cài đặt.
 
 <details>
@@ -109,13 +109,13 @@ Bot và chế độ không giao diện chạy được trên Linux. Cần:
    (`pip install "pywebview[qt]"`).
 
 ```bash
-./run.sh
+./scripts/run.sh
 ```
 ```bash
-./run.sh --run-all --headless
+./scripts/run.sh --run-all --headless
 ```
 
-Chạy hằng ngày bằng cron: `30 7 * * * cd /đường/dẫn/reward-automation && ./run.sh --run-all --headless`.
+Chạy hằng ngày bằng cron: `30 7 * * * cd /đường/dẫn/reward-automation && ./scripts/run.sh --run-all --headless`.
 Trên Linux thư mục `data/` không tự khóa quyền (tự `chmod 700 data` nếu cần) và app không đọc proxy hệ thống.
 </details>
 
@@ -243,8 +243,7 @@ pip install -r requirements-dev.txt
 python -m pytest -q tests
 ```
 
-Test giao diện vẽ mọi trang trong Edge chạy ẩn với API giả. `CLAUDE.md` ghi kiến trúc và những điều đã kiểm chứng về
-cách Bing / Rewards hoạt động; đọc trước khi sửa bot.
+Test giao diện vẽ mọi trang trong Edge chạy ẩn với API giả.
 
 Phát hành: tăng `__version__` trong `rewards_bot/__init__.py`, rồi đẩy tag `v<phiên bản>`. GitHub Actions chạy test,
 build `PrixAuto.exe` và đăng file zip kèm `.sha256`. Build trên máy: `python packaging/build_exe.py`.

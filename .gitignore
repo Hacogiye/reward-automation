@@ -5,7 +5,7 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
-*.csv
+.pytest_cache/
 
 # bản build .exe (python packaging/build_exe.py)
 build/
@@ -15,3 +15,10 @@ dist/
 .claude/
 .agents/
 .codex/
+
+# ghi chú review của quy trình /ship (docs/reviews/<ngày>-<task>.md), chỉ giữ trên máy
+docs/reviews/
+
+# hướng dẫn cho trợ lý AI của riêng máy này
+AGENTS.md
+CLAUDE.md

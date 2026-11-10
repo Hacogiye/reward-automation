@@ -96,7 +96,7 @@ python -m rewards_bot
 | `python -m rewards_bot --run-all --headless` | Runs every account without a window |
 | `python -m rewards_bot --check` | Self-checks every account, no searches |
 
-On Windows you can also double-click `run.bat`.
+On Windows you can also double-click `scripts/run.bat`.
 
 <details>
 <summary><b>Linux</b></summary>
@@ -110,13 +110,13 @@ The bot and the headless mode work on Linux. You need:
    (`pip install "pywebview[qt]"`).
 
 ```bash
-./run.sh
+./scripts/run.sh
 ```
 ```bash
-./run.sh --run-all --headless
+./scripts/run.sh --run-all --headless
 ```
 
-Daily with cron: `30 7 * * * cd /path/to/reward-automation && ./run.sh --run-all --headless`.
+Daily with cron: `30 7 * * * cd /path/to/reward-automation && ./scripts/run.sh --run-all --headless`.
 On Linux `data/` is not locked down automatically (`chmod 700 data` if needed) and the system proxy is not read.
 </details>
 
@@ -188,8 +188,7 @@ pip install -r requirements-dev.txt
 python -m pytest -q tests
 ```
 
-The UI smoke tests render every page in headless Edge with a mocked API. `CLAUDE.md` documents the architecture and
-the hard-won facts about how Bing and Rewards behave; read it before changing the bot.
+The UI smoke tests render every page in headless Edge with a mocked API.
 
 Releases: bump `__version__` in `rewards_bot/__init__.py`, then push a tag `v<version>`. GitHub Actions runs the tests,
 builds `PrixAuto.exe` and publishes the zip with its `.sha256`. Build locally with `python packaging/build_exe.py`.
@@ -200,18 +199,23 @@ builds `PrixAuto.exe` and publishes the zip with its `.sha256`. Build locally wi
 ```
 rewards_bot/
 ├── __main__.py           entry point: UI, --run-all, --check
+├── cli.py                --run-all / --check without a window
 ├── core/
 │   ├── bot.py            one account: tasks, searches, self-check
 │   ├── rewards_page.py   parses rewards.bing.com (points, cards, Points breakdown)
 │   ├── runner.py         runs accounts in parallel, daily log files
 │   ├── edge_launcher.py  starts a normal Edge with a local debug port for Playwright
+│   ├── browser.py        finds a leftover Edge still holding a profile folder
+│   ├── instance.py       single-instance lock (data/app.lock)
 │   ├── credentials.py    optional auto sign-in, DPAPI-encrypted
 │   ├── security.py       data folder permissions, proxy and debug-port checks
 │   └── config.py         settings and atomic JSON writes
 ├── search/               query catalog and no-repeat query bank
 └── ui/                   pywebview app + web UI (Tabler, ApexCharts, vendored)
 packaging/                PyInstaller build (PrixAuto.exe)
+scripts/                  run.bat / run.sh (open the app), check.bat / check.sh (tests)
 tests/                    pytest: bot logic, page parsing, API and UI smoke tests
+docs/images/              README screenshots
 ```
 </details>
 
