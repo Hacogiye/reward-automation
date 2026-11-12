@@ -1,6 +1,6 @@
 # Đẩy tag phiên bản (vd: git tag v1.2.0 && git push origin v1.2.0) -> chạy test, build PrixAuto.exe trên Windows và
 # tạo GitHub Release kèm PrixAuto-<phiên bản>-win64.zip + .sha256. App thấy tag mới thì báo người dùng, hiện ghi chú
-# của release (sinh từ commit bằng packaging/release_notes.py) và cho tải zip về tự cập nhật.
+# của release (mục của phiên bản trong CHANGELOG.md, bắt buộc phải có) và cho tải zip về tự cập nhật.
 name: release
 
 on:
@@ -31,6 +31,15 @@ jobs:
           $v = python -c "import rewards_bot; print(rewards_bot.__version__)"
           if ("v$v" -ne "${{ github.ref_name }}") { throw "Tag ${{ github.ref_name }} khác phiên bản v$v" }
 
+      # bắt buộc có danh sách thay đổi: thiếu mục trong CHANGELOG.md thì dừng ngay, không build, không tạo release
+      - name: Danh sách thay đổi (CHANGELOG.md)
+        shell: pwsh
+        run: |
+          $env:PYTHONIOENCODING = "utf-8"
+          python packaging/release_notes.py "${{ github.ref_name }}" > notes.md
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          Get-Content notes.md
+
       - name: Test
         run: python -m pytest -q tests
 
@@ -47,7 +56,4 @@ jobs:
           $hash = (Get-FileHash -Algorithm SHA256 $zip.FullName).Hash.ToLower()
           $sha = "$($zip.FullName).sha256"
           [IO.File]::WriteAllText($sha, "$hash  $($zip.Name)`n")
-          # danh sách thay đổi (app hiện cho người dùng khi báo bản mới)
-          $env:PYTHONIOENCODING = "utf-8"
-          python packaging/release_notes.py "${{ github.ref_name }}" | Out-File -Encoding utf8 notes.md
           gh release create "${{ github.ref_name }}" $zip.FullName $sha --title "PrixAuto ${{ github.ref_name }}" --notes-file notes.md

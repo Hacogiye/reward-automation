@@ -175,14 +175,39 @@ def test_download_refuses_foreign_redirect_and_missing_sha(tmp_path, monkeypatch
         U.download({**ASSET, "sha256_url": ""}, tmp_path / "p.zip")
 
 
-def test_release_notes_from_commits():
-    items = [("DAPI: phone check-in", "- detail\n\nCo-Authored-By: Bot <x@y>"), ("Fix login", ""),
-             ("Version 1.6.0", "Summary for users.\n\nCo-Authored-By: Bot <x@y>")]
-    md = RN.build("v1.6.0", items, "v1.5.0")
-    assert md.startswith("Summary for users.") and "Co-Authored-By" not in md
-    assert "- DAPI: phone check-in\n- Fix login" in md and "Version 1.6.0" not in md
-    assert "v1.5.0...v1.6.0" in md
-    assert RN.build("v1.0.0", []) == "Phiên bản 1.0.0.\n"
+CHANGELOG = """# Nhật ký thay đổi
+
+Lời dẫn.
+
+## 1.10.0 - 2026-12-01
+- Thêm A
+  dòng nối tiếp
+
+## 1.9.0 - 2026-11-30
+
+## 1.1.0 - 2026-11-01
+- Bản cũ
+"""
+
+
+def test_release_notes_come_from_changelog():
+    md = RN.build("v1.10.0", CHANGELOG, "v1.9.0")
+    assert md == "- Thêm A\n  dòng nối tiếp\n\nSo sánh / Compare: v1.9.0...v1.10.0\n"
+    assert RN.build("v1.1.0", CHANGELOG) == "- Bản cũ\n"
+    for missing in ("v1.9.0", "v1.0.0", "v1.10"):  # mục rỗng, chưa viết, "1.10" không được khớp nhầm mục 1.10.0
+        with pytest.raises(ValueError, match="CHANGELOG.md"):
+            RN.build(missing, CHANGELOG)
+
+
+def test_current_version_has_changelog_entry():
+    """Bắt buộc: đổi __version__ thì phải viết mục tương ứng trong CHANGELOG.md, nếu không test đỏ ngay trên máy dev
+    (và workflow phát hành dừng trước khi build)."""
+    from rewards_bot import __version__
+    text = RN.CHANGELOG.read_text(encoding="utf-8")
+    assert RN.section(__version__, text), f"CHANGELOG.md chưa có mục '## {__version__} - <ngày>'"
+    # mỗi tag đã phát hành từ khi có CHANGELOG đều phải còn mục của nó (không lỡ tay xóa)
+    for v in ("1.7.0", "1.7.1", "1.7.2", "1.7.3"):
+        assert RN.section(v, text), v
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="chỉ Windows có PowerShell + robocopy")

@@ -1,70 +1,60 @@
-"""Ghi chú cho GitHub Release (app hiện nó làm "Danh sách thay đổi" khi báo có bản mới).
+"""Ghi chú cho GitHub Release, lấy từ CHANGELOG.md (app hiện nó làm "danh sách thay đổi" khi báo có bản mới).
 
-    python packaging/release_notes.py v1.6.0 > notes.md
+    python packaging/release_notes.py v1.7.3 > notes.md
 
-Lấy các commit từ tag phiên bản trước tới tag này (bỏ commit merge):
-- phần thân của commit "Version X.Y.Z" là đoạn tóm tắt ở đầu;
-- mỗi commit còn lại là một gạch đầu dòng (tiêu đề commit), dòng "Co-Authored-By" bị bỏ.
+Mỗi phiên bản BẮT BUỘC có mục `## X.Y.Z - YYYY-MM-DD` trong CHANGELOG.md. Thiếu mục hoặc mục rỗng thì thoát lỗi, nên
+workflow release.yml dừng trước khi build và không tạo bản phát hành nào.
 """
 import re
 import subprocess
 import sys
+from pathlib import Path
 
-SEP = "\x1e"  # tách các commit trong đầu ra của git log
-VERSION_RE = re.compile(r"^(Version|Release|Bump version)\b.*\d+\.\d+", re.I)
-TRAILER_RE = re.compile(r"^(Co-Authored-By|Signed-off-by):", re.I)
+ROOT = Path(__file__).resolve().parents[1]
+CHANGELOG = ROOT / "CHANGELOG.md"
+HEAD_RE = re.compile(r"^##\s+v?(\d+\.\d+\.\d+)\b.*$", re.M)
 
 
-def _git(*args) -> str:
-    return subprocess.run(["git", *args], check=True, capture_output=True, text=True, encoding="utf-8").stdout
+def section(version: str, text: str):
+    """Nội dung mục `## <version>` (tới mục `## ` kế tiếp), đã bỏ dòng trống đầu/cuối; không có thì None."""
+    heads = list(HEAD_RE.finditer(text))
+    for i, m in enumerate(heads):
+        if m.group(1) == version:
+            end = heads[i + 1].start() if i + 1 < len(heads) else len(text)
+            body = text[m.end():end].strip()
+            return body or None
+    return None
 
 
 def previous_tag(tag: str) -> str:
-    """Tag vX.Y.Z gần nhất trước `tag` (rỗng nếu đây là tag đầu tiên)."""
+    """Tag vX.Y.Z gần nhất trước `tag` (rỗng nếu đây là tag đầu tiên hoặc không có git)."""
     try:
-        return _git("describe", "--tags", "--abbrev=0", "--match", "v[0-9]*", f"{tag}^").strip()
-    except subprocess.CalledProcessError:
+        return subprocess.run(["git", "describe", "--tags", "--abbrev=0", "--match", "v[0-9]*", f"{tag}^"], check=True,
+                              capture_output=True, text=True, cwd=ROOT).stdout.strip()
+    except (subprocess.CalledProcessError, OSError):
         return ""
 
 
-def commits(tag: str, prev: str) -> list:
-    """[(tiêu đề, thân)] từ cũ tới mới."""
-    rng = f"{prev}..{tag}" if prev else tag
-    out = _git("log", "--no-merges", "--reverse", f"--format=%s%n%b{SEP}", rng)
-    items = []
-    for block in out.split(SEP):
-        lines = block.strip("\n").splitlines()
-        if lines and lines[0].strip():
-            items.append((lines[0].strip(), "\n".join(lines[1:])))
-    return items
-
-
-def _clean(body: str) -> str:
-    return "\n".join(ln for ln in body.splitlines() if not TRAILER_RE.match(ln.strip())).strip()
-
-
-def build(tag: str, items: list, prev: str = "") -> str:
-    summary = [_clean(b) for s, b in items if VERSION_RE.match(s) and _clean(b)]
-    changes = [s for s, _ in items if not VERSION_RE.match(s)]
-    parts = []
-    if summary:
-        parts.append(summary[-1])
-    if changes:
-        parts.append("### Thay đổi / Changes\n" + "\n".join(f"- {s}" for s in changes))
-    if not parts:
-        parts.append(f"Phiên bản {tag.lstrip('v')}.")
-    if prev:
-        parts.append(f"So sánh / Compare: {prev}...{tag}")
-    return "\n\n".join(parts) + "\n"
+def build(tag: str, text: str, prev: str = "") -> str:
+    version = tag.lstrip("v")
+    body = section(version, text)
+    if not body:
+        raise ValueError(f"CHANGELOG.md chưa có mục '## {version} - <ngày>' (hoặc mục rỗng): viết danh sách thay đổi "
+                         f"cho người dùng trước khi phát hành {tag}")
+    return body + (f"\n\nSo sánh / Compare: {prev}...{tag}" if prev else "") + "\n"
 
 
 def main() -> None:
     if len(sys.argv) != 2:
         sys.exit("Dùng: python packaging/release_notes.py vX.Y.Z")
     tag = sys.argv[1]
-    prev = previous_tag(tag)
+    sys.stderr.reconfigure(encoding="utf-8")  # thông báo lỗi tiếng Việt không bị vỡ chữ trên console Windows
+    try:
+        notes = build(tag, CHANGELOG.read_text(encoding="utf-8"), previous_tag(tag))
+    except (ValueError, OSError) as e:
+        sys.exit(f"Lỗi: {e}")
     sys.stdout.reconfigure(encoding="utf-8")
-    sys.stdout.write(build(tag, commits(tag, prev), prev))
+    sys.stdout.write(notes)
 
 
 if __name__ == "__main__":
