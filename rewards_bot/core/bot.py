@@ -1628,12 +1628,10 @@ class RewardsBot:
             add("ok" if n_daily else "warn", "Daily Set / Keep earning",
                 f"{n_daily} thẻ Daily Set, {n_more} thẻ Keep earning" if n_daily
                 else "không thấy thẻ Daily Set nào (có thể Rewards đổi giao diện)")
-            if self.s.get("do_read_earn", True):
-                offer = self.read_earn_status(ctx, quiet=True)
-                row = read_earn_row(offer)
-                add("ok" if row else "warn", "Read to Earn (DAPI)",
-                    f"{row['progress']}/{row['max']} điểm hôm nay" if row
-                    else "không đọc được hoặc tài khoản không có offer đọc báo")
+            row = read_earn_row(self.read_earn_status(ctx, quiet=True))
+            add("ok" if row else "warn", "Read to Earn (DAPI)",
+                f"{row['progress']}/{row['max']} điểm hôm nay" if row
+                else "không đọc được hoặc tài khoản không có offer đọc báo")
             level, detail = self.bing_account_check(page)
             add(level, "Tài khoản trên bing.com", detail)
             m = ctx.new_page()
@@ -1666,8 +1664,9 @@ class RewardsBot:
         def work(ctx, page, own):
             self.status(state="Đang làm mới", progress="")
             st = self.read_state(page)
-            if self.s.get("do_read_earn", True):  # trang web không có Read to Earn: hỏi DAPI (chỉ đọc)
-                self.read_earn_status(ctx)
+            # trang web không có Read to Earn: hỏi DAPI (chỉ đọc), kể cả khi công tắc Read to Earn tắt (công tắc chỉ
+            # quyết định bot có tự đọc báo hay không, còn theo dõi tiến độ thì luôn có)
+            self.read_earn_status(ctx)
             self.status(state="Sẵn sàng", progress="")
             self.log(f"Đã cập nhật: {st['available']} điểm, hôm nay {st['today']}")
         self._session(work, headless=True, label="Làm mới")
@@ -1684,6 +1683,8 @@ class RewardsBot:
             checked_in = self.do_checkin(ctx, page) if self.s.get("do_checkin", True) else True
             if self.s.get("do_read_earn", True):
                 self.do_read_to_earn(ctx)
+            else:  # không tự đọc báo nhưng vẫn hiện tiến độ (vd người dùng tự đọc trên điện thoại)
+                self.read_earn_status(ctx, quiet=True)
             if self.s.get("do_quests", True):  # Daily Set + Keep earning
                 self.do_cards(page)
                 self.retry_missed_cards(page)

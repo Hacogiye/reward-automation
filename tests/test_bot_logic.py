@@ -798,8 +798,11 @@ def test_run_does_checkin_first_and_respects_switch():
     bot.read_state = lambda page: {"available": 1}
     bot.do_checkin = lambda ctx, page: True
     bot.do_read_to_earn = lambda ctx: pytest.fail("Read to Earn đang tắt")
+    tracked = []
+    bot.read_earn_status = lambda ctx, quiet=False: tracked.append(quiet)
     bot._session = lambda work, headless, label: work(object(), FakePage(), [])
     bot.run()
+    assert tracked == [True]  # công tắc tắt: không đọc báo, nhưng vẫn đọc tiến độ để hiện trên giao diện
 
 
 def test_run_retries_failed_checkin_at_end():
@@ -1273,11 +1276,12 @@ def test_read_earn_status_errors_keep_last_value():
 
 
 @pytest.mark.parametrize("enabled", [True, False])
-def test_refresh_reads_read_earn_only_when_enabled(enabled):
+def test_refresh_always_reads_read_earn(enabled):
+    """Làm mới luôn đọc tiến độ Read to Earn (chỉ GET), dù công tắc tự đọc báo bật hay tắt."""
     bot, logs, ctx, statuses = tracked_bot([readearn_me(30)], do_read_earn=enabled)
     bot.state = empty_state()
     bot.read_state = lambda page: bot.state
     bot._session = lambda work, *a, **k: work(ctx, None, [])
     bot.refresh()
-    has_row = any(r["title"] == "Read to Earn" for s in statuses if "tasks" in s for r in s["tasks"])
-    assert has_row is enabled and bool(ctx.request.calls) is enabled
+    assert any(r["title"] == "Read to Earn" for s in statuses if "tasks" in s for r in s["tasks"])
+    assert [c[0] for c in ctx.request.calls] == ["GET"]
