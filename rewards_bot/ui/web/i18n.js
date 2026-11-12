@@ -223,6 +223,7 @@ const I18N = (() => {
     "Đã lưu mục tiêu": "Goal saved", "Đã xóa mục tiêu": "Goal deleted",
     "Nhật ký hoạt động": "Activity log", "Nhật ký đang trống": "The log is empty", "Đã sao chép nhật ký": "Log copied",
     "Đã chọn toàn bộ nhật ký, bấm Ctrl+C để sao chép": "Selected the whole log, press Ctrl+C to copy",
+    "# bài": "# articles",
     // ---- cập nhật
     "Ẩn thông báo cập nhật": "Hide update notice", "Cập nhật": "Update", "Tự kiểm tra bản mới trên GitHub": "Check GitHub for new versions",
     "Kiểm tra ngay": "Check now", "Đang kiểm tra...": "Checking...", "Có bản mới #": "New version #", "Có bản mới": "New version",

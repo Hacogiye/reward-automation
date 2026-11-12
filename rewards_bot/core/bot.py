@@ -157,6 +157,18 @@ def readearn_offer(data):
     return None
 
 
+def read_earn_row(offer):
+    """Dòng "Read to Earn" cho danh sách task trên giao diện, từ offer DAPI (số điểm: 3 điểm/bài, tối đa 30).
+
+    None khi chưa đọc DAPI hoặc tài khoản không có offer đọc báo (không hiện 0/30 gây hiểu nhầm)."""
+    if not offer:
+        return None
+    total = offer.get("max") or READ_EARN_MAX * 3
+    progress = total if offer.get("complete") else min(offer.get("progress") or 0, total)
+    return {"group": "Hoạt động", "title": "Read to Earn", "progress": progress, "max": total, "unit": "điểm",
+            "done": progress >= total, "img": "", "bot": f"{progress // 3}/{total // 3} bài"}
+
+
 def dapi_offer_ids(data) -> list:
     """Offer id của mọi promotion trong phản hồi GET /dapi/me (để tìm offer làm tăng Bing App Streak)."""
     try:
@@ -239,6 +251,8 @@ class RewardsBot:
         self._browser = None
         self.now = time.time     # đồng hồ (test thay bằng đồng hồ giả)
         self._dapi_tok = None    # (token DAPI, lúc lấy): dùng chung cho check-in và Read to Earn trong 1 lượt
+        # tiến độ Read to Earn đọc từ DAPI (trang web Rewards không có dòng này): {"progress","max","complete"} hoặc None
+        self.read_earn = None
         # giới hạn chỉnh được trong Cài đặt (thiếu thì dùng mặc định của lớp)
         self.STALL_AFTER = int(settings.get("stall_after", RewardsBot.STALL_AFTER))
         self.VISUAL_MAX_TRIES = int(settings.get("visual_max_tries", RewardsBot.VISUAL_MAX_TRIES))
@@ -292,6 +306,9 @@ class RewardsBot:
                 continue
             rows.append({"group": "Task thêm", "title": title, "progress": t["progress"], "max": t["max"],
                          "unit": t["unit"], "done": t["progress"] >= t["max"], "img": local_icons.get(title, "")})
+        row = read_earn_row(self.read_earn)
+        if row:
+            rows.append(row)
         self.status(tasks=rows, today=self.state.get("today"), stats=stats(self.state),
                     icons=group_icons(self.state), streak=streak_info(self.state),
                     updated=time.strftime("%H:%M %d/%m"))
@@ -1387,6 +1404,7 @@ class RewardsBot:
         try:
             token, me = self._dapi_me(ctx)
             offer = readearn_offer(me)
+            self._set_read_earn(offer)
             if offer is None:
                 self.log("Read to Earn: tài khoản không có offer đọc báo (DAPI)")
                 return 0
@@ -1406,13 +1424,44 @@ class RewardsBot:
                 balance = bal if bal is not None else balance
                 self.log(f"  Read to Earn: bài {i + 1} (+{pts})")
                 self.status(progress=f"Read to Earn +{gained}")
+                # dòng trên dashboard tăng theo từng bài; số chính thức đọc lại từ DAPI ở cuối
+                self._set_read_earn({**offer, "progress": offer["progress"] + gained})
                 self.sleep(6, 20)  # thời gian "đọc" 1 bài, không gửi dồn dập
         except (StopRequested, NotLoggedIn):
             raise
         except Exception as e:
             self.log(f"Read to Earn không được: {e}")
         self.log(f"Read to Earn: +{gained} điểm")
+        if gained:
+            self.read_earn_status(ctx, quiet=True)
         return gained
+
+    def _set_read_earn(self, offer) -> None:
+        self.read_earn = offer
+        self.report()
+
+    def read_earn_status(self, ctx: BrowserContext, quiet: bool = False):
+        """Chỉ ĐỌC tiến độ Read to Earn từ DAPI (không đọc bài nào) rồi cập nhật dòng trên giao diện.
+
+        Read to Earn nằm ở app điện thoại nên trang web Rewards không có; DAPI (API của chính app đó) thì có.
+        Lỗi chỉ ghi nhật ký và giữ số cũ. Trả offer hoặc None."""
+        try:
+            _, me = self._dapi_me(ctx)
+        except (StopRequested, NotLoggedIn):
+            raise
+        except Exception as e:
+            self.check_stop()
+            self.log(f"Không đọc được tiến độ Read to Earn (DAPI): {e}")
+            return self.read_earn
+        if me is None:
+            self.log("Không đọc được tiến độ Read to Earn (DAPI trả lỗi)")
+            return self.read_earn
+        offer = readearn_offer(me)
+        self._set_read_earn(offer)
+        if not quiet:
+            self.log("Read to Earn: tài khoản không có offer đọc báo (DAPI)" if offer is None else
+                     f"Read to Earn: {read_earn_row(offer)['progress']}/{read_earn_row(offer)['max']} điểm")
+        return offer
 
     def checkin_only(self) -> None:
         """Chỉ check-in app điện thoại (lệnh --checkin): đọc trang Rewards, check-in, xác nhận Bing App Streak."""
@@ -1579,6 +1628,12 @@ class RewardsBot:
             add("ok" if n_daily else "warn", "Daily Set / Keep earning",
                 f"{n_daily} thẻ Daily Set, {n_more} thẻ Keep earning" if n_daily
                 else "không thấy thẻ Daily Set nào (có thể Rewards đổi giao diện)")
+            if self.s.get("do_read_earn", True):
+                offer = self.read_earn_status(ctx, quiet=True)
+                row = read_earn_row(offer)
+                add("ok" if row else "warn", "Read to Earn (DAPI)",
+                    f"{row['progress']}/{row['max']} điểm hôm nay" if row
+                    else "không đọc được hoặc tài khoản không có offer đọc báo")
             level, detail = self.bing_account_check(page)
             add(level, "Tài khoản trên bing.com", detail)
             m = ctx.new_page()
@@ -1611,6 +1666,8 @@ class RewardsBot:
         def work(ctx, page, own):
             self.status(state="Đang làm mới", progress="")
             st = self.read_state(page)
+            if self.s.get("do_read_earn", True):  # trang web không có Read to Earn: hỏi DAPI (chỉ đọc)
+                self.read_earn_status(ctx)
             self.status(state="Sẵn sàng", progress="")
             self.log(f"Đã cập nhật: {st['available']} điểm, hôm nay {st['today']}")
         self._session(work, headless=True, label="Làm mới")

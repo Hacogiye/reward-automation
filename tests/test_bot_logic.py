@@ -1204,3 +1204,80 @@ def test_visual_done_explains_streak_not_points():
     assert logs == ["Visual Search: hôm nay đã xong (Visual Search không cộng điểm mỗi lượt, "
                     "chỉ tính vào streak: ngày 3/7, mốc tới +5 điểm)"]
     assert RewardsBot.visual_streak_note({}).endswith("chỉ tính vào streak)")
+
+
+# ---------------------------------------------------------------- theo dõi Read to Earn trên giao diện (từ DAPI)
+def tasks_of(statuses):
+    """Danh sách task trong lần gửi trạng thái cuối cùng có "tasks"."""
+    return next(s["tasks"] for s in reversed(statuses) if "tasks" in s)
+
+
+def tracked_bot(mes, posts=(), **settings):
+    """Bot ghi lại mọi trạng thái gửi lên giao diện; GET /dapi/me lần lượt trả các phản hồi trong mes."""
+    bot, logs = make_bot(**settings)
+    statuses = []
+    bot._status = lambda n, d: statuses.append(d)
+    bot._mobile_token = lambda ctx: "tok"
+    ctx = FakeCtx(None, list(posts))
+    queue = [FakeResp(m) if not isinstance(m, FakeResp) else m for m in mes]
+    ctx.request.get = lambda url, **k: ctx.request.calls.append(("GET", url, k)) or (queue.pop(0) if len(queue) > 1 else queue[0])
+    return bot, logs, ctx, statuses
+
+
+def test_read_earn_row():
+    assert bot_mod.read_earn_row(None) is None
+    row = bot_mod.read_earn_row({"offerid": "x", "complete": False, "progress": 12, "max": 30})
+    assert row == {"group": "Hoạt động", "title": "Read to Earn", "progress": 12, "max": 30, "unit": "điểm",
+                   "done": False, "img": "", "bot": "4/10 bài"}
+    assert bot_mod.read_earn_row({"complete": True, "progress": 0, "max": 30})["progress"] == 30  # DAPI báo xong
+    assert bot_mod.read_earn_row({"complete": False, "progress": 45, "max": 30})["done"]  # không vượt quá tối đa
+    assert bot_mod.read_earn_row({"complete": False, "progress": 0, "max": 0})["max"] == 30  # thiếu max: 10 bài x 3
+
+
+def test_read_to_earn_shows_progress_and_rereads_dapi_at_the_end():
+    """Dòng Read to Earn tăng theo từng bài, cuối lượt lấy số chính thức từ DAPI (không tự cộng)."""
+    bot, _, ctx, statuses = tracked_bot([readearn_me(0), readearn_me(9)], [act(3, 103), act(3, 106), act(0, 106)])
+    bot.state = empty_state()
+    assert bot.do_read_to_earn(ctx) == 6
+    rows = [r for s in statuses if "tasks" in s for r in s["tasks"] if r["title"] == "Read to Earn"]
+    assert [r["progress"] for r in rows] == [0, 3, 6, 9]  # đầu lượt, sau bài 1, bài 2, đọc lại DAPI
+    assert [c[0] for c in ctx.request.calls].count("GET") == 2
+
+
+def test_read_earn_status_only_reads():
+    bot, logs, ctx, statuses = tracked_bot([readearn_me(12)])
+    bot.state = empty_state()
+    offer = bot.read_earn_status(ctx)
+    assert offer["progress"] == 12 and not [c for c in ctx.request.calls if c[0] == "POST"]
+    row = next(r for r in tasks_of(statuses) if r["title"] == "Read to Earn")
+    assert (row["progress"], row["max"], row["done"]) == (12, 30, False)
+    assert logs[-1] == "Read to Earn: 12/30 điểm"
+    # tài khoản không có offer đọc báo: bỏ dòng, không hiện 0/30
+    bot, logs, ctx, statuses = tracked_bot([ME_VN])
+    bot.state = empty_state()
+    assert bot.read_earn_status(ctx) is None
+    assert not [r for r in tasks_of(statuses) if r["title"] == "Read to Earn"] and "không có offer" in logs[-1]
+
+
+def test_read_earn_status_errors_keep_last_value():
+    bot, logs, ctx, statuses = tracked_bot([FakeResp({}, status=500)])
+    bot.state = empty_state()
+    bot.read_earn = {"offerid": "x", "complete": False, "progress": 6, "max": 30}
+    assert bot.read_earn_status(ctx)["progress"] == 6 and "DAPI trả lỗi" in logs[-1]
+
+    def boom(ctx):
+        raise RuntimeError("oauth hỏng")
+    bot._mobile_token = boom
+    bot._dapi_tok = None
+    assert bot.read_earn_status(ctx)["progress"] == 6 and "oauth hỏng" in logs[-1]
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_refresh_reads_read_earn_only_when_enabled(enabled):
+    bot, logs, ctx, statuses = tracked_bot([readearn_me(30)], do_read_earn=enabled)
+    bot.state = empty_state()
+    bot.read_state = lambda page: bot.state
+    bot._session = lambda work, *a, **k: work(ctx, None, [])
+    bot.refresh()
+    has_row = any(r["title"] == "Read to Earn" for s in statuses if "tasks" in s for r in s["tasks"])
+    assert has_row is enabled and bool(ctx.request.calls) is enabled

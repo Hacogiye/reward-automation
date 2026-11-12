@@ -1143,3 +1143,18 @@ def test_update_dialog_in_english_and_source_mode(server):
             d.querySelectorAll('.ud-notes').forEach((n) => n.remove()); return d.innerText + ' ' + document.querySelector('#update-bar').innerText; })()""")
         assert not re.search(r"[ăâđêôơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]", text.lower()), text
         assert errors == []
+
+
+def test_read_to_earn_row_on_dashboard(server):
+    """Dòng Read to Earn (tiến độ đọc từ DAPI) nằm trong nhóm Hoạt động, icon báo, số điểm, số bài ở chú thích."""
+    from rewards_bot.core import bot as bot_mod
+    boot = boot_data()
+    name = boot["profiles"][0]["name"]
+    boot["pstate"][name]["tasks"].append(bot_mod.read_earn_row({"complete": False, "progress": 12, "max": 30}))
+    with app_page(server, boot) as (pg, errors):
+        row = pg.locator(".trow", has_text="Read to Earn")
+        assert poll(pg, "[...document.querySelectorAll('.trow')].some((r) => r.textContent.includes('Read to Earn'))")
+        assert row.locator(".tpill").inner_text().startswith("12/30")
+        assert row.get_attribute("title") == "Read to Earn · 4/10 bài"
+        assert row.locator(".ticon .ti-news").count() == 1
+        assert errors == []

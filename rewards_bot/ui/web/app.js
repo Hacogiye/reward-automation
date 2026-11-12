@@ -29,7 +29,7 @@ const ICON_RULES = [
   [/poll|vote|bình chọn|this or that/, "poll"],
   [/food|recipe|burger|cook|pizza|món ăn/, "food"],
   [/travel|\btrip|flight|reef|island|beach|tokyo|du lịch/, "travel"],
-  [/news|tin tức/, "news"],
+  [/news|tin tức|read to earn/, "news"],
   [/shop|\bdeals?\b|mua sắm/, "shopping"],
   [/\bgames?\b|xbox/, "game"],
   [/music|song|âm nhạc/, "music"],
