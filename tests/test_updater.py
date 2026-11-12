@@ -183,3 +183,30 @@ def test_release_notes_from_commits():
     assert "- DAPI: phone check-in\n- Fix login" in md and "Version 1.6.0" not in md
     assert "v1.5.0...v1.6.0" in md
     assert RN.build("v1.0.0", []) == "Phiên bản 1.0.0.\n"
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="chỉ Windows có PowerShell + robocopy")
+def test_apply_script_really_runs_and_keeps_data(tmp_path):
+    """Chạy script cài thật bằng đúng cách app khởi chạy nó (launch_script): file mới đè file cũ, data/ giữ nguyên.
+    Bản 1.7.0 khởi chạy PowerShell với DETACHED_PROCESS nên script không bao giờ chạy."""
+    inst = tmp_path / "App's folder"
+    (inst / "_internal").mkdir(parents=True)
+    (inst / "data").mkdir()
+    (inst / U.EXE_NAME).write_text("old exe")
+    (inst / "_internal" / "lib.txt").write_text("old lib")
+    (inst / "data" / "settings.json").write_text("keep me")
+    zp = tmp_path / "work" / "u.zip"
+    zp.parent.mkdir()
+    with zipfile.ZipFile(zp, "w") as z:
+        z.writestr(f"{U.APP_FOLDER}/{U.EXE_NAME}", "new exe")
+        z.writestr(f"{U.APP_FOLDER}/_internal/lib.txt", "new lib")
+        z.writestr(f"{U.APP_FOLDER}/_internal/added.txt", "added")
+    script = tmp_path / "work" / "apply.ps1"
+    # pid đã chết: Wait-Process trả về ngay; dòng Start-Process cuối sẽ lỗi vì exe giả, không sao
+    script.write_text(U.apply_script(zp, inst, 999999, tmp_path / "work"), encoding="utf-8-sig")
+    assert U.launch_script(script).wait(120) is not None
+    assert (inst / U.EXE_NAME).read_text() == "new exe"
+    assert (inst / "_internal" / "lib.txt").read_text() == "new lib" and (inst / "_internal" / "added.txt").exists()
+    assert (inst / "data" / "settings.json").read_text() == "keep me"
+    assert "Đã cập nhật xong" in (tmp_path / "work" / "update.log").read_text(encoding="utf-8-sig")
+    assert not zp.exists() and not (tmp_path / "work" / "staging").exists()

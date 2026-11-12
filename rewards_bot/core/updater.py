@@ -257,6 +257,15 @@ def start_apply(zip_path: Path, install_dir: Path, work: Path) -> None:
     work.mkdir(parents=True, exist_ok=True)
     script = work / "apply.ps1"
     script.write_text(apply_script(zip_path, install_dir, os.getpid(), work), encoding="utf-8-sig")
-    flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW
-    subprocess.Popen(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script)],
-                     creationflags=flags, close_fds=True)
+    launch_script(script)
+
+
+def launch_script(script: Path) -> subprocess.Popen:
+    """Chạy script PowerShell ẩn, vẫn sống sau khi app thoát.
+
+    KHÔNG dùng DETACHED_PROCESS: powershell.exe không có console thì thoát ngay (mã 0) mà không chạy script, bản 1.7.0
+    bị lỗi này nên bấm cập nhật xong vẫn ở bản cũ. CREATE_NO_WINDOW cho nó một console ẩn riêng là đủ để tách khỏi app.
+    """
+    flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+    return subprocess.Popen(["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(script)],
+                            creationflags=flags, close_fds=True)
