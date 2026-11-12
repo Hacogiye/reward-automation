@@ -2,6 +2,7 @@
 
 import base64
 import json
+import math
 import random
 import re
 import secrets
@@ -42,6 +43,31 @@ OAUTH_TOKEN_URL = "https://login.live.com/oauth20_token.srf"
 OAUTH_REDIRECT = "https://login.live.com/oauth20_desktop.srf"
 OAUTH_CLIENT_ID = "0000000040170455"  # client id công khai của app Rewards trên điện thoại
 OAUTH_SCOPE = "service::prod.rewardsplatform.microsoft.com::MBI_SSL"
+
+
+def skewed_between(a: float, b: float, rnd=random) -> float:
+    """Số ngẫu nhiên trong [a, b] theo phân phối log-normal: phần lớn rơi vào khoảng 1/3 dưới, thỉnh thoảng gần b.
+
+    Giống thời gian nghỉ của người thật hơn phân phối đều (trải phẳng, dừng cứng ở 2 đầu). Giá trị ra ngoài [a, b] thì
+    lấy lại chứ không cắt, nên không dồn ở 2 đầu."""
+    if b < a:
+        a, b = b, a
+    if a <= 0 or b == a:
+        return rnd.uniform(a, b)
+    span = math.log(b / a)
+    mu, sigma = math.log(a) + 0.35 * span, 0.65 * span / 1.88  # a ≈ phân vị 16, b ≈ phân vị 97
+    for _ in range(50):
+        x = rnd.lognormvariate(mu, sigma)
+        if a <= x <= b:
+            return x
+    return rnd.uniform(a, b)
+
+
+def key_gap(ch: str, rnd=random) -> float:
+    """Thời gian chờ (giây) sau khi gõ 1 ký tự: thường 0.05–0.3 giây, sau dấu cách lâu hơn, đôi khi dừng nghĩ."""
+    if rnd.random() < 0.04:
+        return rnd.uniform(0.5, 1.4)
+    return min(0.6, max(0.04, rnd.lognormvariate(math.log(0.16 if ch == " " else 0.11), 0.45)))
 
 
 def oauth_code(url: str, state: str):
@@ -698,17 +724,54 @@ class RewardsBot:
                         return
             self.status(progress=f"{label} {i + 1}/{count}")
             self._search_once(page, f"{label} {i + 1}/{count}")
-            self._idle_browse(page, random.uniform(self.s["search_delay_min"], self.s["search_delay_max"]))
+            self._idle_browse(page, skewed_between(self.s["search_delay_min"], self.s["search_delay_max"]))
+
+    BING_HOME = "https://www.bing.com/"
+    SEARCH_BOX = "#sb_form_q"
 
     def _search_once(self, page: Page, tag: str) -> None:
         q = self.bank.take(self.name)
         try:
-            page.goto(f"https://www.bing.com/search?q={quote_plus(q)}&form=QBLH",
-                      wait_until="domcontentloaded", timeout=30000)
+            typed = self.s.get("search_typing", True) and self._type_query(page, q)
+            if not typed:  # tắt gõ phím, hoặc không tìm thấy ô tìm kiếm: mở thẳng trang kết quả
+                page.goto(f"https://www.bing.com/search?q={quote_plus(q)}&form=QBLH",
+                          wait_until="domcontentloaded", timeout=30000)
             page.mouse.wheel(0, random.randint(200, 1200))
+        except StopRequested:
+            raise
         except Exception as e:
             self.log(f"  lỗi khi tìm '{q}': {e}")
         self.log(f"  [{tag}] {q}")
+
+    def _type_query(self, page: Page, q: str) -> bool:
+        """Gõ từng ký tự của q vào ô tìm kiếm của Bing rồi bấm Enter, như người thật.
+
+        Trả False nếu chưa bấm Enter mà đã không gõ được (không có ô tìm kiếm...): khi đó gọi lại bằng URL vẫn an toàn,
+        không bị tính 2 lượt. Lỗi sau khi đã bấm Enter thì báo lỗi, không thử lại."""
+        try:
+            # chỉ www.bing.com có ô tìm kiếm (rewards.bing.com thì không); trang khác: trang kết quả đã mở, trang trắng
+            if urlparse(page.url).netloc not in ("www.bing.com", "bing.com"):
+                page.goto(self.BING_HOME, wait_until="domcontentloaded", timeout=30000)
+                self.sleep(0.8, 2.0)
+            box = page.locator(self.SEARCH_BOX).first
+            box.wait_for(state="visible", timeout=8000)
+            box.click(timeout=5000)
+            self.sleep(0.2, 0.6)
+            box.fill("")  # xóa câu của lượt trước trên trang kết quả
+            for ch in q:
+                page.keyboard.type(ch)
+                self.sleep(key_gap(ch))
+            self.sleep(0.3, 1.2)
+        except StopRequested:
+            raise
+        except Exception as e:
+            if "has been closed" in str(e):
+                raise
+            self.log(f"  không gõ được vào ô tìm kiếm ({type(e).__name__}), mở thẳng trang kết quả")
+            return False
+        with page.expect_navigation(wait_until="domcontentloaded", timeout=30000):
+            page.keyboard.press("Enter")
+        return True
 
     # Kết quả tìm kiếm thật (bỏ quảng cáo) trên trang Bing: [{i, cite}] theo thứ tự trên trang
     SERP_RESULT = "#b_results > li.b_algo h2 a[href]"

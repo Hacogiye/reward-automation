@@ -45,7 +45,8 @@ def boot_data():
              {"level": "fail", "title": "Tài khoản trên bing.com", "detail": "<b>sai tài khoản</b>"}]
     return {
         "settings": {"search_delay_min": 8, "search_delay_max": 20, "extra_searches": 2, "browser_channel": "msedge",
-                     "search_browse": True, "search_click_pct": 40, "stall_after": 6, "visual_max_tries": 4, "log_keep_days": 14,
+                     "search_browse": True, "search_click_pct": 40, "search_typing": True, "start_jitter_max": 30,
+                     "stall_after": 6, "visual_max_tries": 4, "log_keep_days": 14,
                      "headless": True, "max_parallel": 3, "history_days": 30, "do_quests": True, "do_pc": True,
                      "do_mobile": True, "do_visual": True, "do_browse": False,
                      "browse_minutes": 30, "bypass_proxy": True, "theme": "light", "fun_mode": False,

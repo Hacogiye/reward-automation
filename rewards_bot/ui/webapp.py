@@ -32,6 +32,7 @@ SETTING_SCHEMA = {
     "max_parallel": (int, 1, 10), "history_days": (int, 0, 365),
     "browse_minutes": (int, 1, 240),
     "search_browse": (bool,), "search_click_pct": (int, 0, 100),
+    "search_typing": (bool,), "start_jitter_max": (int, 0, 120),
     "stall_after": (int, 3, 30), "visual_max_tries": (int, 1, 10), "log_keep_days": (int, 1, 90),
     "headless": (bool,), "do_quests": (bool,), "do_pc": (bool,), "do_mobile": (bool,), "do_visual": (bool,),
     "do_checkin": (bool,), "do_read_earn": (bool,),

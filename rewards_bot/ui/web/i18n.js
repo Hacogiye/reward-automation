@@ -153,7 +153,8 @@ const I18N = (() => {
     "Lưu cài đặt": "Save settings", "Search & trình duyệt": "Search & browser",
     "Nghỉ ít nhất giữa # lượt search": "Shortest pause between # searches",
     "Nghỉ nhiều nhất giữa # lượt search": "Longest pause between # searches",
-    "Bot chờ một khoảng ngẫu nhiên giữa mức ít nhất và nhiều nhất.": "The bot waits a random time between the shortest and longest pause.",
+    "Bot chờ ngẫu nhiên giữa mức ít nhất và nhiều nhất: phần lớn lượt nghỉ ngắn, thỉnh thoảng nghỉ lâu gần mức nhiều nhất.":
+      "The bot waits a random time between the shortest and longest pause: mostly short pauses, now and then a long one near the longest.",
     "Số lượt search thêm": "Extra searches",
     "Search thêm vài lượt sau khi đủ điểm, phòng khi Rewards cập nhật chậm.": "A few more searches after the points are full, in case Rewards updates late.",
     "Dừng khi không được cộng điểm sau": "Stop when not credited after",
@@ -167,6 +168,12 @@ const I18N = (() => {
       "Scrolls the results page and sometimes opens a result, within the normal pause between # searches.",
     "Tỉ lệ lượt search có mở một kết quả": "Share of searches that open a result",
     "Bỏ qua quảng cáo và link tải file.": "Ads and file downloads are skipped.",
+    "Gõ từ khóa vào ô tìm kiếm": "Type queries into the search box",
+    "Gõ từng chữ vào ô tìm kiếm của Bing rồi bấm Enter, thay vì mở thẳng trang kết quả. Mỗi lượt search lâu hơn vài giây.":
+      "Types each letter into Bing's search box and presses Enter instead of opening the results page directly. Each search takes a few seconds longer.",
+    "Chờ ngẫu nhiên trước khi lịch tự chạy": "Random wait before a scheduled run",
+    "Lệnh --run-all và --checkin chờ ngẫu nhiên tới số phút này rồi mới bắt đầu, để ngày nào cũng không chạy đúng một giờ. Đặt # để tắt, thêm --now để chạy ngay.":
+      "--run-all and --checkin wait a random time up to this many minutes before starting, so runs don't start at the same time every day. Set # to turn off, add --now to start at once.",
     "Task": "Tasks", "Thời gian Browse tối đa": "Maximum Browse time",
     "Thời gian lướt web cho Edge – Minutes trong một lượt chạy.": "Time spent browsing for Edge – Minutes in one run.",
     "Số lần thử Visual Search mỗi ngày": "Visual Search tries per day",

@@ -1,5 +1,6 @@
 """Chạy nhiều profile song song, mỗi profile 1 thread + 1 trình duyệt riêng."""
 
+import random
 import threading
 import time
 from datetime import date, timedelta
@@ -60,6 +61,8 @@ class Runner:
     def is_running(self, name: str) -> bool:
         return name in self.running
 
+    SHUFFLE_ACTIONS = {"run", "checkin"}
+
     def start(self, profiles: list, settings: dict, action: str = "run") -> None:
         """action: "run" (làm task), "login" (mở cửa sổ đăng nhập), "refresh" (chỉ đọc điểm),
         "check" (tự chẩn đoán, không search), "checkin" (chỉ check-in app điện thoại)."""
@@ -67,6 +70,8 @@ class Runner:
         with self.lock:
             if not self.running or self.sem is None:
                 self.sem = threading.Semaphore(max(1, int(settings.get("max_parallel", 3))))
+            if action in self.SHUFFLE_ACTIONS:  # xáo thứ tự tài khoản để ngày nào cũng không chạy theo đúng 1 thứ tự
+                profiles = random.sample(list(profiles), len(profiles))
             for prof in profiles:
                 if prof["name"] in self.running:
                     continue

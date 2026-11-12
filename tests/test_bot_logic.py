@@ -35,7 +35,7 @@ class FakeBank:
 
 
 def make_bot(**settings):
-    s = {"search_delay_min": 0, "search_delay_max": 0, "extra_searches": 0, **settings}
+    s = {"search_delay_min": 0, "search_delay_max": 0, "extra_searches": 0, "search_typing": False, **settings}
     logs = []
     bot = RewardsBot({"name": "t", "mode": "managed"}, s, FakeBank(), lambda n, m: logs.append(m),
                      lambda n, d: None, threading.Event())
@@ -914,3 +914,159 @@ def test_dapi_token_reused_within_run():
     clock[0] += bot.DAPI_TOKEN_TTL + 1
     bot.do_read_to_earn(ctx)
     assert len(tokens) == 2  # hết hạn thì lấy token mới
+
+
+# ---------------------------------------------------------------- hành vi giống người: nghỉ log-normal, gõ phím
+def test_skewed_between_stays_in_range_and_leans_short():
+    import random as _r
+    rnd = _r.Random(7)
+    xs = [bot_mod.skewed_between(8, 20, rnd) for _ in range(4000)]
+    assert min(xs) >= 8 and max(xs) <= 20
+    xs.sort()
+    assert xs[len(xs) // 2] < 14  # trung vị nghiêng về phía ngắn (phân phối đều thì ~14)
+    assert sum(x > 18 for x in xs) > 20  # vẫn có lúc nghỉ lâu gần mức nhiều nhất
+    assert bot_mod.skewed_between(5, 5) == 5 and bot_mod.skewed_between(0, 0) == 0
+    assert 3 <= bot_mod.skewed_between(9, 3, rnd) <= 9  # min/max bị đảo vẫn đúng
+
+
+def test_key_gap_range():
+    import random as _r
+    rnd = _r.Random(1)
+    gaps = [bot_mod.key_gap(c, rnd) for c in "hello world " * 200]
+    assert min(gaps) >= 0.04 and max(gaps) <= 1.4
+    assert 0.08 < sorted(gaps)[len(gaps) // 2] < 0.2
+
+
+class FakeBox:
+    def __init__(self, page, visible=True):
+        self.page, self.visible = page, visible
+
+    @property
+    def first(self):
+        return self
+
+    def wait_for(self, **k):
+        if not self.visible:
+            raise bot_mod.PWTimeout("no box")
+
+    def click(self, **k):
+        self.page.events.append("click")
+
+    def fill(self, v):
+        self.page.events.append(("fill", v))
+
+
+class FakeKeyboard:
+    def __init__(self, page):
+        self.page = page
+
+    def type(self, ch):
+        self.page.typed += ch
+
+    def press(self, key):
+        self.page.events.append(("press", key))
+        if key == "Enter":
+            self.page.url = "https://www.bing.com/search?q=" + self.page.typed.replace(" ", "+") + "&form=QBRE"
+
+
+class FakeNav:
+    def __init__(self, page):
+        self.page = page
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        self.page.events.append("navigated")
+        return False
+
+
+class TypingPage(FakePage):
+    def __init__(self, url="https://www.bing.com/search?q=old", box=True):
+        super().__init__()
+        self.url, self.box, self.typed, self.events = url, box, "", []
+        self.keyboard = FakeKeyboard(self)
+
+    def goto(self, url, **k):
+        super().goto(url, **k)
+        self.url = url
+
+    def locator(self, sel):
+        assert sel == RewardsBot.SEARCH_BOX
+        return FakeBox(self, self.box)
+
+    def expect_navigation(self, **k):
+        return FakeNav(self)
+
+
+def test_search_types_query_into_box():
+    bot, logs = make_bot(search_typing=True)
+    page = TypingPage()
+    bot._search_once(page, "PC 1/3")
+    assert page.typed == "query 1" and page.visits == []  # gõ trên trang kết quả đang mở, không mở URL
+    assert ("fill", "") in page.events and page.events[-2:] == [("press", "Enter"), "navigated"]
+    assert logs == ["  [PC 1/3] query 1"]
+
+
+def test_search_typing_goes_home_when_off_bing():
+    bot, _ = make_bot(search_typing=True)
+    for url in ("https://example.com/article", "https://rewards.bing.com/earn", "about:blank"):
+        page = TypingPage(url=url)  # trang kết quả đã bấm mở, trang Rewards (không có ô tìm kiếm), trang trắng
+        bot._search_once(page, "t")
+        assert page.visits == [RewardsBot.BING_HOME] and page.typed.endswith(f"query {bot.bank.n}"), url
+
+
+def test_search_falls_back_to_url_without_box_or_when_off():
+    bot, logs = make_bot(search_typing=True)
+    page = TypingPage(box=False)
+    bot._search_once(page, "t")
+    assert page.typed == "" and len(page.visits) == 1 and "search?q=query+1&form=QBLH" in page.visits[0]
+    assert any("không gõ được vào ô tìm kiếm" in m for m in logs)
+    bot, _ = make_bot(search_typing=False)
+    page = TypingPage()
+    bot._search_once(page, "t")
+    assert page.typed == "" and "search?q=query+1" in page.visits[0]
+
+
+def test_search_stop_while_typing_is_not_swallowed():
+    bot, _ = make_bot(search_typing=True)
+
+    def stop(*a):
+        raise bot_mod.StopRequested()
+    bot.sleep = stop
+    with pytest.raises(bot_mod.StopRequested):
+        bot._search_once(TypingPage(), "t")
+
+
+# ---------------------------------------------------------------- xáo thứ tự tài khoản, chờ ngẫu nhiên khi lịch chạy
+def test_runner_shuffles_accounts_for_runs_only(monkeypatch):
+    from rewards_bot.core import runner as runner_mod
+    monkeypatch.setattr(runner_mod.FileLog, "prune", staticmethod(lambda d: None))
+    r = runner_mod.Runner.__new__(runner_mod.Runner)
+    r.running, r.threads, r.sem, r.lock = {}, {}, None, threading.Lock()
+    order = []
+    r._worker = lambda prof, settings, ev, action: order.append(prof["name"])
+    monkeypatch.setattr(runner_mod.random, "sample", lambda seq, k: list(reversed(seq)))
+    profs = [{"name": n} for n in "abc"]
+    for action, expect in (("run", ["c", "b", "a"]), ("checkin", ["c", "b", "a"]), ("refresh", ["a", "b", "c"])):
+        order.clear()
+        r.start(profs, {}, action=action)
+        for t in list(r.threads.values()):
+            t.join(5)
+        r.running.clear()
+        assert order == expect, action
+    assert [p["name"] for p in profs] == ["a", "b", "c"]  # không đổi danh sách gốc
+
+
+def test_start_jitter():
+    from rewards_bot import cli
+    slept = []
+
+    class Rnd:
+        @staticmethod
+        def uniform(a, b):
+            return b / 2
+    assert cli.start_jitter(20, sleep=slept.append, rnd=Rnd) == 600 and slept == [600]
+    assert cli.start_jitter(0, sleep=slept.append) == 0 and cli.start_jitter("x", sleep=slept.append) == 0
+    assert cli.start_jitter(999, sleep=slept.append, rnd=Rnd) == 3600  # tối đa 120 phút
+    assert slept == [600, 3600]

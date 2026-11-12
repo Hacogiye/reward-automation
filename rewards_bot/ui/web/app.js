@@ -1236,7 +1236,7 @@ async function copyLog() {
 // Khóa nào có ở đây thì saveSettingsForm gửi đi (phải có trong SETTING_SCHEMA của webapp.py).
 const SETTING_GROUPS = [
   ["Search", "ti-search", [
-    ["search_delay_min", "Nghỉ ít nhất giữa 2 lượt search", "giây", "Bot chờ một khoảng ngẫu nhiên giữa mức ít nhất và nhiều nhất.", 1, 600],
+    ["search_delay_min", "Nghỉ ít nhất giữa 2 lượt search", "giây", "Bot chờ ngẫu nhiên giữa mức ít nhất và nhiều nhất: phần lớn lượt nghỉ ngắn, thỉnh thoảng nghỉ lâu gần mức nhiều nhất.", 1, 600],
     ["search_delay_max", "Nghỉ nhiều nhất giữa 2 lượt search", "giây", "", 1, 600],
     ["extra_searches", "Số lượt search thêm", "lượt", "Search thêm vài lượt sau khi đủ điểm, phòng khi Rewards cập nhật chậm.", 0, 20],
     ["stall_after", "Dừng khi không được cộng điểm sau", "lượt", "Số lượt liên tiếp không lên điểm thì dừng loại search đó và ghi lý do vào nhật ký.", 3, 30],
@@ -1245,6 +1245,8 @@ const SETTING_GROUPS = [
   ["Hành vi giống người dùng", "ti-hand-click", [
     { sw: "search_browse", label: "Lướt trang kết quả trong lúc chờ", hint: "Cuộn đọc trang kết quả và thỉnh thoảng mở một kết quả, trong đúng thời gian nghỉ giữa 2 lượt search." },
     ["search_click_pct", "Tỉ lệ lượt search có mở một kết quả", "%", "Bỏ qua quảng cáo và link tải file.", 0, 100],
+    { sw: "search_typing", label: "Gõ từ khóa vào ô tìm kiếm", hint: "Gõ từng chữ vào ô tìm kiếm của Bing rồi bấm Enter, thay vì mở thẳng trang kết quả. Mỗi lượt search lâu hơn vài giây." },
+    ["start_jitter_max", "Chờ ngẫu nhiên trước khi lịch tự chạy", "phút", "Lệnh --run-all và --checkin chờ ngẫu nhiên tới số phút này rồi mới bắt đầu, để ngày nào cũng không chạy đúng một giờ. Đặt 0 để tắt, thêm --now để chạy ngay.", 0, 120],
   ]],
   ["Task", "ti-checklist", [
     ["browse_minutes", "Thời gian Browse tối đa", "phút", "Thời gian lướt web cho Edge – Minutes trong một lượt chạy.", 1, 240],

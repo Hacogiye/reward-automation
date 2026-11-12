@@ -28,6 +28,8 @@ DEFAULT_SETTINGS = {
     "extra_searches": 2,
     "search_browse": True,  # trong lúc chờ lượt search kế: cuộn trang kết quả, đôi khi bấm vào một kết quả
     "search_click_pct": 40,  # % số lượt search có bấm vào một kết quả (khi bật search_browse)
+    "search_typing": True,  # gõ từng chữ vào ô tìm kiếm của Bing rồi Enter, thay vì mở thẳng URL trang kết quả
+    "start_jitter_max": 30,  # phút: lệnh --run-all / --checkin chờ ngẫu nhiên 0..N phút rồi mới chạy (0 = tắt)
     "stall_after": 6,  # số lượt search liên tiếp không được cộng điểm thì dừng loại search đó
     "visual_max_tries": 4,  # số lần thử Visual Search tối đa mỗi tài khoản mỗi ngày
     "log_keep_days": 14,  # giữ file nhật ký data/logs bao nhiêu ngày

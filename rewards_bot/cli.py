@@ -1,5 +1,6 @@
 """Chạy tất cả tài khoản không mở giao diện (dùng cho Task Scheduler), hoặc chỉ kiểm tra (--check)."""
 
+import random
 import threading
 import time
 
@@ -7,6 +8,25 @@ from .core import security
 from .core.config import DATA_DIR, HISTORY_FILE, load_settings
 from .core.runner import Runner
 from .search.bank import QueryBank
+
+
+def start_jitter(max_minutes=None, sleep=time.sleep, rnd=random) -> float:
+    """Lịch tự chạy: chờ ngẫu nhiên 0..max_minutes phút trước khi bắt đầu, để ngày nào cũng không chạy đúng một giờ.
+
+    Gọi trước khi giữ khóa chạy 1 bản, nên trong lúc chờ vẫn mở được giao diện. Trả số giây đã chờ."""
+    if max_minutes is None:
+        max_minutes = load_settings().get("start_jitter_max", 30)
+    try:
+        max_minutes = max(0, min(120, int(max_minutes)))
+    except (TypeError, ValueError):
+        return 0.0
+    if not max_minutes:
+        return 0.0
+    wait = rnd.uniform(0, max_minutes * 60)
+    print(f"[{time.strftime('%H:%M:%S')}] Chờ ngẫu nhiên {wait / 60:.1f} phút trước khi chạy "
+          f"(đổi trong Cài đặt, hoặc thêm --now để chạy ngay)", flush=True)
+    sleep(wait)
+    return wait
 
 
 def run_cli(headless: bool, action: str = "run") -> None:

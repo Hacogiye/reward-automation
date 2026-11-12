@@ -5,6 +5,7 @@ PrixAuto
     python -m rewards_bot --run-all [--headless] # chạy tất cả tài khoản không cần giao diện
     python -m rewards_bot --check                # kiểm tra (chẩn đoán) tất cả tài khoản, không search
     python -m rewards_bot --checkin              # chỉ check-in app điện thoại cho tất cả tài khoản (giữ chuỗi)
+    (--run-all / --checkin chờ ngẫu nhiên 0..start_jitter_max phút trước khi chạy; thêm --now để chạy ngay)
 """
 
 import argparse
@@ -34,7 +35,15 @@ def main() -> None:
     ap.add_argument("--checkin", action="store_true",
                     help="chỉ check-in app điện thoại cho tất cả tài khoản (lịch riêng để giữ chuỗi)")
     ap.add_argument("--headless", action="store_true", help="chạy ẩn trình duyệt")
+    ap.add_argument("--now", action="store_true",
+                    help="--run-all / --checkin chạy ngay, không chờ ngẫu nhiên trước khi bắt đầu")
     args = ap.parse_args()
+    if (args.run_all or args.checkin) and not args.now:
+        from .cli import start_jitter
+        try:
+            start_jitter()
+        except KeyboardInterrupt:
+            return
     try:
         with single_instance():
             if args.run_all or args.check or args.checkin:
