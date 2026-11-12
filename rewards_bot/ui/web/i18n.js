@@ -223,6 +223,27 @@ const I18N = (() => {
     "Đã lưu mục tiêu": "Goal saved", "Đã xóa mục tiêu": "Goal deleted",
     "Nhật ký hoạt động": "Activity log", "Nhật ký đang trống": "The log is empty", "Đã sao chép nhật ký": "Log copied",
     "Đã chọn toàn bộ nhật ký, bấm Ctrl+C để sao chép": "Selected the whole log, press Ctrl+C to copy",
+    // ---- cập nhật
+    "Ẩn thông báo cập nhật": "Hide update notice", "Cập nhật": "Update", "Tự kiểm tra bản mới trên GitHub": "Check GitHub for new versions",
+    "Kiểm tra ngay": "Check now", "Đang kiểm tra...": "Checking...", "Có bản mới #": "New version #", "Có bản mới": "New version",
+    "Đang dùng bản mới nhất (#)": "You have the latest version (#)", "(đang dùng #)": "(you have #)", "Xem thay đổi": "What's new",
+    "Đang tải bản": "Downloading version", "Đã tải xong bản": "Downloaded version",
+    ". Dữ liệu và phiên đăng nhập được giữ nguyên.": ". Your data and logins are kept.",
+    "Khởi động lại để cập nhật": "Restart to update", "Cập nhật ngay": "Update now", "Mở trang GitHub": "Open on GitHub",
+    "Đang tải...": "Downloading...", "Đã tải xong": "Downloaded",
+    "Thay đổi từ bản đang dùng (#) tới bản mới nhất:": "Changes from your version (#) to the latest:",
+    "Chưa có ghi chú cho bản này.": "No notes for this version yet.",
+    "App tải bản mới từ GitHub, kiểm tra mã SHA-256, rồi khởi động lại để cài. Dữ liệu, cài đặt và phiên đăng nhập được giữ nguyên.":
+      "The app downloads the new version from GitHub, checks its SHA-256, then restarts to install it. Your data, settings and logins are kept.",
+    "Đang chạy từ mã nguồn: cập nhật bằng lệnh git pull trong thư mục app.": "Running from source: update with git pull in the app folder.",
+    "Bản mới đang được chuẩn bị trên GitHub, thử lại sau ít phút.": "The new version is still being built on GitHub, try again in a few minutes.",
+    "Tải bản mới ở trang GitHub.": "Download the new version from the GitHub page.",
+    "Dừng bot để cập nhật?": "Stop the bot to update?", "Dừng và cập nhật": "Stop and update",
+    "Các tài khoản đang chạy sẽ bị dừng, rồi app khởi động lại để cài bản mới.": "Running accounts will be stopped, then the app restarts to install the new version.",
+    "Đang cập nhật, app sẽ tự mở lại sau vài giây...": "Updating, the app will reopen in a few seconds...",
+    "GitHub tạm giới hạn số lần hỏi, thử lại sau": "GitHub is rate limiting requests, try again later",
+    "Bot chưa dừng hẳn, thử lại sau vài giây.": "The bot has not fully stopped yet, try again in a few seconds.",
+    "File cập nhật không khớp mã SHA-256, đã xóa (tải lại sau)": "The update file did not match its SHA-256 and was deleted (try again later)",
   };
   // chuỗi có dữ liệu của người dùng (tên tài khoản, email...) ở giữa: dịch theo mẫu, phần ở giữa giữ nguyên hoặc dịch tiếp
   const PATTERNS = [
@@ -232,6 +253,9 @@ const I18N = (() => {
       (m) => `Password saved (encrypted) for ${m[1]}: when the session expires the bot logs in again`],
     [/^“(.+)” cần là số từ (\d+) đến (\d+)$/, (m) => `“${tr(m[1]) ?? m[1]}” must be a number from ${m[2]} to ${m[3]}`],
     [/^Đang dừng (.+)$/, (m) => `Stopping ${m[1]}`],
+    [/^Cập nhật lỗi: (.+)$/, (m) => `Update failed: ${tr(m[1]) ?? m[1]}`],
+    [/^Không kết nối được GitHub \((.+)\)$/, (m) => `Could not reach GitHub (${m[1]})`],
+    [/^GitHub trả lỗi (\d+)$/, (m) => `GitHub returned error ${m[1]}`],
     [/^Đăng nhập cho tài khoản (.+)$/, (m) => `Signing in account ${m[1]}`],
   ];
   const NUM = /[+\-]?\d[\d,.:/-]*/g;  // vd "3,083", "+10", "60/90", "14:16", "09-11"

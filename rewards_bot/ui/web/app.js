@@ -91,7 +91,140 @@ window.addEventListener("pywebviewready", async () => {
   applyLanguage();
   renderAll();
   if (!S.settings.onboarded) Welcome.open(1);
+  Update.auto();
 });
+
+// ===================================================================== cập nhật (tag phiên bản mới trên GitHub)
+// Python hỏi GitHub danh sách tag: có tag vX.Y.Z cao hơn bản đang chạy là có bản mới (không quan tâm commit / push).
+// Báo bằng thanh trên cùng; "Xem thay đổi" mở hộp liệt kê ghi chú của từng bản mới. Bản .exe: tải zip (kiểm tra SHA-256)
+// rồi khởi động lại để cài, data/ giữ nguyên. Bản mã nguồn: chỉ báo, cập nhật bằng git pull.
+const UPDATE_EVERY_MS = 6 * 3600 * 1000;
+// ghi chú release (Markdown) -> HTML an toàn: chỉ tiêu đề, gạch đầu dòng, đoạn văn, **đậm**, `code`; link thành chữ thường
+function mdLite(text) {
+  const inline = (s) => esc(s.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1"))
+    .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, "<code>$1</code>");
+  const out = []; let list = false, para = [];
+  const flushPara = () => { if (para.length) out.push(`<p>${inline(para.join(" "))}</p>`); para = []; };
+  const closeList = () => { if (list) out.push("</ul>"); list = false; };
+  for (const raw of String(text || "").replace(/\r/g, "").split("\n")) {
+    const line = raw.trim();
+    const li = /^[-*]\s+(.*)$/.exec(line), h = /^#{1,6}\s+(.*)$/.exec(line);
+    if (!line) { flushPara(); closeList(); continue; }
+    if (h) { flushPara(); closeList(); out.push(`<h5>${inline(h[1])}</h5>`); continue; }
+    if (li) { flushPara(); if (!list) { out.push("<ul>"); list = true; } out.push(`<li>${inline(li[1])}</li>`); continue; }
+    if (list && /^\s{2,}/.test(raw)) { out[out.length - 1] = out[out.length - 1].replace(/<\/li>$/, ` ${inline(line)}</li>`); continue; }
+    closeList(); para.push(line);
+  }
+  flushPara(); closeList();
+  return out.join("");
+}
+const Update = {
+  info: null, state: "", dismissed: "", timer: 0,
+  bind() {
+    $("#update-dismiss").onclick = () => { this.dismissed = this.info?.latest || ""; $("#update-bar").hidden = true; };
+    $("#btn-check-update").onclick = () => this.check(true);
+    $("#set-check-updates").onchange = async (e) => { await saveSettings({ check_updates: e.target.checked }); this.auto(); };
+    $("#ud-close").onclick = $("#ud-later").onclick = () => $("#update-dialog").close();
+    $("#ud-page").onclick = () => api().open_releases();
+    $("#ud-go").onclick = () => this.go();
+  },
+  // tự kiểm tra lúc mở app và mỗi 6 giờ (nếu bật); lỗi mạng thì im lặng
+  auto() {
+    clearInterval(this.timer);
+    if (S.settings.check_updates === false) return;
+    this.check(false);
+    this.timer = setInterval(() => this.check(false), UPDATE_EVERY_MS);
+  },
+  async check(manual) {
+    if (this.state === "downloading" || this.state === "ready") return;  // đang tải / chờ cài: giữ nguyên
+    const res = $("#update-result");
+    if (manual) res.textContent = "Đang kiểm tra...";
+    let r;
+    try { r = await api().check_update(); } catch (err) { r = { ok: false, error: String(err) }; }
+    const msg = !r.ok ? r.error : r.newer ? `Có bản mới ${r.latest}` : `Đang dùng bản mới nhất (${r.current || S.app?.version || "?"})`;
+    res.textContent = msg;
+    if (!r.ok || !r.newer) { if (manual) (r.ok ? toast : showError)(msg); return; }
+    this.info = r;
+    if (manual) this.dismissed = "";
+    if (this.dismissed !== r.latest) this.bar();
+    if (manual) this.open();
+  },
+  bar() {
+    const r = this.info; if (!r) return;
+    let text, actions = "";
+    if (this.state === "downloading") text = `Đang tải bản <b>${esc(r.latest)}</b>... <span id="update-pct">${this.pct || ""}</span>`;
+    else if (this.state === "ready") {
+      text = `Đã tải xong bản <b>${esc(r.latest)}</b>. Dữ liệu và phiên đăng nhập được giữ nguyên.`;
+      actions = `<button type="button" class="btn btn-sm btn-primary" id="btn-upd-apply">Khởi động lại để cập nhật</button>`;
+    } else {
+      text = `Có bản mới <b>${esc(r.latest)}</b> (đang dùng ${esc(r.current)})`;
+      actions = `<button type="button" class="btn btn-sm" id="btn-upd-notes">Xem thay đổi</button>`
+        + (r.can_install ? `<button type="button" class="btn btn-sm btn-primary" id="btn-upd-get">Cập nhật</button>` : "");
+    }
+    $("#update-text").innerHTML = text;
+    $("#update-actions").innerHTML = actions;
+    $("#update-bar").hidden = false;
+    $("#btn-upd-notes")?.addEventListener("click", () => this.open());
+    $("#btn-upd-get")?.addEventListener("click", () => this.open());
+    $("#btn-upd-apply")?.addEventListener("click", () => this.apply());
+  },
+  // hộp thoại: danh sách thay đổi của mọi bản mới hơn bản đang dùng, nút cập nhật / mở GitHub
+  open() {
+    const r = this.info; if (!r) return;
+    $("#ud-title").textContent = `Có bản mới ${r.latest}`;
+    $("#ud-sub").textContent = `Thay đổi từ bản đang dùng (${r.current}) tới bản mới nhất:`;
+    $("#ud-changes").innerHTML = r.changes?.length
+      ? r.changes.map((c) => `<section class="ud-ver"><div class="ud-ver-head"><b data-no-i18n>${esc(c.version)}</b>`
+        + `${c.date ? `<span class="text-secondary small" data-no-i18n>${esc(c.date)}</span>` : ""}</div>`
+        + `<div class="ud-notes" data-no-i18n>${mdLite(c.notes) || "<p>—</p>"}</div></section>`).join("")
+      : `<p class="text-secondary">Chưa có ghi chú cho bản này.</p>`;
+    this.paint();
+    const dlg = $("#update-dialog");
+    if (!dlg.open) dlg.showModal();
+  },
+  paint() {
+    const r = this.info || {}, st = this.state;
+    const go = $("#ud-go");
+    go.hidden = !(r.can_install || st === "ready");
+    go.disabled = st === "downloading";
+    go.innerHTML = st === "ready" ? `<i class="ti ti-refresh"></i>Khởi động lại để cập nhật`
+      : st === "downloading" ? `<i class="ti ti-loader-2"></i>Đang tải...` : `<i class="ti ti-download"></i>Cập nhật ngay`;
+    $("#ud-progress").hidden = st !== "downloading" && st !== "ready";
+    $("#ud-note").textContent = r.can_install || st ? "App tải bản mới từ GitHub, kiểm tra mã SHA-256, rồi khởi động lại để cài. Dữ liệu, cài đặt và phiên đăng nhập được giữ nguyên."
+      : !r.frozen ? "Đang chạy từ mã nguồn: cập nhật bằng lệnh git pull trong thư mục app."
+      : !r.ready ? "Bản mới đang được chuẩn bị trên GitHub, thử lại sau ít phút."
+      : "Tải bản mới ở trang GitHub.";
+  },
+  async go() {
+    if (this.state === "ready") return this.apply();
+    const r = await api().download_update();
+    if (!r.ok) { showError(r.error); return; }
+    this.state = "downloading"; this.pct = ""; this.progress(0, 0); this.paint(); this.bar();
+  },
+  async apply() {
+    if (S.running.size && !(await confirmDialog({ title: "Dừng bot để cập nhật?", text: "Các tài khoản đang chạy sẽ bị dừng, rồi app khởi động lại để cài bản mới.", okLabel: "Dừng và cập nhật" }))) return;
+    const r = await api().apply_update();  // Python tự dừng bot và đợi trình duyệt đóng trước khi cài
+    if (!r.ok) { showError(r.error); return; }
+    $("#update-text").textContent = "Đang cập nhật, app sẽ tự mở lại sau vài giây...";
+    $("#update-actions").innerHTML = "";
+    $("#ud-go").disabled = true;
+  },
+  progress(done, total) {
+    this.pct = total ? `${Math.round((done / total) * 100)}%` : `${fmt(Math.round(done / 1048576))} MB`;
+    $("#ud-bar").style.width = total ? `${Math.min(100, (done / total) * 100)}%` : "0%";
+    $("#ud-status").textContent = this.pct;
+    const p = $("#update-pct"); if (p) p.textContent = this.pct;
+  },
+  onEvent(e) {
+    if (e.state === "downloading") { this.state = "downloading"; this.progress(e.done, e.total); return; }
+    if (e.state === "ready") {
+      this.state = "ready"; $("#ud-bar").style.width = "100%"; $("#ud-status").textContent = "Đã tải xong";
+    } else if (e.state === "error") {
+      this.state = ""; showError(`Cập nhật lỗi: ${e.error}`);
+    }
+    this.paint(); this.bar();
+  },
+};
 
 // ===================================================================== màn hình chào + đồng ý rủi ro
 // Lần đầu mở app: chọn ngôn ngữ -> đọc và đồng ý phần rủi ro -> thêm tài khoản đầu tiên. Chưa đồng ý (risk_ack rỗng) thì
@@ -184,6 +317,8 @@ window.onEvents = (batch) => {
       dirty = true;
     } else if (e.type === "done") {
       S.running.delete(e.name); dirty = true;
+    } else if (e.type === "update") {
+      Update.onEvent(e);
     }
   }
   if (S.logs.length > 4000) S.logs = S.logs.slice(-3000);
@@ -305,6 +440,7 @@ function bindStatic() {
   });
   $$("#theme-choice input").forEach((i) => (i.onchange = () => setTheme(i.value)));
   $("#set-fun-mode").onchange = (e) => setFunMode(e.target.checked);
+  Update.bind();
   $("#error-dismiss").onclick = () => ($("#error-banner").hidden = true);
   $("#more-charts-body").addEventListener("shown.bs.collapse", () => { Charts.reset(); renderDashboard(); });  // biểu đồ trong khối đang gập chưa có kích thước thật
   document.addEventListener("hidden.bs.dropdown", () => { if (renderProfiles._defer) { renderProfiles._defer = false; if (S.page === "profiles") renderProfiles(); } });
@@ -1286,6 +1422,7 @@ function renderSettings() {
   const th = S.settings.theme || "system";
   $$("#theme-choice input").forEach((i) => (i.checked = i.value === (th === "cyberpunk" && !isFun() ? "dark" : th)));
   $("#set-fun-mode").checked = isFun();
+  $("#set-check-updates").checked = S.settings.check_updates !== false;
   $$("#lang-choice input").forEach((i) => (i.checked = i.value === (S.settings.language === "en" ? "en" : "vi")));
   const app = S.app || {};
   $("#app-version").textContent = `Phiên bản ${app.version || "?"}${app.frozen ? "" : " (mã nguồn)"}`;

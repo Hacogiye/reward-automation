@@ -123,7 +123,11 @@ thì chuột phải vào task → **Run**. Kết quả xem ở trang **Lịch s�
 
 ## Cập nhật
 
-App không tự cập nhật. Tải file zip mới rồi giải nén **đè lên** `C:\PrixAuto` (chọn *Replace* nếu Windows hỏi). Trong zip
+Khi có phiên bản mới (tag mới trên GitHub), app hiện một thanh thông báo ở trên cùng. Bấm **Xem thay đổi** để đọc danh sách
+thay đổi, rồi **Cập nhật ngay**: app tải bản mới, kiểm tra mã SHA-256 rồi khởi động lại để cài. Tài khoản, cài đặt và
+phiên đăng nhập được giữ nguyên. Tắt / bật tự kiểm tra hoặc bấm **Kiểm tra ngay** ở **Cài đặt → Giới thiệu**.
+
+Cập nhật bằng tay: tải file zip mới rồi giải nén **đè lên** `C:\PrixAuto` (chọn *Replace* nếu Windows hỏi). Trong zip
 không có thư mục `data\` nên tài khoản và phiên đăng nhập được giữ nguyên.
 
 Từ bản cũ tên **RewardsBot**: chép thư mục `data\` cạnh `RewardsBot.exe` sang cạnh `PrixAuto.exe`, rồi sửa task trong
@@ -247,7 +251,8 @@ Hai câu liền nhau không cùng lĩnh vực, các tài khoản không tìm cù
 
 ## Riêng tư và bảo mật
 
-- Mọi thứ nằm trên máy bạn. App không gửi số liệu sử dụng và không kiểm tra cập nhật. Trình duyệt của bot chỉ mở Bing,
+- Mọi thứ nằm trên máy bạn. App không gửi số liệu sử dụng. Việc kiểm tra cập nhật chỉ đọc danh sách tag / bản phát hành công khai trên
+  GitHub (tắt được ở Cài đặt). Trình duyệt của bot chỉ mở Bing,
   Rewards, và các trang mà Browse hoặc việc thỉnh thoảng mở một kết quả search đi tới.
 - `data\` chứa cookie đăng nhập Microsoft. Trên Windows thư mục này được khóa quyền ngay lần chạy đầu (chỉ tài khoản
   Windows của bạn và SYSTEM đọc được). Đừng gửi nó cho ai.

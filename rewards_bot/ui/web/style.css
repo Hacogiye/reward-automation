@@ -414,6 +414,23 @@ img.broken { visibility: hidden; }
 .side :where(a, button):focus-visible { outline-color: #60a5fa !important; }  /* nền thanh bên tối: xanh sáng hơn */
 .form-selectgroup-input:focus-visible + .form-selectgroup-label { outline: 2px solid var(--tblr-primary); outline-offset: 2px; }
 
+/* ---------------------------------------------------------------- thanh báo bản mới + hộp danh sách thay đổi */
+.update-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 24px; font-size: 14px;
+  background: var(--tblr-primary); color: #fff; }
+.update-bar > .ti { font-size: 18px; }
+.update-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
+.update-bar .btn:not(.btn-primary) { background: rgba(255, 255, 255, .12); color: #fff; border-color: rgba(255, 255, 255, .3); }
+.update-bar .btn-primary { background: #fff; color: var(--tblr-primary); border-color: #fff; }
+.ud-changes { max-height: 50vh; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.ud-ver { border: 1px solid var(--tblr-border-color); border-radius: 8px; padding: 10px 14px; }
+.ud-ver-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; font-size: 15px; }
+.ud-notes { font-size: 13px; overflow-wrap: anywhere; }
+.ud-notes h5 { font-size: 13px; margin: 10px 0 4px; }
+.ud-notes p { margin: 0 0 6px; }
+.ud-notes ul { margin: 0 0 6px; padding-left: 1.2rem; }
+.ud-progress { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.ud-progress .progress { flex: 1; }
+
 /* ---------------------------------------------------------------- thẻ Giới thiệu (Cài đặt) */
 .about-app { display: flex; gap: 12px; align-items: center; }
 .about-app img { width: 40px; height: 40px; flex: none; }

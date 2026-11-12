@@ -56,6 +56,11 @@
   </aside>
 
   <div class="page-wrapper">
+    <div class="update-bar" id="update-bar" role="status" hidden>
+      <i class="ti ti-download"></i><span id="update-text"></span>
+      <span class="update-actions" id="update-actions"></span>
+      <button type="button" class="btn-close btn-close-white ms-1" id="update-dismiss" aria-label="Ẩn thông báo cập nhật"></button>
+    </div>
     <div class="alert alert-danger alert-dismissible error-banner" id="error-banner" role="alert" hidden>
       <i class="ti ti-alert-circle"></i><span id="error-text"></span>
       <button type="button" class="btn-close" id="error-dismiss" aria-label="Đóng"></button>
@@ -345,6 +350,16 @@
                   <div><strong data-no-i18n>PrixAuto</strong><span>Tự làm các việc Microsoft Rewards hằng ngày cho nhiều tài khoản.</span></div></div>
                 <div><div class="form-label mb-1">Thư mục dữ liệu</div><code class="about-path" id="about-data" data-no-i18n></code></div>
                 <div><button class="btn" type="button" id="btn-open-logs-about"><i class="ti ti-folder-open"></i>Mở thư mục nhật ký</button></div>
+                <div class="d-flex flex-column gap-2">
+                  <div class="form-label mb-0">Cập nhật</div>
+                  <label class="form-check form-switch m-0">
+                    <input class="form-check-input" type="checkbox" id="set-check-updates">
+                    <span class="form-check-label">Tự kiểm tra bản mới trên GitHub</span></label>
+                  <div class="d-flex flex-wrap align-items-center gap-2">
+                    <button class="btn" type="button" id="btn-check-update"><i class="ti ti-refresh"></i>Kiểm tra ngay</button>
+                    <span class="text-secondary small min-w-0" id="update-result"></span>
+                  </div>
+                </div>
                 <p class="text-secondary small m-0">Điều khoản của Microsoft Rewards không cho phép dùng bot. Bạn tự chịu rủi ro khi dùng app.</p>
                 <details class="about-lic">
                   <summary>Thư viện và giấy phép</summary>
@@ -835,6 +850,25 @@
       <button class="btn btn-primary" value="ok">Lưu</button>
     </div>
   </form>
+</dialog>
+
+<dialog id="update-dialog" class="dlg dlg-wide" aria-labelledby="ud-title">
+  <div class="dlg-head"><h3 class="m-0" id="ud-title">Có bản mới</h3>
+    <button type="button" class="btn-close" id="ud-close" aria-label="Đóng"></button></div>
+  <div class="dlg-body">
+    <p class="mt-0 text-secondary" id="ud-sub"></p>
+    <div class="ud-changes" id="ud-changes"></div>
+    <div class="ud-progress" id="ud-progress" hidden>
+      <div class="progress"><div class="progress-bar" id="ud-bar" style="width:0%"></div></div>
+      <span class="small text-secondary" id="ud-status"></span>
+    </div>
+    <p class="small text-secondary mb-0 mt-3" id="ud-note"></p>
+  </div>
+  <div class="dlg-foot">
+    <button type="button" class="btn" id="ud-later">Để sau</button>
+    <button type="button" class="btn" id="ud-page"><i class="ti ti-external-link"></i>Mở trang GitHub</button>
+    <button type="button" class="btn btn-primary" id="ud-go"><i class="ti ti-download"></i>Cập nhật ngay</button>
+  </div>
 </dialog>
 
 <dialog id="confirm-dialog" class="dlg" aria-labelledby="cd-title">

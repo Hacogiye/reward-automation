@@ -136,8 +136,12 @@ On Linux `data/` is not locked down automatically (`chmod 700 data` if needed) a
 
 ## Updating
 
-The app does not update itself. Download the new zip and unzip it over the old folder: the zip has no `data\` folder,
-so your accounts and sessions are kept. From source: `git pull`.
+When a new version is tagged on GitHub, the app shows a bar at the top. Click **What's new** to read the changelog, then
+**Update now**: the app downloads the new version, checks its SHA-256 and restarts to install it. Accounts, settings and
+sessions are kept. Turn the automatic check off, or click **Check now**, in **Settings → About**.
+
+Manual update: download the new zip and unzip it over the old folder: the zip has no `data\` folder, so your accounts and
+sessions are kept. From source: `git pull`.
 
 Upgrading from the old **RewardsBot** name: copy the `data\` folder from next to `RewardsBot.exe` to next to
 `PrixAuto.exe`, and point your scheduled task at `PrixAuto.exe`.
@@ -189,7 +193,8 @@ to start, see `data\crash.log`. Please attach the log when you open an issue.
 
 ## Privacy and security
 
-- Everything stays on your computer. The app has no telemetry and no update check. The bot's browser opens Bing and
+- Everything stays on your computer. The app has no telemetry. The update check only reads the public tag and release list on
+  GitHub (you can turn it off in Settings). The bot's browser opens Bing and
   Rewards, plus the pages that Browse and the occasional search-result click visit.
 - `data\` holds your Microsoft sign-in cookies. On Windows it is locked to your user account and SYSTEM on first run.
   Never share it.

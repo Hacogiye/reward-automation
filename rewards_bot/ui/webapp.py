@@ -18,7 +18,7 @@ from pathlib import Path
 import webview
 
 from .. import APP_NAME, __version__
-from ..core import credentials, security
+from ..core import credentials, security, updater
 from ..core import config
 from ..core.config import (DATA_DIR, DASHBOARD_FILE, HISTORY_FILE, POINTS_HISTORY_FILE, load_settings, new_profile_dir,
                            read_json, save_settings, write_json)
@@ -42,7 +42,7 @@ SETTING_SCHEMA = {
     "browser_channel": (str, ("msedge", "chrome", "")),
     "theme": (str, ("system", "light", "dark", "cyberpunk")),
     "language": (str, ("vi", "en")),
-    "onboarded": (bool,),
+    "onboarded": (bool,), "check_updates": (bool,),
     "risk_ack": (str, re.compile(r"(\d{1,4}\.\d{1,4}\.\d{1,4})?")),  # số phiên bản lúc đồng ý, hoặc rỗng
 }
 SETTING_KEYS = tuple(SETTING_SCHEMA)
@@ -219,6 +219,77 @@ class Api:
     # ------------------------------------------------------------ thông tin app, thư mục nhật ký
     def _app_info(self) -> dict:
         return {"name": APP_NAME, "version": __version__, "frozen": config.FROZEN, "data_dir": str(DATA_DIR)}
+
+    # ------------------------------------------------------------ cập nhật (theo tag phiên bản trên GitHub)
+    def check_update(self) -> dict:
+        """Hỏi GitHub có tag phiên bản mới hơn không, kèm danh sách thay đổi từ bản đang dùng tới bản mới nhất."""
+        try:
+            info = updater.check(__version__)
+        except updater.UpdateError as e:
+            return {"ok": False, "error": str(e), "current": __version__}
+        self._release = info
+        asset = info.pop("asset")
+        self._release_asset = asset
+        return {"ok": True, **info, "frozen": config.FROZEN, "ready": bool(asset),
+                "can_install": info["newer"] and config.FROZEN and sys.platform == "win32" and bool(asset)}
+
+    def open_releases(self) -> dict:
+        """Mở trang bản phát hành trên GitHub bằng trình duyệt mặc định (chỉ địa chỉ của repo này, không nhận từ JS)."""
+        import webbrowser
+        url = (getattr(self, "_release", None) or {}).get("url") or updater.RELEASES_URL
+        webbrowser.open(url if url.startswith(updater.RELEASES_URL) else updater.RELEASES_URL)
+        return {"ok": True}
+
+    def download_update(self) -> dict:
+        """Tải bản mới ở luồng nền; tiến độ / xong / lỗi gửi qua sự kiện {"type": "update"}."""
+        rel, asset = getattr(self, "_release", None), getattr(self, "_release_asset", None)
+        if not config.FROZEN:
+            return {"ok": False, "error": "Đang chạy từ mã nguồn: cập nhật bằng git pull."}
+        if not rel or not rel.get("newer"):
+            return {"ok": False, "error": "Không có bản mới để tải."}
+        if not asset:
+            return {"ok": False, "error": "Bản mới đang được chuẩn bị trên GitHub, thử lại sau ít phút."}
+        with self._lock:
+            if getattr(self, "_downloading", False):
+                return {"ok": True}
+            self._downloading = True
+
+        def work():
+            dest = config.UPDATE_DIR / asset["name"]
+            last = [0.0]
+
+            def progress(done, total):
+                if time.time() - last[0] > 0.4:
+                    last[0] = time.time()
+                    self._events.put({"type": "update", "state": "downloading", "done": done, "total": total})
+            try:
+                updater.download(asset, dest, progress)
+                self._update_zip = dest
+                self._events.put({"type": "update", "state": "ready", "version": rel["latest"]})
+            except (updater.UpdateError, OSError) as e:
+                self._events.put({"type": "update", "state": "error", "error": str(e)})
+            finally:
+                self._downloading = False
+
+        threading.Thread(target=work, daemon=True).start()
+        return {"ok": True}
+
+    def apply_update(self) -> dict:
+        """Chạy script cài (đợi app đóng rồi chép đè, giữ nguyên data/) rồi đóng app; script tự mở lại app."""
+        z = getattr(self, "_update_zip", None)
+        if not z:
+            return {"ok": False, "error": "Chưa tải bản cập nhật."}
+        if self._runner.running:  # giao diện đã hỏi người dùng: dừng bot, đợi trình duyệt đóng hẳn rồi mới cài
+            self._runner.stop()
+            self._runner.wait(15)
+            if self._runner.running:
+                return {"ok": False, "error": "Bot chưa dừng hẳn, thử lại sau vài giây."}
+        try:
+            updater.start_apply(z, config.BASE_DIR, config.UPDATE_DIR)
+        except (updater.UpdateError, OSError) as e:
+            return {"ok": False, "error": str(e)}
+        threading.Timer(0.8, lambda: [w.destroy() for w in list(webview.windows)]).start()
+        return {"ok": True}
 
     def open_log_folder(self) -> dict:
         """Mở thư mục nhật ký (data/logs) bằng trình quản lý file. Đường dẫn cố định, không nhận tham số từ giao diện."""

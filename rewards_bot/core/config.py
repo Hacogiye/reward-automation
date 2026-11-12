@@ -21,6 +21,7 @@ VISUAL_TRIES_FILE = DATA_DIR / "visual_tries.json"  # số lần thử Visual Se
 CREDENTIALS_FILE = DATA_DIR / "credentials.json"  # email + mật khẩu đã mã hóa (DPAPI) để tự đăng nhập lại
 SECRETS_FILE = DATA_DIR / "secrets.json"  # bí mật khác (đã mã hóa DPAPI); hiện chưa dùng
 AVATAR_DIR = DATA_DIR / "avatars"  # ảnh đại diện tài khoản: <thư mục profile>.webp|png|jpg
+UPDATE_DIR = DATA_DIR / "update"  # bản cập nhật tải về + script cài (chỉ bản .exe)
 
 DEFAULT_SETTINGS = {
     "search_delay_min": 8,
@@ -54,6 +55,7 @@ DEFAULT_SETTINGS = {
     "bypass_proxy": True,  # trình duyệt của bot không đi qua proxy hệ thống
     "browse_minutes": 30,
     "browse_auto_stop": True,  # Browse tự dừng khi Edge – Minutes không tăng sau 20 phút
+    "check_updates": True,  # mở app (và mỗi 6 giờ) thì hỏi GitHub có tag phiên bản mới không
     "onboarded": False,  # đã xem màn hình chào lần đầu (chọn ngôn ngữ, đồng ý rủi ro, thêm tài khoản)
     # phiên bản app lúc người dùng đồng ý phần rủi ro; rỗng = chưa đồng ý, nút Chạy trong giao diện mở lại bước đồng ý.
     # Chỉ chặn giao diện: lệnh --run-all của Task Scheduler không bị ảnh hưởng.

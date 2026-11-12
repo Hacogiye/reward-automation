@@ -83,6 +83,7 @@ window.pywebview = { api: new Proxy({}, { get: (_, k) => async (...a) => {
   if (k === 'delete_profiles') { window.__B.profiles = window.__B.profiles.filter((p) => !a[0].includes(p.name));
     return {ok: true, profiles: window.__B.profiles}; }
   if (k === 'start') return window.__failStart ? {ok: false, error: 'x'} : {ok: true, running: []};
+  if (k === 'check_update') return window.__update || {ok: true, newer: false, current: window.__B.app.version};
   return {ok: true, running: [], settings: window.__B.settings, profiles: window.__B.profiles}; } }) };
 window.addEventListener('load', () => window.dispatchEvent(new Event('pywebviewready')));"""
 
@@ -1072,7 +1073,7 @@ def test_branding_about_card_and_log_folder(server):
     with app_page(server, boot) as (pg, errors):
         assert poll(pg, "document.querySelectorAll('.chip').length === 1")
         assert pg.title() == "PrixAuto" and pg.locator(".brand strong").inner_text() == "PrixAuto"
-        assert pg.locator("#update-bar, #set-check-updates, #btn-check-update").count() == 0
+        assert pg.locator("#update-bar").is_hidden()  # đang dùng bản mới nhất: không báo gì
         pg.evaluate("go('settings')")
         card = pg.locator("#about-card")
         assert "PrixAuto" in card.inner_text() and pg.locator("#about-data").inner_text() == r"C:\PrixAuto\data"
@@ -1084,4 +1085,61 @@ def test_branding_about_card_and_log_folder(server):
         pg.evaluate("go('log')")
         pg.click("#btn-open-logs")
         assert pg.evaluate("window.__calls.filter((c) => c[0] === 'open_log_folder')") == [["open_log_folder"], ["open_log_folder"]]
+        assert errors == []
+
+
+UPDATE = {"ok": True, "current": "1.2.0", "latest": "1.4.0", "tag": "v1.4.0", "newer": True, "frozen": True, "ready": True,
+          "can_install": True, "url": "https://github.com/NT101-lc/reward-automation/releases/tag/v1.4.0",
+          "changes": [
+              {"version": "1.4.0", "tag": "v1.4.0", "date": "2026-11-20",
+               "notes": "Tóm tắt **mới**.\n\n### Thay đổi / Changes\n- Thêm A\n- <img src=x onerror=alert(1)>\n- [link](https://x.y)"},
+              {"version": "1.3.0", "tag": "v1.3.0", "date": "2026-11-12", "notes": "Bản 1.3"}]}
+
+
+def test_update_bar_changelog_and_install(server):
+    """Có tag mới: thanh báo trên cùng; Xem thay đổi mở hộp liệt kê ghi chú mọi bản mới (Markdown an toàn); Cập nhật ngay
+    gọi download_update, sự kiện tải xong đổi sang Khởi động lại để cập nhật -> apply_update. Tắt tự kiểm tra thì lưu."""
+    boot = boot_data()
+    boot["settings"]["onboarded"] = True
+    init = "window.__update = %s;" % json.dumps(UPDATE)
+    with app_page(server, boot, init=init) as (pg, errors):
+        assert poll(pg, "!document.querySelector('#update-bar').hidden")
+        assert "1.4.0" in pg.locator("#update-text").inner_text()
+        pg.click("#btn-upd-notes")
+        dlg = pg.locator("#update-dialog")
+        assert dlg.is_visible() and pg.locator(".ud-ver").count() == 2
+        notes = pg.locator(".ud-ver").first
+        assert notes.locator("b").first.inner_text() == "1.4.0" and notes.locator("li").count() == 3
+        assert notes.locator("img").count() == 0 and "<img" in notes.inner_text()  # HTML trong ghi chú chỉ là chữ
+        assert notes.locator("a").count() == 0 and "link" in notes.inner_text()
+        pg.click("#ud-go")
+        assert pg.evaluate("window.__calls.some((c) => c[0] === 'download_update')")
+        pg.evaluate("window.onEvents([{type: 'update', state: 'downloading', done: 50, total: 100}])")
+        assert pg.locator("#ud-status").inner_text() == "50%" and pg.locator("#ud-go").is_disabled()
+        pg.evaluate("window.onEvents([{type: 'update', state: 'ready', version: '1.4.0'}])")
+        assert "Khởi động lại" in pg.locator("#ud-go").inner_text() and pg.locator("#btn-upd-apply").count() == 1
+        pg.click("#ud-go")
+        assert poll(pg, "window.__calls.some((c) => c[0] === 'apply_update')")
+        # Cài đặt: kiểm tra ngay khi đang dùng bản mới nhất, và tắt tự kiểm tra
+        pg.evaluate("window.__update = null")
+        pg.evaluate("$('#update-dialog').close(); go('settings')")
+        pg.click("#btn-check-update")
+        pg.click("#set-check-updates")
+        assert pg.evaluate("window.__calls.filter((c) => c[0] === 'save_settings').map((c) => c[1])")[-1] == {"check_updates": False}
+        assert errors == []
+
+
+def test_update_dialog_in_english_and_source_mode(server):
+    """Bản mã nguồn: không có nút cập nhật, chỉ hướng dẫn git pull; English không còn chữ tiếng Việt (trừ ghi chú release)."""
+    boot = boot_data()
+    boot["settings"].update(onboarded=True, language="en")
+    init = "window.__update = %s;" % json.dumps({**UPDATE, "frozen": False, "can_install": False})
+    with app_page(server, boot, init=init) as (pg, errors):
+        assert poll(pg, "!document.querySelector('#update-bar').hidden")
+        assert pg.locator("#btn-upd-get").count() == 0
+        pg.click("#btn-upd-notes")
+        assert pg.locator("#ud-go").is_hidden() and "git pull" in pg.locator("#ud-note").inner_text()
+        text = pg.evaluate("""(() => { const d = document.querySelector('#update-dialog').cloneNode(true);
+            d.querySelectorAll('.ud-notes').forEach((n) => n.remove()); return d.innerText + ' ' + document.querySelector('#update-bar').innerText; })()""")
+        assert not re.search(r"[ăâđêôơưạảấầẩẫậắằẳẵặẹẻẽếềểễệỉịọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]", text.lower()), text
         assert errors == []

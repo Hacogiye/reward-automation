@@ -114,10 +114,54 @@ def test_goal_validation_and_follows_profile(api):
     assert api._settings["goals"] == {}
 
 
-def test_app_info_has_name_and_no_updater(api):
+def test_app_info_has_name(api):
     info = api._app_info()
     assert info["name"] == "PrixAuto" and info["version"] == W.__version__
-    assert not hasattr(api, "check_update") and "check_updates" not in W.SETTING_SCHEMA
+    assert W.SETTING_SCHEMA["check_updates"] == (bool,)
+
+
+def test_check_update_reports_tag_and_install_only_for_exe(api, monkeypatch):
+    from rewards_bot.core import updater
+    asset = {"name": "PrixAuto-9.0.0-win64.zip", "size": 1, "api_url": "https://api.github.com/a/2", "sha256_url": "x"}
+    info = {"current": W.__version__, "latest": "9.0.0", "tag": "v9.0.0", "newer": True,
+            "url": updater.RELEASES_URL + "/tag/v9.0.0", "changes": [{"version": "9.0.0", "notes": "n"}], "asset": asset}
+    monkeypatch.setattr(updater, "check", lambda cur: dict(info))
+    monkeypatch.setattr(W.config, "FROZEN", False)
+    r = api.check_update()
+    assert r["ok"] and r["newer"] and r["latest"] == "9.0.0" and r["changes"] == info["changes"]
+    assert "asset" not in r and r["ready"] and not r["can_install"]  # bản mã nguồn: chỉ báo, không tự cài
+    assert not api.download_update()["ok"]
+    monkeypatch.setattr(W.config, "FROZEN", True)
+    monkeypatch.setattr(W.sys, "platform", "win32")
+    assert api.check_update()["can_install"]
+
+    def boom(cur):
+        raise updater.UpdateError("Không kết nối được GitHub (x)")
+    monkeypatch.setattr(updater, "check", boom)
+    assert api.check_update() == {"ok": False, "error": "Không kết nối được GitHub (x)", "current": W.__version__}
+
+
+def test_download_update_needs_built_release(api, monkeypatch):
+    from rewards_bot.core import updater
+    monkeypatch.setattr(W.config, "FROZEN", True)
+    monkeypatch.setattr(updater, "check", lambda cur: {"current": "1", "latest": "9.0.0", "tag": "v9.0.0", "newer": True,
+                                                       "url": updater.RELEASES_URL, "changes": [], "asset": None})
+    assert not api.check_update()["ready"]
+    r = api.download_update()
+    assert not r["ok"] and "chuẩn bị" in r["error"]
+    assert not api.apply_update()["ok"]  # chưa tải thì không cài
+
+
+def test_open_releases_only_opens_this_repo(api, monkeypatch):
+    import webbrowser
+    from rewards_bot.core import updater
+    opened = []
+    monkeypatch.setattr(webbrowser, "open", opened.append)
+    api._release = {"url": "https://evil.example.com/x"}
+    api.open_releases()
+    api._release = {"url": updater.RELEASES_URL + "/tag/v9.0.0"}
+    api.open_releases()
+    assert opened == [updater.RELEASES_URL, updater.RELEASES_URL + "/tag/v9.0.0"]
 
 
 @pytest.mark.parametrize("platform", ["win32", "linux"])
