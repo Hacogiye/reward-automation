@@ -6,6 +6,10 @@ Mỗi lĩnh vực gồm nhiều nhóm, mỗi nhóm là một trong ba dạng:
   {"queries": [...]}                                      câu viết sẵn
 """
 
+import json
+from functools import lru_cache
+from pathlib import Path
+
 # ============================================================================ IT
 _IT_TOOL_TEMPLATES = [
     "how to install and configure {t} on ubuntu server",
@@ -532,7 +536,23 @@ def _expand(group: dict) -> list:
     return [tpl.format(t=t) for t in group["topics"] for tpl in group["templates"]]
 
 
-def all_queries() -> list:
+# Từ khóa phổ biến (tên phim, người nổi tiếng, xu hướng tìm kiếm...): câu ngắn, đã lọc từ 18+.
+# Là một lĩnh vực riêng nên QueryBank xen kẽ nó với các lĩnh vực ở trên như mọi lĩnh vực khác.
+POPULAR_CATEGORY = "Từ khóa phổ biến"
+POPULAR_FILE = Path(__file__).with_name("popular_queries.json")
+
+
+@lru_cache(maxsize=1)
+def popular_queries() -> tuple:
+    """Danh sách từ khóa phổ biến; thiếu file hoặc file hỏng thì trả về rỗng."""
+    try:
+        data = json.loads(POPULAR_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ()
+    return tuple(q.strip() for q in data if isinstance(q, str) and q.strip())
+
+
+def all_queries(popular: bool = True) -> list:
     """[(lĩnh vực, câu search)], không trùng (không phân biệt hoa thường)."""
     out, seen = [], set()
     for cat, groups in CATEGORIES.items():
@@ -541,6 +561,11 @@ def all_queries() -> list:
                 if q.lower() not in seen:
                     seen.add(q.lower())
                     out.append((cat, q))
+    if popular:
+        for q in popular_queries():
+            if q.lower() not in seen:
+                seen.add(q.lower())
+                out.append((POPULAR_CATEGORY, q))
     return out
 
 

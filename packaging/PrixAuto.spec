@@ -8,7 +8,8 @@ ROOT = Path(SPECPATH).parent
 a = Analysis(
     [str(ROOT / "packaging" / "launcher.py")],
     pathex=[str(ROOT)],
-    datas=[(str(ROOT / "rewards_bot" / "ui" / "web"), "rewards_bot/ui/web")],
+    datas=[(str(ROOT / "rewards_bot" / "ui" / "web"), "rewards_bot/ui/web"),
+           (str(ROOT / "rewards_bot" / "search" / "popular_queries.json"), "rewards_bot/search")],
     hiddenimports=["rewards_bot.ui.webapp", "rewards_bot.cli"],
     excludes=["tkinter", "pytest", "rewards_bot.gui"],
     noarchive=False,
