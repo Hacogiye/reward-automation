@@ -4,6 +4,7 @@ PrixAuto
     python -m rewards_bot                        # mở giao diện
     python -m rewards_bot --run-all [--headless] # chạy tất cả tài khoản không cần giao diện
     python -m rewards_bot --check                # kiểm tra (chẩn đoán) tất cả tài khoản, không search
+    python -m rewards_bot --checkin              # chỉ check-in app điện thoại cho tất cả tài khoản (giữ chuỗi)
 """
 
 import argparse
@@ -30,13 +31,15 @@ def main() -> None:
     ap = argparse.ArgumentParser(prog="rewards_bot")
     ap.add_argument("--run-all", action="store_true", help="chạy tất cả tài khoản không mở giao diện")
     ap.add_argument("--check", action="store_true", help="kiểm tra tất cả tài khoản (không search)")
+    ap.add_argument("--checkin", action="store_true",
+                    help="chỉ check-in app điện thoại cho tất cả tài khoản (lịch riêng để giữ chuỗi)")
     ap.add_argument("--headless", action="store_true", help="chạy ẩn trình duyệt")
     args = ap.parse_args()
     try:
         with single_instance():
-            if args.run_all or args.check:
+            if args.run_all or args.check or args.checkin:
                 from .cli import run_cli
-                run_cli(args.headless, action="check" if args.check else "run")
+                run_cli(args.headless, action="check" if args.check else "checkin" if args.checkin else "run")
                 return
             try:
                 from .ui.webapp import main as web_main
@@ -47,7 +50,7 @@ def main() -> None:
     except AlreadyRunning:
         msg = f"{APP_NAME} đang chạy ở cửa sổ khác. Đóng cửa sổ đó trước khi mở lại."
         print(msg)
-        if not (args.run_all or args.check):  # chỉ hiện hộp thoại khi mở giao diện, không chặn lệnh chạy tự động
+        if not (args.run_all or args.check or args.checkin):  # chỉ hiện hộp thoại khi mở giao diện, không chặn lệnh chạy tự động
             try:
                 import ctypes
                 ctypes.windll.user32.MessageBoxW(None, msg, APP_NAME, 0x40)

@@ -943,6 +943,8 @@ function renderProfiles() {
 function renderToggles() {
   // [khóa cài đặt, tiêu đề, mô tả, icon, mục cha (mục con chỉ bật được khi mục cha bật)]
   const items = [
+    ["do_checkin", "Check-in app điện thoại", "Check-in app điện thoại mỗi ngày (Bing App Streak), gọi thẳng API của app", "mobile"],
+    ["do_read_earn", "Read to Earn", "Đọc tối đa 10 bài báo mỗi ngày (3 điểm/bài), gọi thẳng API của app", "news"],
     ["do_quests", "Daily Set, Keep earning", "Bấm từng thẻ task, làm quiz và poll", "calendar"],
     ["do_quest_tasks", "Quests", "Làm từng bước của các quest nhiều bước ở trang Earn (bước cần app điện thoại / app máy tính thì bỏ qua)", "trophy"],
     ["do_visual", "Visual Search", "Tìm bằng 1 ảnh qua nút camera của Bing (mỗi ngày 1 lượt)", "camera"],

@@ -62,7 +62,7 @@ class Runner:
 
     def start(self, profiles: list, settings: dict, action: str = "run") -> None:
         """action: "run" (làm task), "login" (mở cửa sổ đăng nhập), "refresh" (chỉ đọc điểm),
-        "check" (tự chẩn đoán, không search)."""
+        "check" (tự chẩn đoán, không search), "checkin" (chỉ check-in app điện thoại)."""
         FileLog.prune(settings.get("log_keep_days", LOG_KEEP_DAYS))
         with self.lock:
             if not self.running or self.sem is None:
@@ -88,6 +88,9 @@ class Runner:
                 return
             if action == "check":
                 bot.diagnose()
+                return
+            if action == "checkin":
+                bot.checkin_only()
                 return
             self.status(name, {"state": "Đang chờ", "progress": "Chờ lượt chạy"})
             with self.sem:

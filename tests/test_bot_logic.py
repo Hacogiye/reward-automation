@@ -640,3 +640,277 @@ def test_log_keep_days_prunes_old_files(tmp_path, monkeypatch):
     assert not (tmp_path / f"{old}.log").exists() and (tmp_path / f"{new}.log").exists()
     runner.FileLog.prune("x")  # giá trị hỏng: không xóa gì, không lỗi
     assert (tmp_path / f"{new}.log").exists()
+
+
+# ---------------------------------------------------------------- check-in qua DAPI
+def test_oauth_code_from_redirect():
+    url = "https://login.live.com/oauth20_desktop.srf?code=M.abc&state=s1&lc=1033"
+    assert bot_mod.oauth_code(url, "s1") == "M.abc"
+    assert bot_mod.oauth_code(url, "other") == ""  # sai state: không nhận mã
+    assert bot_mod.oauth_code("https://login.live.com/oauth20_desktop.srf?error=access_denied&state=s1", "s1") == ""
+    assert bot_mod.oauth_code("https://login.live.com/oauth20_authorize.srf?client_id=x", "s1") is None
+    assert bot_mod.oauth_code("https://evil.example/oauth20_desktop.srf?code=x&state=s1", "s1") is None
+
+
+def test_dapi_country_points_and_offer_ids():
+    assert bot_mod.dapi_country({"response": {"profile": {"attributes": {"country": "VN"}}}}) == "vn"
+    assert bot_mod.dapi_country({"response": {"profile": {"attributes": {"country": "Vietnam"}}}}) == ""
+    assert bot_mod.dapi_country(None) == "" and bot_mod.dapi_country({}) == ""
+    assert bot_mod.checkin_points({"response": {"activity": {"p": 5}}}) == 5
+    assert bot_mod.checkin_points({"response": {"activity": {"p": "0"}}}) == 0
+    assert bot_mod.checkin_points({"response": None}) is None
+    data = {"response": {"promotions": [{"name": "a", "attributes": {"offerid": "Gamification_Sapphire_DailyCheckIn"}},
+                                        {"name": "b_only"}, {"name": "a", "attributes": {"offerid":
+                                                                                        "Gamification_Sapphire_DailyCheckIn"}},
+                                        "junk"]}}
+    assert bot_mod.dapi_offer_ids(data) == ["Gamification_Sapphire_DailyCheckIn", "b_only"]
+    assert bot_mod.dapi_offer_ids(None) == []
+
+
+def test_checkin_body_matches_app():
+    b = bot_mod.checkin_body("vn")
+    assert b["type"] == 101 and b["amount"] == 1 and b["country"] == "vn"
+    assert b["attributes"] == {"offerid": "Gamification_Sapphire_DailyCheckIn"}
+    assert len(b["id"]) == 128 and b["id"] != bot_mod.checkin_body("vn")["id"]  # id ngẫu nhiên mỗi lần
+
+
+class FakeResp:
+    def __init__(self, data, status=200):
+        self.data, self.status, self.ok = data, status, 200 <= status < 300
+
+    def json(self):
+        if isinstance(self.data, Exception):
+            raise self.data
+        return self.data
+
+
+class FakeRequest:
+    def __init__(self, me, activity):
+        self.me, self.activity, self.calls = me, activity, []
+
+    def get(self, url, **k):
+        self.calls.append(("GET", url, k))
+        return self.me
+
+    def post(self, url, **k):
+        self.calls.append(("POST", url, k))
+        if isinstance(self.activity, list):  # mỗi lần POST lấy 1 phản hồi theo thứ tự
+            return self.activity.pop(0)
+        return self.activity
+
+
+class FakeCtx:
+    def __init__(self, me, activity):
+        self.request = FakeRequest(me, activity)
+
+
+ME_VN = {"response": {"profile": {"attributes": {"country": "VN"}},
+                      "promotions": [{"name": "Gamification_Sapphire_DailyCheckIn",
+                                      "attributes": {"offerid": "Gamification_Sapphire_DailyCheckIn"}}]}}
+
+
+def app_streak(day, done):
+    return {"title": "Bing App Streak", "day": day, "of": 7, "today": "1/1" if done else "0/1", "today_done": done,
+            "next": 10}
+
+
+def checkin_bot(me, activity, before, after=None, **settings):
+    """before/after: dòng Bing App Streak trước khi check-in và sau khi đọc lại trang Rewards (None = không có)."""
+    bot, logs = make_bot(**settings)
+    bot.state = empty_state()
+    bot.state["streaks"] = [before] if before else []
+
+    def reread(page):
+        bot.state = empty_state()
+        bot.state["streaks"] = [after] if after else []
+        return bot.state
+    bot.read_state = reread
+    bot._mobile_token = lambda ctx: "tok"
+    bot.do_read_to_earn = lambda ctx: 0
+    return bot, logs, FakeCtx(me, activity)
+
+
+def test_checkin_confirmed_by_bing_app_streak():
+    import json as _json
+    bot, logs, ctx = checkin_bot(FakeResp(ME_VN), FakeResp({"response": {"activity": {"p": 10}}}),
+                                 app_streak(2, False), app_streak(3, True))
+    assert bot.do_checkin(ctx, FakePage()) is True
+    posts = [c for c in ctx.request.calls if c[0] == "POST"]
+    assert len(posts) == 2 and all(u == bot_mod.DAPI_ACTIVITIES_URL for _, u, _ in posts)
+    web, app = (_json.loads(k["data"]) for _, _, k in posts)
+    assert web["type"] == 101 and web["attributes"] == {"offerid": "Gamification_Sapphire_DailyCheckIn"}
+    assert app["type"] == 103 and app["channel"] == "SAAndroid" and app["country"] == "vn"  # check-in app Bing
+    k = posts[1][2]
+    assert k["headers"]["Authorization"] == "Bearer tok" and k["headers"]["X-Rewards-Country"] == "vn"
+    assert k["headers"]["X-Rewards-AppId"] == "SAAndroid" and k["headers"]["X-Rewards-PartnerId"] == "startapp"
+    assert "X-Rewards-AppId" not in posts[0][2]["headers"]
+    assert any("DAPI app Bing (type 103): +10 điểm" in m for m in logs)
+    assert "ngày 2/7, hôm nay chưa check-in (+10 điểm)" in logs[0]
+    assert any("DAPI có 1 offer: Gamification_Sapphire_DailyCheckIn" in m for m in logs)
+    assert logs[-1] == "Check-in app điện thoại: Bing App Streak đã lên ngày 3/7"
+    assert not any("tok" in m for m in logs)  # không lộ token ra nhật ký
+
+
+def test_checkin_skipped_when_bing_app_streak_done():
+    bot, logs, ctx = checkin_bot(FakeResp(ME_VN), FakeResp({}), app_streak(3, True))
+    assert bot.do_checkin(ctx, FakePage()) is True
+    assert ctx.request.calls == [] and "đã check-in rồi (ngày 3/7)" in logs[-1]
+
+
+def test_checkin_not_done_when_streak_does_not_move():
+    bot, logs, ctx = checkin_bot(FakeResp(ME_VN), FakeResp({"response": {"activity": {"p": 0}}}),
+                                 app_streak(2, False), app_streak(2, False))
+    assert bot.do_checkin(ctx, FakePage()) is False  # DAPI nhận nhưng streak không tăng: chưa xong
+    assert "Bing App Streak vẫn 0/1" in logs[-1]
+    assert any("DAPI app Bing (type 103): hôm nay đã check-in rồi" in m for m in logs)
+
+
+def test_checkin_errors_do_not_crash():
+    bot, logs, ctx = checkin_bot(FakeResp(ValueError("not json")), FakeResp({}, status=401), app_streak(2, False))
+    assert bot.do_checkin(ctx, FakePage()) is False
+    assert any("dùng 'us'" in m for m in logs) and any("HTTP 401" in m for m in logs)
+    assert "cả 2 lệnh check-in DAPI đều lỗi" in logs[-1]
+
+    def no_token(ctx):
+        raise RuntimeError("không lấy được mã OAuth của app điện thoại")
+    bot._mobile_token = no_token
+    bot._dapi_tok = None  # bỏ token đã nhớ của lần trước
+    assert bot.do_checkin(ctx, FakePage()) is False  # lỗi lấy token: chỉ ghi nhật ký
+    assert "không lấy được mã OAuth" in logs[-1]
+
+
+def test_run_does_checkin_first_and_respects_switch():
+    for enabled in (True, False):
+        bot, _ = make_bot(do_browse=False, do_checkin=enabled, do_pc=False, do_mobile=False, do_visual=False,
+                          do_quest_tasks=False)
+        order = []
+        bot.read_state = lambda page: {"available": 1}
+        bot.do_checkin = lambda ctx, page: order.append("checkin") or True
+        bot.do_read_to_earn = lambda ctx: order.append("read") or 0
+        bot.do_cards = lambda page: order.append("daily")
+        bot.retry_missed_cards = lambda page: None
+        bot._session = lambda work, headless, label: work(object(), FakePage(), [])
+        bot.run()
+        assert order == (["checkin", "read", "daily"] if enabled else ["read", "daily"])
+    bot, _ = make_bot(do_browse=False, do_read_earn=False, do_pc=False, do_mobile=False, do_visual=False,
+                      do_quest_tasks=False, do_quests=False)
+    bot.read_state = lambda page: {"available": 1}
+    bot.do_checkin = lambda ctx, page: True
+    bot.do_read_to_earn = lambda ctx: pytest.fail("Read to Earn đang tắt")
+    bot._session = lambda work, headless, label: work(object(), FakePage(), [])
+    bot.run()
+
+
+def test_run_retries_failed_checkin_at_end():
+    bot, logs = make_bot(do_browse=False, do_pc=False, do_mobile=False, do_visual=False, do_quests=False,
+                         do_quest_tasks=False)
+    results, states = [False, True], []
+    bot.read_state = lambda page: {"available": 1}
+    bot.do_read_to_earn = lambda ctx: 0
+    bot.do_checkin = lambda ctx, page: results.pop(0)
+    bot._status = lambda n, d: states.append(d.get("state"))
+    bot._session = lambda work, headless, label: work(object(), FakePage(), [])
+    bot.run()
+    assert results == [] and "Thử check-in app điện thoại lần nữa" in logs and states[-1] == "Hoàn thành"
+    results[:] = [False, False]
+    bot.run()
+    assert states[-1] == "Lỗi"
+
+
+def test_checkin_only_reads_page_then_checks_in():
+    bot, _ = make_bot()
+    calls, states = [], []
+    bot.read_state = lambda page: calls.append("read")
+    bot.do_checkin = lambda ctx, page: calls.append("checkin") or True
+    bot._status = lambda n, d: states.append(d.get("state"))
+    bot._session = lambda work, headless, label: work(object(), FakePage(), [])
+    bot.checkin_only()
+    assert calls == ["read", "checkin"] and states[-1] == "Hoàn thành"
+
+
+# ---------------------------------------------------------------- check-in app Bing (type 103) + Read to Earn
+def test_app_checkin_body_and_activity_result():
+    b = bot_mod.app_checkin_body("vn")
+    assert b["type"] == 103 and b["channel"] == "SAAndroid" and b["attributes"] == {} and b["risk_context"] == {}
+    assert len(b["id"]) == 128
+    assert bot_mod.activity_body("us", "X")["attributes"] == {"offerid": "X"}
+    assert bot_mod.activity_result({"response": {"activity": {"p": "3"}, "balance": 100, "isDuplicate": False}}) \
+        == (3, 100, False)
+    assert bot_mod.activity_result({"response": {"isDuplicate": True}}) == (None, None, True)
+    assert bot_mod.activity_result(None) == (None, None, False)
+    assert bot_mod.dapi_balance({"response": {"balance": "250"}}) == 250 and bot_mod.dapi_balance([]) is None
+
+
+def readearn_me(progress=0, mx=30, complete="False", balance=100):
+    return {"response": {"balance": balance, "profile": {"attributes": {"country": "VN"}}, "promotions": [
+        {"name": "Gamification_Sapphire_DailyCheckIn", "attributes": {"type": "checkin"}},
+        {"name": "ENUS_readarticle3_30points", "attributes": {
+            "offerid": "ENUS_readarticle3_30points", "type": "msnreadearn", "complete": complete,
+            "progress": str(progress), "max": str(mx)}}]}}
+
+
+def test_readearn_offer_parsing():
+    assert bot_mod.readearn_offer(readearn_me(6)) == {"offerid": "ENUS_readarticle3_30points", "complete": False,
+                                                      "progress": 6, "max": 30}
+    assert bot_mod.readearn_offer({"response": {"promotions": [{"name": "x", "attributes": {
+        "offerid": "Y_readarticle_z", "pointprogress": "3", "pointmax": "30"}}]}})["progress"] == 3
+    assert bot_mod.readearn_offer(ME_VN) is None and bot_mod.readearn_offer(None) is None
+
+
+def read_bot(me, posts):
+    bot, logs = make_bot()
+    tokens = []
+    bot._mobile_token = lambda ctx: tokens.append(1) or "tok"
+    return bot, logs, FakeCtx(FakeResp(me), posts), tokens
+
+
+def act(p, bal, dup=False):
+    return FakeResp({"response": {"activity": {"p": p}, "balance": bal, "isDuplicate": dup}})
+
+
+def test_read_to_earn_reads_until_no_gain():
+    import json as _json
+    bot, logs, ctx, _ = read_bot(readearn_me(), [act(3, 103), act(3, 106), act(0, 106)])
+    assert bot.do_read_to_earn(ctx) == 6
+    posts = [c for c in ctx.request.calls if c[0] == "POST"]
+    assert len(posts) == 3
+    body = _json.loads(posts[0][2]["data"])
+    assert body["type"] == 101 and body["attributes"] == {"offerid": "ENUS_readarticle3_30points"}
+    assert body["country"] == "vn" and logs[-1] == "Read to Earn: +6 điểm"
+    assert any("hết bài để đọc" in m for m in logs)
+
+
+def test_read_to_earn_stops_on_duplicate_or_flat_balance_and_caps():
+    bot, _, ctx, _ = read_bot(readearn_me(), [act(3, 100)])  # điểm báo +3 nhưng số dư không tăng
+    assert bot.do_read_to_earn(ctx) == 0
+    bot, _, ctx, _ = read_bot(readearn_me(), [act(3, 103, dup=True)])
+    assert bot.do_read_to_earn(ctx) == 0
+    bot, _, ctx, _ = read_bot(readearn_me(), [act(3, 103 + 3 * i) for i in range(20)])
+    assert bot.do_read_to_earn(ctx) == 3 * bot_mod.READ_EARN_MAX  # không vượt quá 10 bài
+
+
+def test_read_to_earn_skips_when_done_or_missing():
+    for me, msg in ((readearn_me(30), "đã xong (30/30)"), (readearn_me(0, complete="True"), "đã xong"),
+                    (ME_VN, "không có offer")):
+        bot, logs, ctx, _ = read_bot(me, [])
+        assert bot.do_read_to_earn(ctx) == 0
+        assert not [c for c in ctx.request.calls if c[0] == "POST"] and any(msg in m for m in logs)
+
+
+def test_read_to_earn_errors_do_not_crash():
+    bot, logs, ctx, _ = read_bot(readearn_me(), [act(3, 103), FakeResp({}, status=500)])
+    assert bot.do_read_to_earn(ctx) == 3
+    assert any("Read to Earn không được: DAPI trả về HTTP 500" in m for m in logs)
+    assert not any("tok" in m for m in logs)
+
+
+def test_dapi_token_reused_within_run():
+    bot, _, ctx, tokens = read_bot(readearn_me(30), [])
+    clock = [1000.0]
+    bot.now = lambda: clock[0]
+    bot.do_read_to_earn(ctx)
+    bot.do_read_to_earn(ctx)
+    assert len(tokens) == 1  # check-in + Read to Earn dùng chung 1 token
+    clock[0] += bot.DAPI_TOKEN_TTL + 1
+    bot.do_read_to_earn(ctx)
+    assert len(tokens) == 2  # hết hạn thì lấy token mới

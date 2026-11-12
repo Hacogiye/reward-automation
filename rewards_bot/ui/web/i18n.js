@@ -51,6 +51,7 @@ const I18N = (() => {
     "T2": "Mon", "T3": "Tue", "T4": "Wed", "T5": "Thu", "T6": "Fri", "T7": "Sat", "CN": "Sun",
     // ---- trạng thái (từ bot)
     "Sẵn sàng": "Ready", "Đang chạy": "Running", "Đang chờ": "Waiting", "Đang làm mới": "Refreshing",
+    "Đang check-in": "Checking in", "Check-in không được": "Check-in failed",
     "Đang đăng nhập": "Logging in", "Đang kiểm tra": "Checking", "Hoàn thành": "Done", "Chưa đăng nhập": "Not logged in",
     "Đã dừng": "Stopped", "Chờ lượt chạy": "Waiting for a slot", "Khởi động": "Starting", "Bấm Đăng nhập": "Click Log in",
     "Đóng cửa sổ khi xong": "Close the window when done", "Tự đăng nhập lại": "Auto re-login",
@@ -89,8 +90,8 @@ const I18N = (() => {
     "Chưa có lịch sử điểm.": "No points history yet.", "Chưa có số liệu điểm search / thẻ.": "No search / card points yet.",
     // ---- tài khoản
     "Thêm tài khoản": "Add account", "Dừng tất cả": "Stop all", "Chạy tất cả": "Run all",
-    "Chạy mọi tài khoản và làm mọi việc (Daily Set, Quests, Visual Search, PC, Mobile, Browse), bỏ qua các công tắc đang tắt":
-      "Run every account and do every task (Daily Set, Quests, Visual Search, PC, Mobile, Browse), ignoring switches that are off",
+    "Chạy mọi tài khoản và làm mọi việc (Check-in, Read to Earn, Daily Set, Quests, Visual Search, PC, Mobile, Browse), bỏ qua các công tắc đang tắt":
+      "Run every account and do every task (Check-in, Read to Earn, Daily Set, Quests, Visual Search, PC, Mobile, Browse), ignoring switches that are off",
     "Chạy mọi tài khoản theo các công tắc bên dưới": "Run every account using the switches below",
     "Chế độ": "Mode", "Trạng thái": "Status", "Tiến độ": "Progress", "Cửa sổ riêng": "Own window", "Edge đang mở": "Open Edge",
     "cổng #": "port #", "tự đăng nhập": "auto login", "Việc bot sẽ làm khi chạy": "What the bot does on a run",
@@ -100,6 +101,11 @@ const I18N = (() => {
     "Tìm bằng # ảnh qua nút camera của Bing (mỗi ngày # lượt)": "Searches with # image via Bing's camera button (# per day)",
     "Tìm đến khi đủ điểm search máy tính": "Searches until desktop search points are full",
     "Giả lập điện thoại, tìm đến khi đủ điểm": "Emulates a phone, searches until the points are full",
+    "Check-in app điện thoại": "Phone app check-in",
+    "Check-in app điện thoại mỗi ngày (Bing App Streak), gọi thẳng API của app":
+      "Daily phone app check-in (Bing App Streak), calling the app's API directly",
+    "Đọc tối đa 10 bài báo mỗi ngày (3 điểm/bài), gọi thẳng API của app":
+      "Reads up to 10 news articles a day (3 points each), calling the app's API directly",
     "Lướt web tối đa # phút cho Edge – Minutes, đo số phút mỗi # phút": "Browses up to # minutes for Edge – Minutes, measuring every # minutes",
     "Tự dừng khi không được tính phút": "Stop when minutes aren't counted",
     "Tự chọn số lượt search": "Choose the number of searches",

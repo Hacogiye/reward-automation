@@ -42,6 +42,8 @@ DEFAULT_SETTINGS = {
     "custom_searches": False,  # tự chọn số lượt search mỗi ngày thay vì search đến khi đủ điểm tối đa
     "pc_searches": 30,  # số lượt search PC trong ngày khi bật custom_searches (3 điểm/lượt)
     "mobile_searches": 20,  # số lượt search Mobile trong ngày khi bật custom_searches
+    "do_checkin": True,  # check-in app điện thoại mỗi ngày (Bing App Streak), gọi thẳng DAPI
+    "do_read_earn": True,  # Read to Earn: "đọc" tối đa 10 bài báo/ngày qua DAPI (3 điểm/bài)
     "do_visual": True,  # Visual Search: tải 1 ảnh lên bằng nút camera của Bing Images
     "do_browse": False,
     "language": "vi",  # ngôn ngữ giao diện: "vi" / "en" (nhật ký của bot vẫn tiếng Việt)

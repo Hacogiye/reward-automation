@@ -34,6 +34,7 @@ SETTING_SCHEMA = {
     "search_browse": (bool,), "search_click_pct": (int, 0, 100),
     "stall_after": (int, 3, 30), "visual_max_tries": (int, 1, 10), "log_keep_days": (int, 1, 90),
     "headless": (bool,), "do_quests": (bool,), "do_pc": (bool,), "do_mobile": (bool,), "do_visual": (bool,),
+    "do_checkin": (bool,), "do_read_earn": (bool,),
     "do_browse": (bool,), "bypass_proxy": (bool,), "fun_mode": (bool,),
     "browse_auto_stop": (bool,), "do_quest_tasks": (bool,), "custom_searches": (bool,),
     "pc_searches": (int, 0, 50), "mobile_searches": (int, 0, 50),
@@ -44,9 +45,9 @@ SETTING_SCHEMA = {
     "risk_ack": (str, re.compile(r"(\d{1,4}\.\d{1,4}\.\d{1,4})?")),  # số phiên bản lúc đồng ý, hoặc rỗng
 }
 SETTING_KEYS = tuple(SETTING_SCHEMA)
-ACTIONS = {"run", "refresh", "login", "check", "everything"}
+ACTIONS = {"run", "refresh", "login", "check", "checkin", "everything"}
 # "Làm tất cả": chạy như "run" nhưng bật mọi việc, bỏ qua các công tắc (không đổi cài đặt đã lưu)
-EVERYTHING = {"do_quests": True, "do_quest_tasks": True, "do_visual": True, "do_pc": True, "do_mobile": True,
+EVERYTHING = {"do_quests": True, "do_quest_tasks": True, "do_visual": True, "do_checkin": True, "do_read_earn": True, "do_pc": True, "do_mobile": True,
               "do_browse": True}
 AVATAR_MAX_BYTES = 300 * 1024
 # ảnh đại diện: chỉ nhận PNG / JPEG / WebP (kiểm tra cả byte đầu file, không tin phần khai báo)

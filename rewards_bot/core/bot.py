@@ -4,9 +4,10 @@ import base64
 import json
 import random
 import re
+import secrets
 import threading
 import time
-from urllib.parse import quote_plus, urljoin, urlparse
+from urllib.parse import parse_qs, quote_plus, urlencode, urljoin, urlparse
 
 from playwright.sync_api import sync_playwright, BrowserContext, Page, TimeoutError as PWTimeout
 
@@ -22,6 +23,137 @@ REWARDS = "https://rewards.bing.com"
 DASHBOARD_URL = REWARDS + "/dashboard"
 EARN_URL = REWARDS + "/earn"
 POINTS_PER_SEARCH = 3
+
+# DAPI: API mà app Microsoft Rewards / Bing trên điện thoại dùng để ghi nhận hoạt động (check-in hằng ngày...).
+# Token lấy bằng OAuth của app điện thoại, dựa trên phiên đăng nhập login.live.com sẵn có trong trình duyệt của bot
+# (không cần mật khẩu, không lưu token xuống đĩa).
+DAPI = "https://prod.rewardsplatform.microsoft.com/dapi"
+DAPI_ME_URL = DAPI + "/me?channel=SAAndroid&options=613"
+DAPI_ACTIVITIES_URL = DAPI + "/me/activities"
+DAPI_UA = "okhttp/4.9.1"
+CHECKIN_OFFER = "Gamification_Sapphire_DailyCheckIn"  # check-in web (type 101): KHÔNG làm tăng Bing App Streak
+# Check-in của app Bing (Bing App Streak): activity type 103, không có offerid, kênh SAAndroid.
+# Lấy từ lưu lượng app Bing trên điện thoại (theo MicrosoftRewardsPilot), channel phải khớp ngữ cảnh token (SAAndroid).
+APP_CHECKIN_TYPE = 103
+DAPI_APP_HEADERS = {"X-Rewards-AppId": "SAAndroid", "X-Rewards-PartnerId": "startapp"}
+READ_EARN_MAX = 10  # Read to Earn: tối đa 10 bài/ngày (3 điểm/bài)
+OAUTH_AUTHORIZE_URL = "https://login.live.com/oauth20_authorize.srf"
+OAUTH_TOKEN_URL = "https://login.live.com/oauth20_token.srf"
+OAUTH_REDIRECT = "https://login.live.com/oauth20_desktop.srf"
+OAUTH_CLIENT_ID = "0000000040170455"  # client id công khai của app Rewards trên điện thoại
+OAUTH_SCOPE = "service::prod.rewardsplatform.microsoft.com::MBI_SSL"
+
+
+def oauth_code(url: str, state: str):
+    """Mã OAuth trong URL chuyển hướng về oauth20_desktop.srf.
+
+    None = chưa tới trang đó; "" = tới rồi nhưng không có mã hợp lệ (bị từ chối / sai state)."""
+    u = urlparse(url)
+    if not (u.netloc.endswith("login.live.com") and u.path.endswith("oauth20_desktop.srf")):
+        return None
+    q = parse_qs(u.query)
+    if (q.get("state") or [""])[0] != state:
+        return ""
+    return (q.get("code") or [""])[0]
+
+
+def dapi_country(data) -> str:
+    """Mã quốc gia (2 chữ, viết thường) trong phản hồi GET /dapi/me; không có thì trả ""."""
+    try:
+        c = data["response"]["profile"]["attributes"]["country"]
+    except (KeyError, TypeError):
+        return ""
+    return c.strip().lower() if isinstance(c, str) and re.fullmatch(r"\s*[A-Za-z]{2}\s*", c) else ""
+
+
+def activity_body(country: str, offerid: str, rid: str = "") -> dict:
+    """Nội dung POST /dapi/me/activities để hoàn thành 1 offer (type 101 + offerid), giống app điện thoại gửi."""
+    return {"amount": 1, "country": country, "id": rid or secrets.token_hex(64), "type": 101,
+            "attributes": {"offerid": offerid}}
+
+
+def checkin_body(country: str, rid: str = "") -> dict:
+    """Check-in web hằng ngày (type 101, offer Gamification_Sapphire_DailyCheckIn)."""
+    return activity_body(country, CHECKIN_OFFER, rid)
+
+
+def app_checkin_body(country: str, rid: str = "") -> dict:
+    """Check-in của app Bing (type 103, không offerid): đây mới là thứ làm tăng Bing App Streak."""
+    return {"amount": 1, "country": country, "id": rid or secrets.token_hex(64), "type": APP_CHECKIN_TYPE,
+            "channel": "SAAndroid", "attributes": {}, "risk_context": {}}
+
+
+def _int(v):
+    try:
+        return int(float(v))
+    except (TypeError, ValueError):
+        return None
+
+
+def activity_result(data) -> tuple:
+    """(điểm, số dư, trùng) từ phản hồi POST /dapi/me/activities. Điểm / số dư = None nếu phản hồi lạ."""
+    r = data.get("response") if isinstance(data, dict) else None
+    if not isinstance(r, dict):
+        return None, None, False
+    act = r.get("activity") if isinstance(r.get("activity"), dict) else {}
+    return _int(act.get("p")), _int(r.get("balance")), bool(r.get("isDuplicate"))
+
+
+def dapi_balance(data):
+    """Số điểm hiện có trong phản hồi GET /dapi/me; None nếu không đọc được."""
+    r = data.get("response") if isinstance(data, dict) else None
+    return _int(r.get("balance")) if isinstance(r, dict) else None
+
+
+def readearn_offer(data):
+    """Offer Read to Earn (type msnreadearn, vd ENUS_readarticle3_30points) trong GET /dapi/me.
+
+    Trả {"offerid", "complete", "progress", "max"} hoặc None nếu tài khoản không có offer này."""
+    try:
+        promos = data["response"]["promotions"] or []
+    except (KeyError, TypeError):
+        return None
+    for p in promos:
+        if not isinstance(p, dict):
+            continue
+        a = p.get("attributes") if isinstance(p.get("attributes"), dict) else {}
+        oid = str(a.get("offerid") or p.get("name") or "")
+        if str(a.get("type", "")).lower() != "msnreadearn" and "readarticle" not in oid.lower():
+            continue
+        if not oid:
+            continue
+
+        def first(*keys):
+            return next((n for n in (_int(a.get(k)) for k in keys) if n is not None), 0)
+        return {"offerid": oid[:80], "complete": str(a.get("complete", "")).lower() == "true",
+                "progress": first("progress", "pointprogress", "activityprogress"),
+                "max": first("max", "pointmax", "activitymax")}
+    return None
+
+
+def dapi_offer_ids(data) -> list:
+    """Offer id của mọi promotion trong phản hồi GET /dapi/me (để tìm offer làm tăng Bing App Streak)."""
+    try:
+        promos = data["response"]["promotions"] or []
+    except (KeyError, TypeError):
+        return []
+    ids = []
+    for p in promos:
+        if not isinstance(p, dict):
+            continue
+        a = p.get("attributes") if isinstance(p.get("attributes"), dict) else {}
+        oid = str(a.get("offerid") or p.get("name") or "")
+        if oid and oid not in ids:
+            ids.append(oid[:80])
+    return ids
+
+
+def checkin_points(data):
+    """Số điểm nhận được từ phản hồi check-in (0 = hôm nay đã check-in rồi); None nếu phản hồi lạ."""
+    try:
+        return int(data["response"]["activity"]["p"])
+    except (KeyError, TypeError, ValueError):
+        return None
 
 # Dùng khi không đọc được phiên bản trình duyệt thật
 FALLBACK_VERSIONS = {"chromium": "141.0.7390.55", "edge": "141.0.3537.57"}
@@ -80,6 +212,7 @@ class RewardsBot:
         self._launched = None    # trình duyệt do bot mở (edge_launcher), None ở chế độ gắn vào Edge
         self._browser = None
         self.now = time.time     # đồng hồ (test thay bằng đồng hồ giả)
+        self._dapi_tok = None    # (token DAPI, lúc lấy): dùng chung cho check-in và Read to Earn trong 1 lượt
         # giới hạn chỉnh được trong Cài đặt (thiếu thì dùng mặc định của lớp)
         self.STALL_AFTER = int(settings.get("stall_after", RewardsBot.STALL_AFTER))
         self.VISUAL_MAX_TRIES = int(settings.get("visual_max_tries", RewardsBot.VISUAL_MAX_TRIES))
@@ -971,6 +1104,193 @@ class RewardsBot:
             self.status(state="Lỗi", progress=str(e)[:60])
             self.log(f"Lỗi: {e}")
 
+    # ------------------------------------------------------------ check-in qua DAPI (app điện thoại)
+    def _mobile_token(self, ctx: BrowserContext) -> str:
+        """Lấy access token DAPI bằng OAuth của app điện thoại, dùng phiên login.live.com đang có của trình duyệt."""
+        state = secrets.token_hex(8)
+        url = OAUTH_AUTHORIZE_URL + "?" + urlencode({
+            "client_id": OAUTH_CLIENT_ID, "scope": OAUTH_SCOPE, "response_type": "code",
+            "redirect_uri": OAUTH_REDIRECT, "state": state, "access_type": "offline_access"})
+        page = ctx.new_page()
+        try:
+            try:
+                page.goto(url, wait_until="domcontentloaded", timeout=60000)
+            except PWTimeout:
+                pass  # trang chuyển hướng chậm: vẫn kiểm tra URL bên dưới
+            code = None
+            for _ in range(15):
+                code = oauth_code(page.url, state)
+                if code is not None:
+                    break
+                if page.locator("input[name=loginfmt]:visible, input[type=password]:visible").count():
+                    raise RuntimeError("login.live.com yêu cầu đăng nhập lại (bấm Đăng nhập cho tài khoản này)")
+                # lần đầu Microsoft có thể hỏi cho phép app truy cập tài khoản: bấm đồng ý
+                self._click(page, "#idSIButton9, #acceptButton, button:has-text('Accept'), "
+                                  "button:has-text('Yes'), input[type=submit][value='Yes']", 1500)
+                self.sleep(1.5, 2.5)
+            if not code:
+                raise RuntimeError("không lấy được mã OAuth của app điện thoại")
+        finally:
+            try:
+                page.close()
+            except Exception:
+                pass
+        resp = ctx.request.post(OAUTH_TOKEN_URL, timeout=30000, form={
+            "grant_type": "authorization_code", "client_id": OAUTH_CLIENT_ID, "code": code,
+            "redirect_uri": OAUTH_REDIRECT})
+        token = (resp.json() if resp.ok else {}).get("access_token")
+        if not token:  # không ghi nội dung phản hồi: có thể chứa token / mã
+            raise RuntimeError(f"đổi mã OAuth lấy token thất bại (HTTP {resp.status})")
+        return token
+
+    @staticmethod
+    def _dapi_headers(token: str, country: str = "") -> dict:
+        h = {"Authorization": f"Bearer {token}", "User-Agent": DAPI_UA, "X-Rewards-Language": "en",
+             "Content-Type": "application/json"}
+        if country:
+            h["X-Rewards-Country"] = country
+        return h
+
+    def app_streak(self):
+        """Dòng "Bing App Streak" trên trang Rewards: chuỗi check-in của app điện thoại. None nếu không có."""
+        return next((r for r in self.state.get("streaks") or [] if "app" in r["title"].lower()), None)
+
+    DAPI_TOKEN_TTL = 20 * 60  # token OAuth sống ~1 giờ; dùng lại trong 20 phút để khỏi mở trang OAuth nhiều lần
+
+    def _dapi_token(self, ctx: BrowserContext) -> str:
+        if self._dapi_tok and self.now() - self._dapi_tok[1] < self.DAPI_TOKEN_TTL:
+            return self._dapi_tok[0]
+        token = self._mobile_token(ctx)
+        self._dapi_tok = (token, self.now())
+        return token
+
+    def _dapi_post(self, ctx: BrowserContext, token: str, country: str, body: dict, extra: dict = None) -> tuple:
+        """POST /dapi/me/activities -> (điểm, số dư, trùng). Lỗi HTTP thì báo RuntimeError (không ghi nội dung phản hồi)."""
+        resp = ctx.request.post(DAPI_ACTIVITIES_URL, headers={**self._dapi_headers(token, country), **(extra or {})},
+                                data=json.dumps(body), timeout=30000)
+        if not resp.ok:
+            raise RuntimeError(f"DAPI trả về HTTP {resp.status}")
+        try:
+            return activity_result(resp.json())
+        except ValueError:  # phản hồi không phải JSON
+            return None, None, False
+
+    def _dapi_me(self, ctx: BrowserContext):
+        """(token, dữ liệu GET /dapi/me hoặc None)."""
+        token = self._dapi_token(ctx)
+        self.check_stop()
+        me = ctx.request.get(DAPI_ME_URL, headers=self._dapi_headers(token), timeout=30000)
+        try:
+            return token, (me.json() if me.ok else None)
+        except ValueError:  # phản hồi không phải JSON
+            return token, None
+
+    def do_checkin(self, ctx: BrowserContext, page: Page) -> bool:
+        """Check-in app điện thoại qua DAPI, rồi xác nhận bằng dòng Bing App Streak trên trang Rewards.
+
+        Bing App Streak (chuỗi 7 ngày, điểm 5, 5, 10, 10, 15, 15...) là nguồn đúng duy nhất: chỉ khi dòng đó báo
+        hôm nay 1/1 mới coi là xong. Trả True nếu xong, False nếu chưa (lỗi hoặc streak không tăng).
+        Lỗi ở bước này chỉ ghi nhật ký, không làm hỏng lượt chạy."""
+        row = self.app_streak()
+        if row and row.get("today_done"):
+            self.log(f"Bing App Streak: hôm nay đã check-in rồi (ngày {row['day']}/{row['of']})")
+            return True
+        if row:
+            self.log(f"Bing App Streak: ngày {row['day']}/{row['of']}, hôm nay chưa check-in"
+                     + (f" (+{row['next']} điểm)" if row.get("next") else ""))
+        self.status(progress="Check-in (DAPI)")
+        try:
+            token, me_data = self._dapi_me(ctx)
+            ids = dapi_offer_ids(me_data)
+            self.log(f"  DAPI có {len(ids)} offer: {', '.join(ids)[:1500]}")
+            country = dapi_country(me_data)
+            if not country:
+                country = "us"
+                self.log("  Check-in: không đọc được quốc gia của tài khoản từ DAPI, dùng 'us'")
+            # 2 check-in độc lập: web (type 101) và app Bing (type 103, cái làm tăng Bing App Streak).
+            # Cái này lỗi không chặn cái kia.
+            app_pts = None
+            sent = 0
+            for label, body, extra in ((CHECKIN_OFFER, checkin_body(country), None),
+                                       ("app Bing (type 103)", app_checkin_body(country), DAPI_APP_HEADERS)):
+                self.check_stop()
+                try:
+                    pts, _, dup = self._dapi_post(ctx, token, country, body, extra)
+                except RuntimeError as e:
+                    self.log(f"  DAPI {label}: {e}")
+                    continue
+                sent += 1
+                if extra:
+                    app_pts = pts
+                self.log(f"  DAPI {label}: " + ("phản hồi lạ" if pts is None else
+                                                 "hôm nay đã check-in rồi" if dup or pts == 0 else f"+{pts} điểm"))
+                self.sleep(2, 4)
+            if not sent:
+                raise RuntimeError("cả 2 lệnh check-in DAPI đều lỗi")
+            self.sleep(3, 5)
+            self.read_state(page)  # xác nhận trên trang Rewards
+        except (StopRequested, NotLoggedIn):
+            raise
+        except Exception as e:
+            self.log(f"Check-in app điện thoại không được: {e}")
+            return False
+        row = self.app_streak()
+        if row is None:
+            self.log("Check-in app điện thoại: đã gửi, nhưng trang Rewards không có dòng Bing App Streak để xác nhận")
+            return app_pts is not None
+        if row.get("today_done"):
+            self.log(f"Check-in app điện thoại: Bing App Streak đã lên ngày {row['day']}/{row['of']}")
+            return True
+        self.log(f"Check-in app điện thoại: DAPI đã nhận nhưng Bing App Streak vẫn {row.get('today') or '0/1'} "
+                 f"(ngày {row['day']}/{row['of']})")
+        return False
+
+    def do_read_to_earn(self, ctx: BrowserContext) -> int:
+        """Read to Earn qua DAPI: mỗi lần gửi offer msnreadearn = đọc 1 bài (3 điểm), tối đa 10 bài/ngày.
+
+        Dừng khi DAPI không cộng điểm nữa (đã đủ / trùng / số dư không tăng). Trả số điểm nhận được.
+        Lỗi chỉ ghi nhật ký, không làm hỏng lượt chạy."""
+        self.status(progress="Read to Earn")
+        gained = 0
+        try:
+            token, me = self._dapi_me(ctx)
+            offer = readearn_offer(me)
+            if offer is None:
+                self.log("Read to Earn: tài khoản không có offer đọc báo (DAPI)")
+                return 0
+            if offer["complete"] or (offer["max"] and offer["progress"] >= offer["max"]):
+                self.log(f"Read to Earn: hôm nay đã xong ({offer['progress']}/{offer['max']})")
+                return 0
+            self.log(f"Read to Earn: {offer['offerid']} {offer['progress']}/{offer['max']}")
+            country = dapi_country(me) or "us"
+            balance = dapi_balance(me)
+            for i in range(READ_EARN_MAX):
+                self.check_stop()
+                pts, bal, dup = self._dapi_post(ctx, token, country, activity_body(country, offer["offerid"]))
+                if dup or not pts or (bal is not None and balance is not None and bal <= balance):
+                    self.log("  Read to Earn: hết bài để đọc")
+                    break
+                gained += pts
+                balance = bal if bal is not None else balance
+                self.log(f"  Read to Earn: bài {i + 1} (+{pts})")
+                self.status(progress=f"Read to Earn +{gained}")
+                self.sleep(6, 20)  # thời gian "đọc" 1 bài, không gửi dồn dập
+        except (StopRequested, NotLoggedIn):
+            raise
+        except Exception as e:
+            self.log(f"Read to Earn không được: {e}")
+        self.log(f"Read to Earn: +{gained} điểm")
+        return gained
+
+    def checkin_only(self) -> None:
+        """Chỉ check-in app điện thoại (lệnh --checkin): đọc trang Rewards, check-in, xác nhận Bing App Streak."""
+        def work(ctx, page, own):
+            self.status(state="Đang check-in", progress="")
+            self.read_state(page)
+            ok = self.do_checkin(ctx, page)
+            self.status(state="Hoàn thành" if ok else "Lỗi", progress="" if ok else "Check-in không được")
+        self._session(work, headless=True, label="Check-in")
+
     # ------------------------------------------------------------ tự đăng nhập lại
     # Microsoft hỏi thêm bước xác minh: bot KHÔNG tự vượt qua, dừng lại để người dùng bấm Đăng nhập và tự làm
     _VERIFY_RE = re.compile(r"verify your identity|enter code|enter the code|approve sign in|approve the request|"
@@ -1168,7 +1488,11 @@ class RewardsBot:
             self.status(start=start)
             self.log(f"Điểm hiện tại: {start}")
 
-            # thứ tự: Daily Set / Keep earning -> Quests -> Visual Search -> search PC -> search Mobile -> Browse
+            # thứ tự: Check-in (DAPI) -> Read to Earn (DAPI) -> Daily Set / Keep earning -> Quests -> Visual Search
+            #         -> search PC -> search Mobile -> Browse
+            checked_in = self.do_checkin(ctx, page) if self.s.get("do_checkin", True) else True
+            if self.s.get("do_read_earn", True):
+                self.do_read_to_earn(ctx)
             if self.s.get("do_quests", True):  # Daily Set + Keep earning
                 self.do_cards(page)
                 self.retry_missed_cards(page)
@@ -1195,10 +1519,15 @@ class RewardsBot:
                 self.read_state(page)  # số phút Edge mới nhất (có thể đã tăng trong lúc search)
                 self.do_browse(page, int(self.s.get("browse_minutes", 30)))
 
+            if not checked_in:  # check-in đầu lượt chưa được: thử lại 1 lần để không đứt chuỗi
+                self.log("Thử check-in app điện thoại lần nữa")
+                checked_in = self.do_checkin(ctx, page)
             end = self.read_state(page)["available"] or start
             self.log(f"Xong! {start} -> {end} (+{end - start})")
             if not account_ok:
                 self.status(state="Lỗi", progress="bing.com đăng nhập sai tài khoản")
+            elif not checked_in:
+                self.status(state="Lỗi", progress=f"+{end - start} · Check-in app điện thoại không được")
             elif self.stalled:
                 names = ", ".join({"pc": "PC", "mobile": "Mobile"}[k] for k in sorted(self.stalled))
                 self.status(state="Lỗi", progress=f"+{end - start} · Search {names} không được cộng điểm")

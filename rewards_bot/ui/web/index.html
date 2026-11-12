@@ -184,7 +184,7 @@
         <div class="ms-auto btn-list">
           <button class="btn" id="btn-add"><i class="ti ti-user-plus"></i>Thêm tài khoản</button>
           <button class="btn btn-outline-danger" id="btn-stop-all"><i class="ti ti-player-stop-filled"></i>Dừng tất cả</button>
-          <button class="btn" id="btn-do-everything" title="Chạy mọi tài khoản và làm mọi việc (Daily Set, Quests, Visual Search, PC, Mobile, Browse), bỏ qua các công tắc đang tắt">
+          <button class="btn" id="btn-do-everything" title="Chạy mọi tài khoản và làm mọi việc (Check-in, Read to Earn, Daily Set, Quests, Visual Search, PC, Mobile, Browse), bỏ qua các công tắc đang tắt">
             <i class="ti ti-checklist"></i>Chạy mọi task một lần</button>
           <button class="btn btn-primary" id="btn-run-all" title="Chạy mọi tài khoản theo các công tắc bên dưới"><i class="ti ti-player-play-filled"></i>Chạy tất cả</button>
         </div>
@@ -487,6 +487,8 @@
                   <div id="g-auto" class="accordion-collapse collapse" data-bs-parent="#guide"><div class="accordion-body">
                     <p>Tạo một task trong <b>Windows Task Scheduler</b> chạy mỗi ngày một lần với lệnh:</p>
                     <pre>PrixAuto.exe --run-all --headless</pre>
+                    <p>Nên tạo thêm một task riêng chỉ check-in app điện thoại (Bing App Streak, chạy chưa tới 1 phút), ví dụ buổi tối, để lượt chạy chính có lỗi thì chuỗi check-in vẫn không đứt:</p>
+                    <pre>PrixAuto.exe --checkin</pre>
                     <p>Đặt <em>Start in</em> là thư mục chứa <code>PrixAuto.exe</code>.<span class="src-only"> Nếu chạy từ mã nguồn, dùng
                       <code>python -m rewards_bot --run-all --headless</code> với thư mục dự án.</span></p>
                     <p class="text-secondary m-0">Task chỉ chạy được khi cửa sổ app đang đóng. Kết quả xem ở trang <em>Lịch sử</em> và <em>Nhật ký</em>.</p>
@@ -661,6 +663,8 @@
                   <div id="ge-auto" class="accordion-collapse collapse" data-bs-parent="#guide-en"><div class="accordion-body">
                     <p>Create a task in <b>Windows Task Scheduler</b> that runs once a day with this command:</p>
                     <pre>PrixAuto.exe --run-all --headless</pre>
+                    <p>Also add a separate task that only does the phone app check-in (Bing App Streak, under a minute), e.g. in the evening, so the check-in streak survives a failed main run:</p>
+                    <pre>PrixAuto.exe --checkin</pre>
                     <p>Set <em>Start in</em> to the folder that holds <code>PrixAuto.exe</code>.<span class="src-only"> When running from source, use
                       <code>python -m rewards_bot --run-all --headless</code> in the project folder.</span></p>
                     <p class="text-secondary m-0">The task only runs while the app window is closed. See the results on the <em>History</em> and <em>Log</em> pages.</p>
