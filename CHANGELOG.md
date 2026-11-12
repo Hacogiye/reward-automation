@@ -6,6 +6,11 @@ rỗng) thì test và workflow phát hành đều báo lỗi, không có bản p
 
 Viết cho người dùng: bản mới làm được gì, sửa lỗi gì, người dùng cần làm gì. Không cần liệt kê tên file hay chi tiết code.
 
+## 1.8.1 - 2026-11-12
+- Dòng **Read to Earn** ở Tổng quan giờ hiện cả khi công tắc Read to Earn đang tắt (ví dụ khi bạn tự đọc báo trên
+  điện thoại). Công tắc chỉ quyết định bot có tự đọc báo hay không; tiến độ thì luôn được đọc khi chạy, **Làm mới**
+  hoặc **Kiểm tra**.
+
 ## 1.8.0 - 2026-11-12
 - Theo dõi **Read to Earn** (đọc báo trên app điện thoại) ngay trên Tổng quan: dòng mới trong nhóm **Hoạt động** hiện
   số điểm đã nhận hôm nay (tối đa 30), rê chuột để xem số bài (tối đa 10).
