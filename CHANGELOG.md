@@ -6,6 +6,13 @@ rỗng) thì test và workflow phát hành đều báo lỗi, không có bản p
 
 Viết cho người dùng: bản mới làm được gì, sửa lỗi gì, người dùng cần làm gì. Không cần liệt kê tên file hay chi tiết code.
 
+## 1.8.0 - 2026-11-12
+- Theo dõi **Read to Earn** (đọc báo trên app điện thoại) ngay trên Tổng quan: dòng mới trong nhóm **Hoạt động** hiện
+  số điểm đã nhận hôm nay (tối đa 30), rê chuột để xem số bài (tối đa 10).
+- Số liệu lấy từ máy chủ Microsoft qua API của app điện thoại, cập nhật khi bot chạy và khi bấm **Làm mới** hoặc
+  **Kiểm tra** (chỉ đọc, không cộng điểm gì). Đọc báo thật trên điện thoại thì bấm **Làm mới** để thấy số mới.
+- Tài khoản không có Read to Earn (tùy quốc gia) sẽ không có dòng này.
+
 ## 1.7.3 - 2026-11-12
 - Bản thử tự cập nhật, không đổi gì trong app: từ 1.7.2 bấm **Cập nhật ngay** rồi **Khởi động lại để cập nhật**, mở lại
   sẽ thấy 1.7.3 ở **Cài đặt → Giới thiệu**, dữ liệu giữ nguyên.
