@@ -6,6 +6,12 @@ rỗng) thì test và workflow phát hành đều báo lỗi, không có bản p
 
 Viết cho người dùng: bản mới làm được gì, sửa lỗi gì, người dùng cần làm gì. Không cần liệt kê tên file hay chi tiết code.
 
+## Chưa phát hành
+- Giữ ảnh đại diện cũ nếu ảnh thay thế không hợp lệ hoặc không ghi được xuống đĩa.
+- Hộp thêm/sửa tài khoản có nhãn email, mật khẩu rõ ràng; nút đổi ảnh dùng được bằng bàn phím. Lỗi được thông báo
+  cho trình đọc màn hình, nút Lưu chống bấm lặp và cho phép thử lại khi lưu thất bại.
+- Nhật ký chẩn đoán proxy hệ thống không còn hiện user, mật khẩu, đường dẫn hoặc tham số URL.
+
 ## 1.8.2 - 2026-11-13
 - Sửa lỗi tài khoản mới luôn chạy profile Edge **Default** dù trong cửa sổ **Đăng nhập** bạn đã chuyển sang profile khác
   (vd Profile 2). Giờ đóng cửa sổ đăng nhập xong, bot ghim đúng profile bạn dùng sau cùng và ghi rõ trong nhật ký.

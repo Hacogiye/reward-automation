@@ -770,13 +770,13 @@
       <div class="pd-avatar-row">
         <span class="avatar avatar-lg rounded-circle" id="pd-avatar"></span>
         <div class="d-flex flex-wrap gap-2">
-          <label class="btn btn-sm mb-0" for="pd-avatar-file"><i class="ti ti-photo"></i>Đổi ảnh</label>
+          <button type="button" class="btn btn-sm mb-0" id="pd-avatar-choose" aria-describedby="pd-error"><i class="ti ti-photo" aria-hidden="true"></i>Đổi ảnh</button>
           <input type="file" id="pd-avatar-file" accept="image/png,image/jpeg,image/webp" hidden>
           <button type="button" class="btn btn-sm btn-ghost-danger" id="pd-avatar-clear"><i class="ti ti-trash"></i>Xóa ảnh</button>
         </div>
       </div>
       <label class="form-label" for="pd-name">Tên</label>
-      <input id="pd-name" name="name" class="form-control" required maxlength="40">
+      <input id="pd-name" name="name" class="form-control" required maxlength="40" aria-describedby="pd-error">
       <div class="form-label mt-3">Cách mở trình duyệt</div>
       <div class="form-selectgroup form-selectgroup-boxes d-flex flex-column gap-2">
         <label class="form-selectgroup-item">
@@ -811,10 +811,12 @@
       </div>
       <div id="pd-cred" class="mt-3">
         <div class="form-label">Tự đăng nhập lại <span class="text-secondary fw-normal">(không bắt buộc)</span></div>
+        <label class="form-label" for="pd-email">Email tài khoản Microsoft</label>
         <input id="pd-email" type="email" class="form-control" placeholder="Email tài khoản Microsoft" maxlength="200"
-          autocomplete="off" spellcheck="false">
-        <input id="pd-pass" type="password" class="form-control mt-2" placeholder="Mật khẩu" maxlength="256"
-          autocomplete="new-password">
+          autocomplete="username" spellcheck="false" aria-describedby="pd-error">
+        <label class="form-label mt-2" for="pd-pass">Mật khẩu</label>
+        <input id="pd-pass" type="password" class="form-control" placeholder="Mật khẩu" maxlength="256"
+          autocomplete="current-password" aria-describedby="pd-error">
         <label class="form-check mt-2 mb-0" id="pd-cred-del-wrap"><input type="checkbox" class="form-check-input" id="pd-cred-del">
           <span class="form-check-label">Xóa mật khẩu đã lưu</span></label>
         <div class="form-hint mt-2" data-lang="vi">Chỉ dùng khi phiên đăng nhập hết hạn. Mật khẩu được Windows mã hóa (DPAPI): chỉ tài khoản
@@ -824,7 +826,7 @@
           only this Windows user on this computer can decrypt it, and the app never shows it again. If Microsoft asks for a
           verification code, Authenticator or a CAPTCHA, the bot stops so you can click <em>Log in</em> and finish it yourself.</div>
       </div>
-      <div class="text-danger mt-2" id="pd-error"></div>
+      <div class="text-danger mt-2" id="pd-error" role="alert" aria-atomic="true" tabindex="-1"></div>
     </div>
     <div class="dlg-foot">
       <button class="btn" value="cancel" formnovalidate>Hủy</button>

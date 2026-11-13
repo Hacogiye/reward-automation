@@ -1141,47 +1141,69 @@ function bindProfileDialog() {
     $("#pd-proxy-wrap").hidden = f.mode.value === "cdp";  // Edge tự mở thì proxy do bạn đặt cho Edge đó
     $("#pd-cred").hidden = f.mode.value === "cdp" || !S.credentials?.supported;  // chế độ gắn vào Edge: tự đăng nhập trên Edge đó
   };
+  const error = (message, field) => {
+    $("#pd-error").textContent = message;
+    if (field) field.setAttribute("aria-invalid", "true");
+    (field || $("#pd-error")).focus();
+  };
   $$("input[name=mode]", f).forEach((r) => (r.onchange = syncPort));
   f.onsubmit = async (e) => {
     if (e.submitter?.value !== "ok") return;
     e.preventDefault();
+    const save = $("#pd-save");
+    if (save.disabled) return;
+    $("#pd-error").textContent = "";
+    $$("[aria-invalid]", f).forEach((el) => el.removeAttribute("aria-invalid"));
     const old = dlg.dataset.old || null, had = old ? savedEmail(old) : "";
     const email = $("#pd-email").value.trim(), pass = $("#pd-pass").value;
     if (!$("#pd-cred").hidden && !$("#pd-cred-del").checked && email !== had && (email || had) && !pass) {
-      $("#pd-error").textContent = email ? "Nhập mật khẩu cho email này (hoặc xóa email để không tự đăng nhập)."
-        : "Muốn bỏ tự đăng nhập thì tick \"Xóa mật khẩu đã lưu\".";
+      error(email ? "Nhập mật khẩu cho email này (hoặc xóa email để không tự đăng nhập)."
+        : "Muốn bỏ tự đăng nhập thì tick \"Xóa mật khẩu đã lưu\".", $(email ? "#pd-pass" : "#pd-cred-del"));
       return;
     }
-    const r = await api().save_profile(old, { name: f.name.value, mode: f.mode.value, cdp_port: +f.cdp_port.value,
-      proxy: f.proxy.value.trim() });
-    if (!r.ok) { $("#pd-error").textContent = r.error; return; }
-    const name = f.name.value.trim();
-    dlg.dataset.old = name;  // tài khoản đã lưu: bấm Lưu lần nữa (sau lỗi mật khẩu) là sửa, không thêm mới
-    if (S.selected === old || !S.selected) S.selected = name;
-    S.profiles = r.profiles;
-    if (dlg._avatar !== undefined) {
-      const a = await api().set_avatar(name, dlg._avatar || null);
-      if (!a.ok) { $("#pd-error").textContent = a.error; renderAll(); return; }
-      S.avatars = a.avatars;
+    save.disabled = true;
+    save.textContent = "Đang lưu…";
+    f.setAttribute("aria-busy", "true");
+    try {
+      const r = await api().save_profile(old, { name: f.name.value, mode: f.mode.value, cdp_port: +f.cdp_port.value,
+        proxy: f.proxy.value.trim() });
+      if (!r.ok) { error(r.error); return; }
+      const name = f.name.value.trim();
+      dlg.dataset.old = name;  // lưu lại sau lỗi phụ là sửa tài khoản, không tạo trùng
+      if (S.selected === old || !S.selected) S.selected = name;
+      S.profiles = r.profiles;
+      if (dlg._avatar !== undefined) {
+        const a = await api().set_avatar(name, dlg._avatar || null);
+        if (!a.ok) { error(a.error); renderAll(); return; }
+        S.avatars = a.avatars;
+        dlg._avatar = undefined;
+      }
+      if (!$("#pd-cred").hidden) {
+        let c = null;
+        if ($("#pd-cred-del").checked) c = await api().delete_credentials(name);
+        else if (pass) c = await api().save_credentials(name, email, pass);
+        if (c && !c.ok) { error(c.error, $("#pd-pass")); renderAll(); return; }
+        if (c) S.credentials = c.credentials;
+      }
+      dlg.close(); renderAll();
+      toast(old ? "Đã lưu tài khoản" : "Đã thêm tài khoản. Bấm Đăng nhập để đăng nhập lần đầu.");
+    } catch {
+      error("Không lưu được thay đổi. Kiểm tra thông tin rồi thử lại.");
+    } finally {
+      $("#pd-pass").value = "";
+      save.disabled = false;
+      save.textContent = "Lưu";
+      f.setAttribute("aria-busy", "false");
     }
-    if (!$("#pd-cred").hidden) {
-      let c = null;
-      if ($("#pd-cred-del").checked) c = await api().delete_credentials(name);
-      else if (pass) c = await api().save_credentials(name, email, pass);
-      $("#pd-pass").value = "";  // không giữ mật khẩu trong ô nhập
-      if (c && !c.ok) { $("#pd-error").textContent = c.error; renderAll(); return; }
-      if (c) S.credentials = c.credentials;
-    }
-    dlg.close(); renderAll();
-    toast(old ? "Đã lưu tài khoản" : "Đã thêm tài khoản. Bấm Đăng nhập để đăng nhập lần đầu.");
   };
   dlg.addEventListener("close", () => ($("#pd-pass").value = ""));
+  $("#pd-avatar-choose").onclick = () => $("#pd-avatar-file").click();
   $("#pd-avatar-file").onchange = async (e) => {
     const file = e.target.files[0];
     e.target.value = "";
     if (!file) return;
     try { dlg._avatar = await squareAvatar(file); setAvatarPreview(dlg._avatar, f.name.value); }
-    catch { $("#pd-error").textContent = "Không đọc được ảnh này. Chọn file PNG, JPEG hoặc WebP."; }
+    catch { error("Không đọc được ảnh này. Chọn file PNG, JPEG hoặc WebP.", $("#pd-avatar-choose")); }
   };
   $("#pd-avatar-clear").onclick = () => { dlg._avatar = ""; setAvatarPreview("", f.name.value); };
   dlg._sync = syncPort;
@@ -1221,6 +1243,7 @@ function openProfileDialog(p) {
   $("#pd-cred-del").checked = false;
   $("#pd-cred-del-wrap").hidden = !saved;
   $("#pd-error").textContent = "";
+  $$("[aria-invalid]", f).forEach((el) => el.removeAttribute("aria-invalid"));
   dlg._sync(); dlg.showModal(); f.name.select();
 }
 window.openProfileDialog = openProfileDialog; window.go = go;

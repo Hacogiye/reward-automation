@@ -138,6 +138,53 @@ def open_row_action(pg, act):
     pg.click(f"#profile-table button[data-act={act}]")
 
 
+def test_profile_dialog_accessible_error_and_keyboard_avatar(server):
+    with app_page(server, boot_n(0)) as (pg, errors):
+        pg.evaluate("go('profiles')")
+        pg.click("#btn-add")
+        assert pg.get_by_label("Email tài khoản Microsoft", exact=True).count() == 1
+        assert pg.get_by_label("Mật khẩu", exact=True).count() == 1
+        change = pg.get_by_role("button", name="Đổi ảnh", exact=True)
+        assert change.count() == 1
+        change.focus()
+        with pg.expect_file_chooser():
+            pg.keyboard.press("Enter")
+        pg.fill("#pd-email", "demo@example.com")
+        pg.click("#pd-save")
+        assert pg.locator("#pd-error").inner_text()
+        assert pg.locator("#pd-error").get_attribute("role") == "alert"
+        assert pg.locator("#pd-pass").get_attribute("aria-invalid") == "true"
+        assert "pd-error" in pg.locator("#pd-pass").get_attribute("aria-describedby").split()
+        assert pg.locator("#pd-pass").evaluate("e => e === document.activeElement")
+        assert pg.locator("#pd-save").is_enabled()
+        assert not errors
+
+
+def test_profile_dialog_save_failure_recovers_and_blocks_duplicates(server):
+    with app_page(server, boot_n(0)) as (pg, errors):
+        pg.evaluate("""() => {
+          const original = window.pywebview.api;
+          window.pywebview.api = new Proxy(original, {get: (target, key) => key === 'save_profile'
+            ? () => new Promise((resolve, reject) => { window.__saveCount = (window.__saveCount || 0) + 1;
+                window.__rejectSave = () => reject(new Error('FAKE_SECRET')); }) : target[key]});
+          go('profiles');
+        }""")
+        pg.click("#btn-add")
+        pg.click("#pd-save")
+        assert poll(pg, "window.__saveCount === 1")
+        assert pg.locator("#pd-save").is_disabled()
+        assert pg.locator("#profile-form").get_attribute("aria-busy") == "true"
+        pg.evaluate("document.querySelector('#pd-save').click()")
+        assert pg.evaluate("window.__saveCount") == 1
+        pg.evaluate("window.__rejectSave()")
+        assert poll(pg, "document.querySelector('#pd-save').disabled === false")
+        assert pg.locator("#profile-form").get_attribute("aria-busy") == "false"
+        assert pg.locator("#pd-error").is_visible()
+        assert "FAKE_SECRET" not in pg.locator("#pd-error").inner_text()
+        assert pg.locator("#profile-dialog").is_visible()
+        assert not errors
+
+
 def test_pages_render_without_errors(server):
     boot = boot_data()
     boot["settings"]["fun_mode"] = True  # Văn phòng, Cyberpunk, icon 3D, thẻ đóng dấu chỉ có ở chế độ vui
@@ -950,7 +997,8 @@ def test_accessibility_focus_ring_chart_labels_and_esc(server):
             assert pg.evaluate(f"document.querySelector('{dlg}').open"), dlg
             pg.keyboard.press("Escape")
             assert poll(pg, f"!document.querySelector('{dlg}').open", 2000), dlg
-        assert pg.locator("#settings-home #settings-cards").count() == 1  # Esc cũng trả khối cài đặt về trang
+        # Sự kiện close được browser xếp hàng sau khi thuộc tính open đã đổi.
+        assert poll(pg, "document.querySelectorAll('#settings-home #settings-cards').length === 1")
         pg.evaluate("setLanguage('en')")
         assert pg.get_attribute("#chart-daily", "aria-label").startswith("Points per day over the last")
         assert errors == []

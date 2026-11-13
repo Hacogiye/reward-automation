@@ -7,6 +7,9 @@
 
 const I18N = (() => {
   const EN = {
+    "Đang lưu…": "Saving…",
+    "Không lưu được thay đổi. Kiểm tra thông tin rồi thử lại.": "Changes could not be saved. Check the details and try again.",
+    "Không lưu được ảnh. Kiểm tra quyền ghi và dung lượng rồi thử lại.": "The image could not be saved. Check write permissions and disk space, then try again.",
     // ---- khung, menu, chung
     "Điểm mỗi ngày trong # ngày gần nhất, tổng # điểm": "Points per day over the last # days, # points in total",
     "Số điểm trong # ngày: từ # đến #": "Points over # days: from # to #",
