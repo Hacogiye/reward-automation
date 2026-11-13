@@ -207,7 +207,8 @@ cờ tự động hóa của Playwright thì Bing từ chối Visual Search. Ý 
   làm lại một lần, vẫn chưa được thì ghi vào nhật ký.
 - Trang Rewards tải chậm hoặc treo thì tải lại một lần trước khi báo lỗi.
 - **Profile Edge cố định**: lần mở đầu bot ghim profile đang dùng vào `rewards_bot_profile.txt` và từ đó luôn mở đúng
-  profile ấy. **Kiểm tra** báo nếu thư mục còn profile khác.
+  profile ấy. Trong cửa sổ **Đăng nhập** mà bạn chuyển sang profile Edge khác thì đóng cửa sổ xong bot ghim profile đó.
+  **Kiểm tra** cảnh báo nếu profile đang ghim chưa đăng nhập trình duyệt trong khi profile khác đã đăng nhập.
 - Tài khoản có thư mục phiên đăng nhập cố định: đổi tên không phải đăng nhập lại.
 </details>
 

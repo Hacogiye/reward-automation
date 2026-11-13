@@ -124,14 +124,23 @@ PIN_FILE = "rewards_bot_profile.txt"
 _PROFILE_DIR_RE = re.compile(r"^(Default|Profile \d{1,3})$")
 
 
-def edge_profiles(user_data_dir: str) -> dict:
-    """Các profile Edge trong thư mục: {"Profile 1": "email hoặc tên"} (đọc từ file Local State)."""
+def _info_cache(user_data_dir: str) -> dict:
     try:
-        info = json.loads((Path(user_data_dir) / "Local State").read_text(encoding="utf-8"))["profile"]
+        cache = json.loads((Path(user_data_dir) / "Local State").read_text(encoding="utf-8"))["profile"]["info_cache"]
     except (OSError, ValueError, KeyError, TypeError):
         return {}
-    cache = info.get("info_cache") or {}
-    return {k: (v.get("user_name") or v.get("name") or "") for k, v in cache.items() if _PROFILE_DIR_RE.match(k)}
+    return {k: v for k, v in cache.items() if _PROFILE_DIR_RE.match(k) and isinstance(v, dict)} \
+        if isinstance(cache, dict) else {}
+
+
+def edge_profiles(user_data_dir: str) -> dict:
+    """Các profile Edge trong thư mục: {"Profile 1": "email hoặc tên"} (đọc từ file Local State)."""
+    return {k: (v.get("user_name") or v.get("name") or "") for k, v in _info_cache(user_data_dir).items()}
+
+
+def signed_in_profiles(user_data_dir: str) -> dict:
+    """Chỉ các profile đã đăng nhập trình duyệt bằng tài khoản: {"Profile 2": "email"}."""
+    return {k: v["user_name"] for k, v in _info_cache(user_data_dir).items() if v.get("user_name")}
 
 
 def _last_used(user_data_dir: str):
@@ -156,6 +165,21 @@ def pinned_profile(user_data_dir: str) -> str:
         except OSError:
             pass
     return name
+
+
+def repin_to_last_used(user_data_dir: str):
+    """Sau khi người dùng tự đăng nhập: nếu họ đã chuyển sang profile Edge khác trong cửa sổ đó thì ghim profile ấy.
+
+    Trả (cũ, mới) khi đổi ghim, None nếu giữ nguyên."""
+    old = pinned_profile(user_data_dir)
+    new = _last_used(user_data_dir)
+    if not new or new == old or not (Path(user_data_dir) / new).is_dir():
+        return None
+    try:
+        (Path(user_data_dir) / PIN_FILE).write_text(new + "\n", encoding="utf-8")
+    except OSError:
+        return None
+    return old, new
 
 
 def build_args(exe: str, user_data_dir: str, headless: bool, extra=(), profile_directory: str = None) -> list:

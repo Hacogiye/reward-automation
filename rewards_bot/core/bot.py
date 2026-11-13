@@ -1566,6 +1566,12 @@ class RewardsBot:
             while not self.stop.is_set() and self._launched.alive():
                 self.stop.wait(1)
             self._close(ctx, [])
+        moved = edge_launcher.repin_to_last_used(str(profile_dir(self.profile)))
+        if moved:
+            names = edge_launcher.edge_profiles(str(profile_dir(self.profile)))
+            self.log(f"Bạn đã chuyển sang profile Edge {moved[1]}"
+                     f"{f' ({names[moved[1]]})' if names.get(moved[1]) else ''}; từ nay bot dùng profile này "
+                     f"thay cho {moved[0]}")
         self.status(state="Sẵn sàng", progress="")
         self.log("Đã lưu phiên đăng nhập")
 
@@ -1581,11 +1587,12 @@ class RewardsBot:
             return "ok", "Profile Edge", f"dùng {who(pinned)}"
         # đã ghim nên profile khác trong thư mục (vd Windows tự đăng nhập Edge bằng tài khoản công ty) không ảnh hưởng;
         # chỉ cảnh báo khi profile đang ghim chưa đăng nhập trình duyệt mà profile khác lại có
-        if all_profiles.get(pinned) or not any(all_profiles.values()):
+        signed_in = edge_launcher.signed_in_profiles(d)  # tên hiển thị như "Profile 1" không có nghĩa là đã đăng nhập
+        if pinned in signed_in or not signed_in:
             return "ok", "Profile Edge", f"luôn dùng {who(pinned)}, bỏ qua {', '.join(others)}"
         return "warn", "Profile Edge", (f"bot luôn dùng {who(pinned)} (chưa đăng nhập trình duyệt), thư mục còn "
-                                        f"{', '.join(others)}. Nếu sai, sửa tên trong {edge_launcher.PIN_FILE} "
-                                        "ở thư mục profile")
+                                        f"{', '.join(others)}. Nếu sai: bấm Đăng nhập, chuyển sang đúng profile "
+                                        "trong cửa sổ Edge rồi đóng cửa sổ, bot sẽ ghim profile đó")
 
     def diagnose(self) -> list:
         """Nút Kiểm tra: chạy các bước kiểm tra, KHÔNG search. Trả về [{level, title, detail}]."""

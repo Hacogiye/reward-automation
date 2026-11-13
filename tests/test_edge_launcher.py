@@ -87,6 +87,25 @@ def test_pinned_profile_keeps_first_choice(tmp_path):
     assert el.edge_profiles(str(tmp_path)) == {"Default": "work@company.com", "Profile 1": "me@gmail.com"}
 
 
+def test_repin_to_last_used_after_user_switches_profile(tmp_path):
+    # tài khoản mới: bot ghim Default; trong cửa sổ đăng nhập người dùng chuyển sang Profile 2
+    assert el.pinned_profile(str(tmp_path)) == "Default"
+    (tmp_path / "Profile 2").mkdir()
+    _local_state(tmp_path, "Profile 2", **{"Default": "", "Profile 2": "me@gmail.com"})
+    assert el.repin_to_last_used(str(tmp_path)) == ("Default", "Profile 2")
+    assert el.pinned_profile(str(tmp_path)) == "Profile 2"
+    assert el.repin_to_last_used(str(tmp_path)) is None  # không đổi gì thì giữ nguyên
+    _local_state(tmp_path, "Profile 9", **{"Profile 2": "me@gmail.com"})  # thư mục profile không có: bỏ qua
+    assert el.repin_to_last_used(str(tmp_path)) is None and el.pinned_profile(str(tmp_path)) == "Profile 2"
+
+
+def test_signed_in_profiles_ignores_display_names(tmp_path):
+    info = {"Default": {"name": "Profile 1"}, "Profile 2": {"user_name": "me@gmail.com", "name": "Me"}}
+    (tmp_path / "Local State").write_text(json.dumps({"profile": {"info_cache": info}}), encoding="utf-8")
+    assert el.signed_in_profiles(str(tmp_path)) == {"Profile 2": "me@gmail.com"}
+    assert el.edge_profiles(str(tmp_path)) == {"Default": "Profile 1", "Profile 2": "me@gmail.com"}
+
+
 def test_pinned_profile_rejects_bad_names(tmp_path):
     (tmp_path / el.PIN_FILE).write_text("../../evil", encoding="utf-8")
     assert el.pinned_profile(str(tmp_path)) == "Default"

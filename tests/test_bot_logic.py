@@ -449,6 +449,9 @@ def test_edge_profile_check_ok_when_pinned_profile_signed_in(tmp_path, monkeypat
     info["Profile 1"]["user_name"] = ""  # profile đang ghim chưa đăng nhập trình duyệt, profile kia có
     (tmp_path / "Local State").write_text(_json.dumps({"profile": {"last_used": "Profile 1", "info_cache": info}}))
     assert bot.edge_profile_check()[0] == "warn" and (tmp_path / el.PIN_FILE).read_text().strip() == "Profile 1"
+    info["Profile 1"] = {"name": "Profile 1"}  # chỉ có tên hiển thị, không phải đã đăng nhập
+    (tmp_path / "Local State").write_text(_json.dumps({"profile": {"last_used": "Profile 1", "info_cache": info}}))
+    assert bot.edge_profile_check()[0] == "warn"
 
 
 def test_run_order_daily_quests_visual_pc_mobile():
