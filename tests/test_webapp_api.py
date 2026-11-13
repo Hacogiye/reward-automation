@@ -1,3 +1,5 @@
+import base64
+
 import pytest
 
 pytest.importorskip("webview")
@@ -200,6 +202,38 @@ def test_avatar_validated_and_follows_profile(api):
     api.set_avatar("b", url)
     api.delete_profiles(["b"])
     assert not any(W.config.AVATAR_DIR.glob("*"))
+
+
+@pytest.mark.parametrize("replacement", [
+    "data:image/svg+xml;base64,PHN2Zz4=",
+    "data:image/png;base64,!",
+    "data:image/png;base64,R0lGODlh",
+    "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\n" + b"0" * 400_000).decode(),
+])
+def test_rejected_avatar_keeps_previous_image(api, replacement):
+    import base64
+    api.save_profile(None, {"name": "a"})
+    original = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\noriginal").decode()
+    assert api.set_avatar("a", original)["ok"]
+    assert not api.set_avatar("a", replacement)["ok"]
+    assert api._avatars() == {"a": original}
+
+
+def test_avatar_replace_failure_preserves_previous_image(api, monkeypatch):
+    import base64
+    api.save_profile(None, {"name": "a"})
+    original = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\noriginal").decode()
+    assert api.set_avatar("a", original)["ok"]
+
+    def denied(*args, **kwargs):
+        raise OSError("disk unavailable")
+
+    monkeypatch.setattr(W.os, "replace", denied)
+    replacement = "data:image/jpeg;base64," + base64.b64encode(b"\xff\xd8\xffnew").decode()
+    result = api.set_avatar("a", replacement)
+    assert result["ok"] is False and result["error"]
+    assert api._avatars() == {"a": original}
+    assert [f.suffix for f in W.config.AVATAR_DIR.iterdir()] == [".png"]
 
 
 def test_everything_turns_on_all_tasks_without_saving(api):

@@ -11,6 +11,7 @@ import queue
 import re
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -200,8 +201,6 @@ class Api:
         p = self._find(name) if isinstance(name, str) else None
         if not p or not p.get("dir"):
             return {"ok": False, "error": "Không có tài khoản này."}
-        for f in self._avatar_files(p):
-            f.unlink(missing_ok=True)
         if data_url:
             head, _, b64 = str(data_url).partition(",")
             mime = head.removeprefix("data:").removesuffix(";base64")
@@ -214,9 +213,29 @@ class Api:
             magic, ext = AVATAR_TYPES[mime]
             if len(raw) > AVATAR_MAX_BYTES or not raw.startswith(magic):
                 return {"ok": False, "error": "Ảnh quá lớn hoặc không đúng định dạng."}
-            config.AVATAR_DIR.mkdir(parents=True, exist_ok=True)
-            (config.AVATAR_DIR / f"{p['dir']}.{ext}").write_bytes(raw)
-        return {"ok": True, "avatars": self._avatars()}
+        tmp = None
+        try:
+            with self._lock:
+                target = None
+                if data_url:
+                    config.AVATAR_DIR.mkdir(parents=True, exist_ok=True)
+                    target = config.AVATAR_DIR / f"{p['dir']}.{ext}"
+                    with tempfile.NamedTemporaryFile(dir=config.AVATAR_DIR, suffix=".tmp", delete=False) as f:
+                        tmp = Path(f.name)
+                        f.write(raw)
+                        f.flush()
+                        os.fsync(f.fileno())
+                    os.replace(tmp, target)
+                for old in self._avatar_files(p):
+                    if old != target:
+                        old.unlink(missing_ok=True)
+                avatars = self._avatars()
+        except OSError:
+            return {"ok": False, "error": "Không lưu được ảnh. Kiểm tra quyền ghi và dung lượng rồi thử lại."}
+        finally:
+            if tmp is not None:
+                tmp.unlink(missing_ok=True)
+        return {"ok": True, "avatars": avatars}
 
     # ------------------------------------------------------------ thông tin app, thư mục nhật ký
     def _app_info(self) -> dict:
