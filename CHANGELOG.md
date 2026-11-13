@@ -6,6 +6,14 @@ rỗng) thì test và workflow phát hành đều báo lỗi, không có bản p
 
 Viết cho người dùng: bản mới làm được gì, sửa lỗi gì, người dùng cần làm gì. Không cần liệt kê tên file hay chi tiết code.
 
+## 1.8.2 - 2026-11-13
+- Sửa lỗi tài khoản mới luôn chạy profile Edge **Default** dù trong cửa sổ **Đăng nhập** bạn đã chuyển sang profile khác
+  (vd Profile 2). Giờ đóng cửa sổ đăng nhập xong, bot ghim đúng profile bạn dùng sau cùng và ghi rõ trong nhật ký.
+- **Kiểm tra** không còn báo OK nhầm khi profile bot đang dùng chưa đăng nhập trình duyệt mà profile khác thì đã đăng
+  nhập; giờ sẽ cảnh báo kèm cách sửa.
+- Tài khoản đang bị dùng sai profile: bấm **Đăng nhập**, chuyển sang đúng profile trong cửa sổ Edge rồi đóng hết cửa
+  sổ. Từ lần chạy sau bot dùng profile đó.
+
 ## 1.8.1 - 2026-11-12
 - Dòng **Read to Earn** ở Tổng quan giờ hiện cả khi công tắc Read to Earn đang tắt (ví dụ khi bạn tự đọc báo trên
   điện thoại). Công tắc chỉ quyết định bot có tự đọc báo hay không; tiến độ thì luôn được đọc khi chạy, **Làm mới**
