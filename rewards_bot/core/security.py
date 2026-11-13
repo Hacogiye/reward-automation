@@ -13,6 +13,7 @@ import socket
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 PORT_MIN, PORT_MAX = 1024, 65535
 
@@ -42,12 +43,24 @@ def harden_data_dir(data_dir: Path, log=print) -> None:
         log(f"Không khóa được quyền thư mục dữ liệu: {e}")
 
 
+def _proxy_endpoint(value: str) -> str:
+    """Chỉ hiển thị scheme/host/port; không đưa userinfo, đường dẫn hay query vào log."""
+    try:
+        u = urlsplit(value if "://" in value else "//" + value)
+        if not u.hostname or any(c in u.hostname for c in "@/\\?#;=\r\n"):
+            return "[đã ẩn cấu hình]"
+        host = f"[{u.hostname}]" if ":" in u.hostname else u.hostname
+        return (f"{u.scheme}://" if u.scheme else "") + host + (f":{u.port}" if u.port else "")
+    except ValueError:
+        return "[đã ẩn cấu hình]"
+
+
 def system_proxy() -> str:
     """Trả về mô tả proxy đang bật trên máy (Windows Internet Settings hoặc biến môi trường), rỗng nếu không có."""
     found = []
     for k in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "https_proxy", "http_proxy", "all_proxy"):
         if os.environ.get(k):
-            found.append(f"{k}={os.environ[k]}")
+            found.append(f"{k}={_proxy_endpoint(os.environ[k])}")
     if sys.platform == "win32":
         try:
             import winreg
@@ -55,11 +68,11 @@ def system_proxy() -> str:
                                 r"Software\Microsoft\Windows\CurrentVersion\Internet Settings") as key:
                 enabled = winreg.QueryValueEx(key, "ProxyEnable")[0]
                 if enabled:
-                    found.append("Windows proxy: " + str(winreg.QueryValueEx(key, "ProxyServer")[0]))
+                    found.append("Windows proxy: " + _proxy_endpoint(str(winreg.QueryValueEx(key, "ProxyServer")[0])))
                 try:
                     pac = winreg.QueryValueEx(key, "AutoConfigURL")[0]
                     if pac:
-                        found.append("PAC: " + str(pac))
+                        found.append("PAC: " + _proxy_endpoint(str(pac)))
                 except OSError:
                     pass
         except OSError:

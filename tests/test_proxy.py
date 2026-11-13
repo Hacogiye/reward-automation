@@ -35,6 +35,29 @@ def test_browser_args_with_own_proxy_replaces_no_proxy():
     assert "--force-webrtc-ip-handling-policy=disable_non_proxied_udp" in args
 
 
+@pytest.mark.parametrize("value", [
+    "http://demo:FAKE_SECRET@proxy.invalid:8080",
+    "socks5://demo:p%40ss@proxy.invalid:1080",
+    "http://demo:password@proxy.invalid:8080/path?token=FAKE_TOKEN#private",
+    "http://[malformed",
+])
+def test_system_proxy_diagnostics_hide_secrets(monkeypatch, value):
+    for key in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY", "https_proxy", "http_proxy", "all_proxy"):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("HTTPS_PROXY", value)
+    monkeypatch.setattr(security.sys, "platform", "linux")
+    result = security.system_proxy()
+    assert "HTTPS_PROXY=" in result
+    for secret in ("demo", "FAKE_SECRET", "p%40ss", "password", "FAKE_TOKEN", "private", "malformed"):
+        assert secret not in result
+
+
+def test_system_proxy_keeps_safe_endpoint(monkeypatch):
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.invalid:8080")
+    monkeypatch.setattr(security.sys, "platform", "linux")
+    assert "HTTPS_PROXY=http://proxy.invalid:8080" in security.system_proxy()
+
+
 def test_browser_args_without_proxy_unchanged():
     assert security.browser_args({"bypass_proxy": True}) == ["--no-proxy-server"]
     assert security.browser_args({"bypass_proxy": False}) == []
