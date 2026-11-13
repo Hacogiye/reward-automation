@@ -11,7 +11,7 @@
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-475569)
 ![Linux](https://img.shields.io/badge/Linux-headless%20%2B%20UI-475569)
 
-[Tiếng Việt](README.md) · English
+[Tiếng Việt](README.md) · English · [Website](https://nt101-lc.github.io/reward-automation/)
 
 <img src="docs/images/dashboard.png" alt="PrixAuto overview page" width="900">
 

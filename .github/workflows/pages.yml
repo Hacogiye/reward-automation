@@ -1,0 +1,59 @@
+# Trang giới thiệu dự án trên GitHub Pages (https://nt101-lc.github.io/reward-automation/), để ChatGPT search, Bing
+# và Google tìm thấy. Mọi nội dung sinh từ packaging/build_site.py + phiên bản trong rewards_bot/__init__.py.
+# Bật một lần: Settings -> Pages -> Build and deployment -> Source: GitHub Actions.
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packaging/build_site.py"
+      - "rewards_bot/__init__.py"
+      - "docs/images/**"
+      - "rewards_bot/ui/web/assets/app-icon-256.png"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Sinh trang
+        run: python packaging/build_site.py _site
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+      # báo Bing (nguồn chính của ChatGPT search) và các máy tìm kiếm dùng IndexNow là trang vừa đổi
+      - name: Ping IndexNow
+        continue-on-error: true
+        run: |
+          python packaging/build_site.py --indexnow > indexnow.json
+          curl -sS -o /dev/null -w "IndexNow HTTP %{http_code}\n" -X POST https://api.indexnow.org/indexnow \
+            -H "Content-Type: application/json; charset=utf-8" --data @indexnow.json

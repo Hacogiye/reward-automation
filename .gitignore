@@ -11,6 +11,9 @@ venv/
 build/
 dist/
 
+# trang GitHub Pages sinh ra (python packaging/build_site.py)
+_site/
+
 # cấu hình trợ lý AI (agent, skill, hook, quyền) của riêng máy này, không đưa lên git
 .claude/
 .agents/

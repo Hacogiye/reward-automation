@@ -11,7 +11,7 @@
 ![Windows 10/11](https://img.shields.io/badge/Windows-10%20%7C%2011-475569)
 ![Linux](https://img.shields.io/badge/Linux-headless%20%2B%20UI-475569)
 
-Tiếng Việt · [English](README.en.md)
+Tiếng Việt · [English](README.en.md) · [Website](https://nt101-lc.github.io/reward-automation/vi/)
 
 <img src="docs/images/dashboard-vi.png" alt="Trang Tổng quan của PrixAuto" width="900">
 
